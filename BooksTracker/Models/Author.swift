@@ -20,7 +20,7 @@ final class Author: Identifiable {
     var bookCount: Int = 0
 
     // Many-to-many relationship with Works
-    @Relationship(deleteRule: .nullify)
+    @Relationship(deleteRule: .nullify, inverse: \Work.authors)
     var works: [Work] = []
 
     init(

@@ -26,31 +26,40 @@ final class UserLibraryEntry: Identifiable {
     var work: Work?
 
     @Relationship
-    var edition: Edition?
+    var edition: Edition? // Nil for wishlist items (don't own yet)
 
     init(
         work: Work,
         edition: Edition? = nil,
-        readingStatus: ReadingStatus = .toRead,
-        rating: Int? = nil,
-        notes: String? = nil,
-        tags: [String] = []
+        readingStatus: ReadingStatus = .toRead
     ) {
         self.work = work
         self.edition = edition
         self.readingStatus = readingStatus
-        self.rating = rating
-        self.notes = notes
-        self.tags = tags
         self.dateAdded = Date()
         self.lastModified = Date()
+    }
+
+    /// Create wishlist entry (want to read but don't own)
+    static func createWishlistEntry(for work: Work) -> UserLibraryEntry {
+        let entry = UserLibraryEntry(work: work, edition: nil, readingStatus: .wishlist)
+        return entry
+    }
+
+    /// Create owned entry (have specific edition)
+    static func createOwnedEntry(for work: Work, edition: Edition, status: ReadingStatus = .toRead) -> UserLibraryEntry {
+        let entry = UserLibraryEntry(work: work, edition: edition, readingStatus: status)
+        return entry
     }
 
     // MARK: - Reading Progress Methods
 
     /// Update reading progress based on current page and edition page count
     func updateReadingProgress() {
-        guard let pageCount = edition?.pageCount, pageCount > 0 else {
+        // Can't track progress for wishlist items (no edition)
+        guard readingStatus != .wishlist,
+              let pageCount = edition?.pageCount,
+              pageCount > 0 else {
             readingProgress = 0.0
             return
         }
@@ -79,8 +88,13 @@ final class UserLibraryEntry: Identifiable {
         touch()
     }
 
-    /// Start reading the book
+    /// Start reading the book (only if owned)
     func startReading() {
+        guard readingStatus != .wishlist, edition != nil else {
+            // Can't start reading a wishlist item - need to acquire edition first
+            return
+        }
+
         if readingStatus == .toRead {
             readingStatus = .reading
             if dateStarted == nil {
@@ -88,6 +102,25 @@ final class UserLibraryEntry: Identifiable {
             }
             touch()
         }
+    }
+
+    /// Convert wishlist entry to owned entry
+    func acquireEdition(_ edition: Edition, status: ReadingStatus = .toRead) {
+        guard readingStatus == .wishlist else { return }
+
+        self.edition = edition
+        self.readingStatus = status
+        touch()
+    }
+
+    /// Check if this is a wishlist entry
+    var isWishlistItem: Bool {
+        return readingStatus == .wishlist && edition == nil
+    }
+
+    /// Check if user owns this entry
+    var isOwned: Bool {
+        return !isWishlistItem
     }
 
     /// Calculate reading pace (pages per day)
@@ -137,23 +170,34 @@ final class UserLibraryEntry: Identifiable {
 
 // MARK: - Reading Status Enum
 enum ReadingStatus: String, Codable, CaseIterable, Identifiable, Sendable {
-    case toRead = "TBR"
-    case reading = "Reading"
-    case read = "Read"
-    case onHold = "On Hold"
-    case dnf = "DNF"
-    case wishlist = "Wishlist"
+    case wishlist = "Wishlist"     // Want to have/read but don't own
+    case toRead = "TBR"            // Have it and want to read in the future
+    case reading = "Reading"       // Currently reading
+    case read = "Read"             // Finished reading
+    case onHold = "On Hold"        // Started but paused
+    case dnf = "DNF"               // Did not finish
 
     var id: Self { self }
 
     var displayName: String {
         switch self {
+        case .wishlist: return "Wishlist"
         case .toRead: return "To Read"
         case .reading: return "Reading"
         case .read: return "Read"
         case .onHold: return "On Hold"
         case .dnf: return "Did Not Finish"
-        case .wishlist: return "Wishlist"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .wishlist: return "Want to have or read, but don't have"
+        case .toRead: return "Have it and want to read in the future"
+        case .reading: return "Currently reading"
+        case .read: return "Finished reading"
+        case .onHold: return "Started reading but paused"
+        case .dnf: return "Started but did not finish"
         }
     }
 
