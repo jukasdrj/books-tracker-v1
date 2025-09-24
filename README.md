@@ -1,64 +1,125 @@
-# BooksTracker V1.0 📚
+# BooksTracker - iOS App
 
-A clean, modern iOS book tracking app built with SwiftUI, SwiftData, and CloudKit.
+A modern iOS application using a **workspace + SPM package** architecture for clean separation between app shell and feature code.
 
-## Architecture
+## AI Assistant Rules Files
 
-**Work/Edition Separation**: Clean data model that separates conceptual books (Works) from specific published versions (Editions).
+This template includes **opinionated rules files** for popular AI coding assistants. These files establish coding standards, architectural patterns, and best practices for modern iOS development using the latest APIs and Swift features.
 
-- **Work**: The conceptual book ("The Adventures of Huckleberry Finn")
-- **Edition**: Specific published version (ISBN, publisher, page count)
-- **UserLibraryEntry**: User's relationship to a Work/Edition (status, rating, notes)
+### Included Rules Files
+- **Claude Code**: `CLAUDE.md` - Claude Code rules
+- **Cursor**: `.cursor/*.mdc` - Cursor-specific rules
+- **GitHub Copilot**: `.github/copilot-instructions.md` - GitHub Copilot rules
 
-## Features
+### Customization Options
+These rules files are **starting points** - feel free to:
+- ✅ **Edit them** to match your team's coding standards
+- ✅ **Delete them** if you prefer different approaches
+- ✅ **Add your own** rules for other AI tools
+- ✅ **Update them** as new iOS APIs become available
 
-### V1.0 Core Features
-- 🔍 **Smart Search**: Single clean results per work, no duplicates
-- 📱 **Barcode Scanning**: Quick ISBN scanning and lookup
-- 📚 **Library Management**: Track reading status and personal ratings
-- 📊 **Reading Analytics**: Author demographics, genre distribution
-- 📝 **CSV Import**: Goodreads library import support
-- ☁️ **CloudKit Sync**: Seamless device synchronization
+### What Makes These Rules Opinionated
+- **No ViewModels**: Embraces pure SwiftUI state management patterns
+- **Swift 6+ Concurrency**: Enforces modern async/await over legacy patterns
+- **Latest APIs**: Recommends iOS 18+ features with optional iOS 26 guidelines
+- **Testing First**: Promotes Swift Testing framework over XCTest
+- **Performance Focus**: Emphasizes @Observable over @Published for better performance
 
-### Technical Stack
-- **iOS 26+** SwiftUI with modern lifecycle
-- **SwiftData + CloudKit** for persistence and sync
-- **Swift 6.0** with strict concurrency checking
-- **CloudFlare Workers** for search proxy and caching
-- **Work/Edition Data Model** for clean search results
+**Note for AI assistants**: You MUST read the relevant rules files before making changes to ensure consistency with project standards.
 
-## Project Structure
+## Project Architecture
 
 ```
 BooksTracker/
-├── Models/              # Clean SwiftData models
-│   ├── Work.swift       # Conceptual book entity
-│   ├── Edition.swift    # Published version entity
-│   ├── UserLibraryEntry.swift # User's book relationship
-│   └── Author.swift     # Author entity
-├── Views/               # SwiftUI interface
-├── Services/            # Business logic layer
-└── CloudFlare-Workers/  # Search proxy infrastructure
+├── BooksTracker.xcworkspace/              # Open this file in Xcode
+├── BooksTracker.xcodeproj/                # App shell project
+├── BooksTracker/                          # App target (minimal)
+│   ├── Assets.xcassets/                # App-level assets (icons, colors)
+│   ├── BooksTrackerApp.swift              # App entry point
+│   └── BooksTracker.xctestplan            # Test configuration
+├── BooksTrackerPackage/                   # 🚀 Primary development area
+│   ├── Package.swift                   # Package configuration
+│   ├── Sources/BooksTrackerFeature/       # Your feature code
+│   └── Tests/BooksTrackerFeatureTests/    # Unit tests
+└── BooksTrackerUITests/                   # UI automation tests
 ```
 
-## Development
+## Key Architecture Points
 
-### Building
-```bash
-# iOS Simulator
-xcodebuild -project BooksTracker.xcodeproj -scheme BooksTracker -destination 'platform=iOS Simulator,name=iPhone 16'
+### Workspace + SPM Structure
+- **App Shell**: `BooksTracker/` contains minimal app lifecycle code
+- **Feature Code**: `BooksTrackerPackage/Sources/BooksTrackerFeature/` is where most development happens
+- **Separation**: Business logic lives in the SPM package, app target just imports and displays it
 
-# CloudFlare Workers
-cd cloudflare-workers/books-api-proxy
-wrangler deploy
+### Buildable Folders (Xcode 16)
+- Files added to the filesystem automatically appear in Xcode
+- No need to manually add files to project targets
+- Reduces project file conflicts in teams
+
+## Development Notes
+
+### Code Organization
+Most development happens in `BooksTrackerPackage/Sources/BooksTrackerFeature/` - organize your code as you prefer.
+
+### Public API Requirements
+Types exposed to the app target need `public` access:
+```swift
+public struct NewView: View {
+    public init() {}
+    
+    public var body: some View {
+        // Your view code
+    }
+}
 ```
 
-### Architecture Goals
-- ✅ **Simple**: 4 clean models vs legacy 720-line UserBook
-- ✅ **Fast**: CloudKit-optimized relationships
-- ✅ **Scalable**: Foundation for V2 features
-- ✅ **Cultural**: Built-in diversity analytics
+### Adding Dependencies
+Edit `BooksTrackerPackage/Package.swift` to add SPM dependencies:
+```swift
+dependencies: [
+    .package(url: "https://github.com/example/SomePackage", from: "1.0.0")
+],
+targets: [
+    .target(
+        name: "BooksTrackerFeature",
+        dependencies: ["SomePackage"]
+    ),
+]
+```
 
----
+### Test Structure
+- **Unit Tests**: `BooksTrackerPackage/Tests/BooksTrackerFeatureTests/` (Swift Testing framework)
+- **UI Tests**: `BooksTrackerUITests/` (XCUITest framework)
+- **Test Plan**: `BooksTracker.xctestplan` coordinates all tests
 
-**This is a greenfield V1.0 rebuild** - clean slate implementation of the Work/Edition architecture for optimal performance and maintainability.
+## Configuration
+
+### XCConfig Build Settings
+Build settings are managed through **XCConfig files** in `Config/`:
+- `Config/Shared.xcconfig` - Common settings (bundle ID, versions, deployment target)
+- `Config/Debug.xcconfig` - Debug-specific settings  
+- `Config/Release.xcconfig` - Release-specific settings
+- `Config/Tests.xcconfig` - Test-specific settings
+
+### Entitlements Management
+App capabilities are managed through a **declarative entitlements file**:
+- `Config/BooksTracker.entitlements` - All app entitlements and capabilities
+- AI agents can safely edit this XML file to add HealthKit, CloudKit, Push Notifications, etc.
+- No need to modify complex Xcode project files
+
+### Asset Management
+- **App-Level Assets**: `BooksTracker/Assets.xcassets/` (app icon, accent color)
+- **Feature Assets**: Add `Resources/` folder to SPM package if needed
+
+### SPM Package Resources
+To include assets in your feature package:
+```swift
+.target(
+    name: "BooksTrackerFeature",
+    dependencies: [],
+    resources: [.process("Resources")]
+)
+```
+
+### Generated with XcodeBuildMCP
+This project was scaffolded using [XcodeBuildMCP](https://github.com/cameroncooke/XcodeBuildMCP), which provides tools for AI-assisted iOS development workflows.

@@ -3,8 +3,8 @@ import SwiftData
 import SwiftUI
 
 @Model
-final class Work: Identifiable {
-    var id: UUID = UUID()
+public final class Work: Identifiable {
+    public var id: UUID = UUID()
     var title: String
     var originalLanguage: String?
     var firstPublicationYear: Int?
@@ -24,7 +24,7 @@ final class Work: Identifiable {
     @Relationship(deleteRule: .cascade)
     var userLibraryEntries: [UserLibraryEntry] = []
 
-    init(
+    public init(
         title: String,
         authors: [Author] = [],
         originalLanguage: String? = nil,
@@ -128,5 +128,3 @@ final class Work: Identifiable {
     }
 }
 
-// MARK: - Sendable Conformance
-extension Work: @unchecked Sendable {}

@@ -3,11 +3,11 @@ import SwiftData
 import SwiftUI
 
 @Model
-final class Author: Identifiable {
-    var id: UUID = UUID()
+public final class Author: Identifiable {
+    public var id: UUID = UUID()
     var name: String
     var nationality: String?
-    var gender: AuthorGender = .unknown
+    var gender: AuthorGender = AuthorGender.unknown
     var culturalRegion: CulturalRegion?
     var birthYear: Int?
     var deathYear: Int?
@@ -20,13 +20,13 @@ final class Author: Identifiable {
     var bookCount: Int = 0
 
     // Many-to-many relationship with Works
-    @Relationship(deleteRule: .nullify, inverse: \Work.authors)
+    @Relationship(deleteRule: .nullify)
     var works: [Work] = []
 
-    init(
+    public init(
         name: String,
         nationality: String? = nil,
-        gender: AuthorGender = .unknown,
+        gender: AuthorGender = AuthorGender.unknown,
         culturalRegion: CulturalRegion? = nil,
         birthYear: Int? = nil,
         deathYear: Int? = nil
@@ -92,14 +92,14 @@ final class Author: Identifiable {
 }
 
 // MARK: - Author Gender Enum
-enum AuthorGender: String, Codable, CaseIterable, Identifiable, Sendable {
+public enum AuthorGender: String, Codable, CaseIterable, Identifiable, Sendable {
     case female = "Female"
     case male = "Male"
     case nonBinary = "Non-binary"
     case other = "Other"
     case unknown = "Unknown"
 
-    var id: Self { self }
+    public var id: Self { self }
 
     var icon: String {
         switch self {
@@ -117,7 +117,7 @@ enum AuthorGender: String, Codable, CaseIterable, Identifiable, Sendable {
 }
 
 // MARK: - Cultural Region Enum
-enum CulturalRegion: String, Codable, CaseIterable, Identifiable, Sendable {
+public enum CulturalRegion: String, Codable, CaseIterable, Identifiable, Sendable {
     case africa = "Africa"
     case asia = "Asia"
     case europe = "Europe"
@@ -130,7 +130,11 @@ enum CulturalRegion: String, Codable, CaseIterable, Identifiable, Sendable {
     case indigenous = "Indigenous"
     case international = "International"
 
-    var id: Self { self }
+    public var id: Self { self }
+
+    var displayName: String {
+        return rawValue
+    }
 
     var shortName: String {
         switch self {
@@ -179,5 +183,3 @@ enum CulturalRegion: String, Codable, CaseIterable, Identifiable, Sendable {
     }
 }
 
-// MARK: - Sendable Conformance
-extension Author: @unchecked Sendable {}

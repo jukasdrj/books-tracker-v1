@@ -3,13 +3,13 @@ import SwiftData
 import SwiftUI
 
 @Model
-final class Edition: Identifiable {
-    var id: UUID = UUID()
+public final class Edition: Identifiable {
+    public var id: UUID = UUID()
     var isbn: String?
     var publisher: String?
     var publicationDate: String?
     var pageCount: Int?
-    var format: BookFormat = .physical
+    var format: EditionFormat = EditionFormat.hardcover
     var coverImageURL: String?
     var editionTitle: String? // "Deluxe Edition", "Abridged", etc.
 
@@ -21,12 +21,12 @@ final class Edition: Identifiable {
     @Relationship
     var work: Work?
 
-    init(
+    public init(
         isbn: String? = nil,
         publisher: String? = nil,
         publicationDate: String? = nil,
         pageCount: Int? = nil,
-        format: BookFormat = .physical,
+        format: EditionFormat = EditionFormat.hardcover,
         coverImageURL: String? = nil,
         editionTitle: String? = nil,
         work: Work? = nil
@@ -80,26 +80,5 @@ final class Edition: Identifiable {
     }
 }
 
-// MARK: - Book Format Enum
-enum BookFormat: String, Codable, CaseIterable, Identifiable, Sendable {
-    case physical = "Physical"
-    case ebook = "E-book"
-    case audiobook = "Audiobook"
+// EditionFormat is now defined in ModelTypes.swift
 
-    var id: Self { self }
-
-    var icon: String {
-        switch self {
-        case .physical: return "book.closed"
-        case .ebook: return "ipad"
-        case .audiobook: return "headphones"
-        }
-    }
-
-    var displayName: String {
-        return rawValue
-    }
-}
-
-// MARK: - Sendable Conformance
-extension Edition: @unchecked Sendable {}

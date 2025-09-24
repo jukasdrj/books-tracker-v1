@@ -3,13 +3,14 @@ import SwiftData
 import SwiftUI
 
 @Model
-final class UserLibraryEntry: Identifiable {
-    var id: UUID = UUID()
+public final class UserLibraryEntry: Identifiable {
+    public var id: UUID = UUID()
     var dateAdded: Date = Date()
-    var readingStatus: ReadingStatus = .toRead
+    var readingStatus: ReadingStatus = ReadingStatus.toRead
     var currentPage: Int = 0
     var readingProgress: Double = 0.0 // 0.0 to 1.0
     var rating: Int? // 1-5 stars
+    var personalRating: Double? // 0.0-5.0 for more granular ratings
     var notes: String?
     var tags: [String] = []
 
@@ -28,10 +29,10 @@ final class UserLibraryEntry: Identifiable {
     @Relationship
     var edition: Edition? // Nil for wishlist items (don't own yet)
 
-    init(
+    public init(
         work: Work,
         edition: Edition? = nil,
-        readingStatus: ReadingStatus = .toRead
+        readingStatus: ReadingStatus = ReadingStatus.toRead
     ) {
         self.work = work
         self.edition = edition
@@ -41,13 +42,13 @@ final class UserLibraryEntry: Identifiable {
     }
 
     /// Create wishlist entry (want to read but don't own)
-    static func createWishlistEntry(for work: Work) -> UserLibraryEntry {
-        let entry = UserLibraryEntry(work: work, edition: nil, readingStatus: .wishlist)
+    public static func createWishlistEntry(for work: Work) -> UserLibraryEntry {
+        let entry = UserLibraryEntry(work: work, edition: nil, readingStatus: ReadingStatus.wishlist)
         return entry
     }
 
     /// Create owned entry (have specific edition)
-    static func createOwnedEntry(for work: Work, edition: Edition, status: ReadingStatus = .toRead) -> UserLibraryEntry {
+    public static func createOwnedEntry(for work: Work, edition: Edition, status: ReadingStatus = ReadingStatus.toRead) -> UserLibraryEntry {
         let entry = UserLibraryEntry(work: work, edition: edition, readingStatus: status)
         return entry
     }
@@ -57,7 +58,7 @@ final class UserLibraryEntry: Identifiable {
     /// Update reading progress based on current page and edition page count
     func updateReadingProgress() {
         // Can't track progress for wishlist items (no edition)
-        guard readingStatus != .wishlist,
+        guard readingStatus != ReadingStatus.wishlist,
               let pageCount = edition?.pageCount,
               pageCount > 0 else {
             readingProgress = 0.0
@@ -67,14 +68,14 @@ final class UserLibraryEntry: Identifiable {
         readingProgress = min(Double(currentPage) / Double(pageCount), 1.0)
 
         // Auto-complete if progress reaches 100%
-        if readingProgress >= 1.0 && readingStatus != .read {
+        if readingProgress >= 1.0 && readingStatus != ReadingStatus.read {
             markAsCompleted()
         }
     }
 
     /// Mark the book as completed
     func markAsCompleted() {
-        readingStatus = .read
+        readingStatus = ReadingStatus.read
         readingProgress = 1.0
         if dateCompleted == nil {
             dateCompleted = Date()
@@ -90,13 +91,13 @@ final class UserLibraryEntry: Identifiable {
 
     /// Start reading the book (only if owned)
     func startReading() {
-        guard readingStatus != .wishlist, edition != nil else {
+        guard readingStatus != ReadingStatus.wishlist, edition != nil else {
             // Can't start reading a wishlist item - need to acquire edition first
             return
         }
 
-        if readingStatus == .toRead {
-            readingStatus = .reading
+        if readingStatus == ReadingStatus.toRead {
+            readingStatus = ReadingStatus.reading
             if dateStarted == nil {
                 dateStarted = Date()
             }
@@ -105,8 +106,8 @@ final class UserLibraryEntry: Identifiable {
     }
 
     /// Convert wishlist entry to owned entry
-    func acquireEdition(_ edition: Edition, status: ReadingStatus = .toRead) {
-        guard readingStatus == .wishlist else { return }
+    func acquireEdition(_ edition: Edition, status: ReadingStatus = ReadingStatus.toRead) {
+        guard readingStatus == ReadingStatus.wishlist else { return }
 
         self.edition = edition
         self.readingStatus = status
@@ -115,7 +116,7 @@ final class UserLibraryEntry: Identifiable {
 
     /// Check if this is a wishlist entry
     var isWishlistItem: Bool {
-        return readingStatus == .wishlist && edition == nil
+        return readingStatus == ReadingStatus.wishlist && edition == nil
     }
 
     /// Check if user owns this entry
@@ -169,7 +170,7 @@ final class UserLibraryEntry: Identifiable {
 }
 
 // MARK: - Reading Status Enum
-enum ReadingStatus: String, Codable, CaseIterable, Identifiable, Sendable {
+public enum ReadingStatus: String, Codable, CaseIterable, Identifiable, Sendable {
     case wishlist = "Wishlist"     // Want to have/read but don't own
     case toRead = "TBR"            // Have it and want to read in the future
     case reading = "Reading"       // Currently reading
@@ -177,7 +178,7 @@ enum ReadingStatus: String, Codable, CaseIterable, Identifiable, Sendable {
     case onHold = "On Hold"        // Started but paused
     case dnf = "DNF"               // Did not finish
 
-    var id: Self { self }
+    public var id: Self { self }
 
     var displayName: String {
         switch self {
@@ -214,15 +215,13 @@ enum ReadingStatus: String, Codable, CaseIterable, Identifiable, Sendable {
 
     var color: Color {
         switch self {
-        case .toRead: return .blue
-        case .reading: return .orange
-        case .read: return .green
-        case .onHold: return .yellow
-        case .dnf: return .red
-        case .wishlist: return .pink
+        case .toRead: return Color.blue
+        case .reading: return Color.orange
+        case .read: return Color.green
+        case .onHold: return Color.yellow
+        case .dnf: return Color.red
+        case .wishlist: return Color.pink
         }
     }
 }
 
-// MARK: - Sendable Conformance
-extension UserLibraryEntry: @unchecked Sendable {}
