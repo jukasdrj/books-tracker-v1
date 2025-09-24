@@ -1,0 +1,64 @@
+# Books API Proxy Configuration
+name = "books-api-proxy"
+main = "src/index.js"
+compatibility_date = "2024-09-17"
+compatibility_flags = ["nodejs_compat"]
+
+# Paid Plan CPU Limits
+limits = { cpu_ms = 30000, memory_mb = 128 }
+keep_vars = true
+
+# Basic observability
+[observability]
+enabled = true
+
+# Professional Logging Configuration disabled for now
+# logpush = true
+
+# Secrets management using secrets store - CORRECT STRUCTURE
+[[secrets_store_secrets]]
+binding = "GOOGLE_BOOKS_API_KEY"
+store_id = "b0562ac16fde468c8af12717a6c88400"
+secret_name = "Google_books_hardoooe"
+
+[[secrets_store_secrets]]
+binding = "GOOGLE_BOOKS_IOSKEY"
+store_id = "b0562ac16fde468c8af12717a6c88400"
+secret_name = "Google_books_ioskey"
+
+[[secrets_store_secrets]]
+binding = "ISBNDB_API_KEY"
+store_id = "b0562ac16fde468c8af12717a6c88400"
+secret_name = "ISBNDB_API_KEY"
+
+[[secrets_store_secrets]]
+binding = "ISBN_SEARCH_KEY"
+store_id = "b0562ac16fde468c8af12717a6c88400"
+secret_name = "ISBN_search_key"
+
+# Service bindings for worker-to-worker communication
+[[services]]
+binding = "ISBNDB_WORKER"
+service = "isbndb-biography-worker-production"
+
+# KV Cache for API responses - primary cache layer
+[[kv_namespaces]]
+binding = "CACHE"
+id = "b9cade63b6db48fd80c109a013f38fdb"
+
+# R2 Storage for large response caching (cold storage layer)
+[[r2_buckets]]
+binding = "API_CACHE_COLD"
+bucket_name = "personal-library-data"
+
+# R2 Storage unified with cache-warmer for consistency
+[[r2_buckets]]
+binding = "LIBRARY_DATA"
+bucket_name = "personal-library-data"
+
+# Environment variables for configuration
+[vars]
+CACHE_HOT_TTL = "3600"         # KV cache TTL: 1 hour
+CACHE_COLD_TTL = "604800"      # R2 cache TTL: 7 days
+MAX_RESULTS_DEFAULT = "40"     # Default max results
+RATE_LIMIT_MS = "100"          # Rate limiting between API calls

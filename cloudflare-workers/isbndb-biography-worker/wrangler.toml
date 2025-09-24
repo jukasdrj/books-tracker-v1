@@ -1,0 +1,24 @@
+name = "isbndb-biography-worker-production"
+main = "src/index.js"
+compatibility_date = "2024-09-17"
+compatibility_flags = ["nodejs_compat"]
+
+limits = { cpu_ms = 30000 }
+
+[observability]
+enabled = true
+
+[[secrets_store_secrets]]
+binding = "ISBNDB_API_KEY"
+store_id = "b0562ac16fde468c8af12717a6c88400"
+secret_name = "ISBNDB_API_KEY"
+
+# KV Cache for hot storage
+[[kv_namespaces]]
+binding = "KV_CACHE"
+id = "b9cade63b6db48fd80c109a013f38fdb"
+
+# R2 for cold storage of bibliographies
+[[r2_buckets]]
+binding = "R2_BUCKET"
+bucket_name = "books-cache"
