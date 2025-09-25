@@ -21,15 +21,18 @@ struct iOS26FloatingBookCard: View {
     }
 
     var body: some View {
-        VStack(spacing: 12) {
-            // FLOATING COVER IMAGE (Main V1.0 Requirement)
-            floatingCoverImage
-                // .glassEffectID("cover-\(work.id)", in: namespace)
+        NavigationLink(destination: WorkDetailView(work: work)) {
+            VStack(spacing: 12) {
+                // FLOATING COVER IMAGE (Main V1.0 Requirement)
+                floatingCoverImage
+                    // .glassEffectID("cover-\(work.id)", in: namespace)
 
-            // SMALL INFO CARD BELOW (V1.0 Requirement)
-            smallInfoCard
-                // .glassEffectID("info-\(work.id)", in: namespace)
+                // SMALL INFO CARD BELOW (V1.0 Requirement)
+                smallInfoCard
+                    // .glassEffectID("info-\(work.id)", in: namespace)
+            }
         }
+        .buttonStyle(.plain)
         .scaleEffect(isPressed ? 0.95 : 1.0)
         .animation(.smooth(duration: 0.2), value: isPressed)
         .onLongPressGesture(minimumDuration: 0.5) {

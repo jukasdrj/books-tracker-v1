@@ -5,13 +5,27 @@ import SwiftUI
 @Model
 public final class Edition: Identifiable {
     public var id: UUID = UUID()
-    var isbn: String?
+
+    // ISBN support - now supports multiple ISBNs per edition
+    var isbn: String?           // Primary ISBN (for backward compatibility)
+    var isbns: [String] = []    // All ISBNs (ISBN-10, ISBN-13, etc.)
+
     var publisher: String?
     var publicationDate: String?
     var pageCount: Int?
     var format: EditionFormat = EditionFormat.hardcover
     var coverImageURL: String?
     var editionTitle: String? // "Deluxe Edition", "Abridged", etc.
+
+    // External API identifiers for syncing and deduplication
+    var openLibraryID: String?      // e.g., "OL123456M" (M for edition/manifest)
+    var isbndbID: String?          // ISBNDB edition identifier
+    var googleBooksVolumeID: String? // e.g., "beSP5CCpiGUC" (same as Work for Google Books)
+    var goodreadsID: String?       // Goodreads edition ID (future)
+
+    // Cache optimization for ISBNDB integration
+    var lastISBNDBSync: Date?       // When this edition was last synced with ISBNDB
+    var isbndbQuality: Int = 0      // Data quality score from ISBNDB (0-100)
 
     // Metadata
     var dateCreated: Date = Date()
@@ -72,6 +86,70 @@ public final class Edition: Identifiable {
     var pageCountString: String? {
         guard let pageCount = pageCount, pageCount > 0 else { return nil }
         return "\(pageCount) pages"
+    }
+
+    // MARK: - ISBN Management
+
+    /// Get the primary ISBN (preferring ISBN-13, then ISBN-10, then any ISBN)
+    var primaryISBN: String? {
+        // Return existing primary ISBN if set
+        if let isbn = isbn, !isbn.isEmpty {
+            return isbn
+        }
+
+        // Find best ISBN from collection
+        return bestISBN
+    }
+
+    /// Get the best ISBN from the collection (ISBN-13 preferred)
+    private var bestISBN: String? {
+        // Prefer ISBN-13 (13 digits)
+        let isbn13 = isbns.first { $0.count == 13 && $0.allSatisfy(\.isNumber) }
+        if let isbn13 = isbn13 {
+            return isbn13
+        }
+
+        // Fallback to ISBN-10 (10 characters)
+        let isbn10 = isbns.first { $0.count == 10 }
+        if let isbn10 = isbn10 {
+            return isbn10
+        }
+
+        // Return any ISBN
+        return isbns.first
+    }
+
+    /// Add an ISBN to the collection (prevents duplicates)
+    func addISBN(_ newISBN: String) {
+        let cleanISBN = newISBN.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanISBN.isEmpty, !isbns.contains(cleanISBN) else { return }
+
+        isbns.append(cleanISBN)
+
+        // Set as primary ISBN if none exists
+        if isbn == nil || isbn?.isEmpty == true {
+            isbn = cleanISBN
+        }
+
+        touch()
+    }
+
+    /// Remove an ISBN from the collection
+    func removeISBN(_ targetISBN: String) {
+        isbns.removeAll { $0 == targetISBN }
+
+        // Update primary ISBN if it was removed
+        if isbn == targetISBN {
+            isbn = bestISBN
+        }
+
+        touch()
+    }
+
+    /// Check if this edition has a specific ISBN
+    func hasISBN(_ searchISBN: String) -> Bool {
+        let cleanSearch = searchISBN.trimmingCharacters(in: .whitespacesAndNewlines)
+        return isbn == cleanSearch || isbns.contains(cleanSearch)
     }
 
     /// Update last modified timestamp

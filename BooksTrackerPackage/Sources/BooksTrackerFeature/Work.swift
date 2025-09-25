@@ -10,6 +10,16 @@ public final class Work: Identifiable {
     var firstPublicationYear: Int?
     var subjectTags: [String] = []
 
+    // External API identifiers for syncing and deduplication
+    var openLibraryID: String?      // e.g., "OL123456W"
+    var isbndbID: String?          // ISBNDB work/book identifier
+    var googleBooksVolumeID: String? // e.g., "beSP5CCpiGUC"
+    var goodreadsID: String?       // Goodreads work ID (future)
+
+    // Cache optimization for ISBNDB integration
+    var lastISBNDBSync: Date?       // When this work was last synced with ISBNDB
+    var isbndbQuality: Int = 0      // Data quality score from ISBNDB (0-100)
+
     // Metadata
     var dateCreated: Date = Date()
     var lastModified: Date = Date()

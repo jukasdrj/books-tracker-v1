@@ -12,6 +12,12 @@ public final class Author: Identifiable {
     var birthYear: Int?
     var deathYear: Int?
 
+    // External API identifiers for syncing and deduplication
+    var openLibraryID: String?      // e.g., "OL23919A"
+    var isbndbID: String?          // ISBNDB author identifier
+    var googleBooksID: String?     // Google Books author identifier
+    var goodreadsID: String?       // Goodreads author ID (future)
+
     // Metadata
     var dateCreated: Date = Date()
     var lastModified: Date = Date()
