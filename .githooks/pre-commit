@@ -1,0 +1,26 @@
+#!/bin/bash
+# Pre-commit hook for BooksTracker
+# Auto-updates build numbers on commits
+
+set -e
+
+# Colors
+BLUE='\033[0;34m'
+GREEN='\033[0;32m'
+NC='\033[0m'
+
+echo -e "${BLUE}🔄${NC} Pre-commit: Updating build number..."
+
+# Get project root
+HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$HOOK_DIR")"
+
+# Update build number only (not marketing version)
+"$PROJECT_ROOT/Scripts/update_version.sh" build
+
+# Stage the updated config file
+git add "$PROJECT_ROOT/Config/Shared.xcconfig"
+
+echo -e "${GREEN}✅${NC} Build number updated and staged"
+
+exit 0

@@ -1,6 +1,8 @@
-# BooksTracker - iOS App
+# 📚 BooksTracker - iOS App
 
-A modern iOS application using a **workspace + SPM package** architecture for clean separation between app shell and feature code.
+A beautiful iOS application for tracking your personal book library with cultural diversity insights! Built with **Swift 6.1+**, **SwiftUI**, and forward-compatible **iOS 26 Liquid Glass** design system.
+
+Uses a modern **workspace + SPM package** architecture for clean separation between app shell and feature code, plus some seriously slick automation! 🤖✨
 
 ## AI Assistant Rules Files
 
@@ -41,6 +43,11 @@ BooksTracker/
 │   ├── Package.swift                   # Package configuration
 │   ├── Sources/BooksTrackerFeature/       # Your feature code
 │   └── Tests/BooksTrackerFeatureTests/    # Unit tests
+├── Scripts/                               # 🛠️ Build automation magic
+│   ├── update_version.sh                  # Smart version management
+│   ├── release.sh                         # One-command releases
+│   └── setup_hooks.sh                     # Git hook installer
+├── .githooks/                             # 🪝 Git automation
 └── BooksTrackerUITests/                   # UI automation tests
 ```
 
@@ -55,6 +62,26 @@ BooksTracker/
 - Files added to the filesystem automatically appear in Xcode
 - No need to manually add files to project targets
 - Reduces project file conflicts in teams
+
+## 🚀 Quick Start & Automation
+
+### Automated Version Management
+Get started with zero-hassle version and release management:
+
+```bash
+# One-time setup (install git hooks for auto-versioning)
+./Scripts/setup_hooks.sh
+
+# Version bumping made easy
+./Scripts/update_version.sh patch    # Bug fixes
+./Scripts/update_version.sh minor    # New features
+./Scripts/update_version.sh major    # Breaking changes
+
+# Complete release workflow
+./Scripts/release.sh minor "Added awesome new features! 🎉"
+```
+
+**Pro tip**: After running `setup_hooks.sh`, your build numbers automatically update on every commit - no more manual version management! 🧠
 
 ## Development Notes
 

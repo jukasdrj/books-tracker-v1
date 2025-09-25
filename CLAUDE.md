@@ -1,6 +1,20 @@
-# CLAUDE.md
+# 📚 CLAUDE.md
+```
+    ██████╗  ██████╗  ██████╗ ██╗  ██╗███████╗
+    ██╔══██╗██╔═══██╗██╔═══██╗██║ ██╔╝██╔════╝
+    ██████╔╝██║   ██║██║   ██║█████╔╝ ███████╗
+    ██╔══██╗██║   ██║██║   ██║██╔═██╗ ╚════██║
+    ██████╔╝╚██████╔╝╚██████╔╝██║  ██╗███████║
+    ╚═════╝  ╚═════╝  ╚═════╝ ╚═╝  ╚═╝╚══════╝
+    ████████╗██████╗  █████╗  ██████╗██╗  ██╗███████╗██████╗
+    ╚══██╔══╝██╔══██╗██╔══██╗██╔════╝██║ ██╔╝██╔════╝██╔══██╗
+       ██║   ██████╔╝███████║██║     █████╔╝ █████╗  ██████╔╝
+       ██║   ██╔══██╗██╔══██║██║     ██╔═██╗ ██╔══╝  ██╔══██╗
+       ██║   ██║  ██║██║  ██║╚██████╗██║  ██╗███████╗██║  ██║
+       ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝
+```
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Hey there! 👋 Welcome to the BooksTracker project docs. This file is your friendly guide to working with Claude Code in this codebase. Think of it as your trusty companion for navigating this Swift wonderland! ✨
 
 ## Project Overview
 
@@ -28,8 +42,42 @@ BooksTracker/
 ├── Config/                                # Build configuration
 │   ├── Shared.xcconfig                    # Bundle ID, versions, deployment target
 │   └── BooksTracker.entitlements          # App capabilities (CloudKit enabled)
+├── Scripts/                               # 🛠️ Build & release automation
+│   ├── update_version.sh                  # Smart version management
+│   ├── release.sh                         # One-click releases
+│   ├── setup_hooks.sh                     # Git hook installer
+│   └── pre_build_version.sh               # Auto-version on build
+├── .githooks/                             # 🪝 Git automation hooks
+│   └── pre-commit                         # Auto-updates build numbers
 └── BooksTrackerUITests/                   # UI automation tests
 ```
+
+## Versioning & Release Management
+
+### 🤖 Automated Versioning System
+The project now has some seriously slick automation! 🎯 No more manual version bumping or forgetting to update build numbers:
+
+```bash
+# Quick version updates
+./Scripts/update_version.sh patch          # 1.0.0 → 1.0.1
+./Scripts/update_version.sh minor          # 1.0.0 → 1.1.0
+./Scripts/update_version.sh major          # 1.0.0 → 2.0.0
+./Scripts/update_version.sh build          # Update build number only
+./Scripts/update_version.sh auto           # Auto-detect from git tags
+
+# Complete release workflow
+./Scripts/release.sh patch "Bug fixes"     # Creates tag, commits, ready to push
+./Scripts/release.sh minor "New features"  # Major.Minor.Patch release
+
+# Setup automated hooks (run once & forget!)
+./Scripts/setup_hooks.sh                   # Auto-updates build on commits 🪝
+```
+
+**Version Configuration**: All versions are managed in `Config/Shared.xcconfig`:
+- `MARKETING_VERSION`: User-facing version (1.2.3)
+- `CURRENT_PROJECT_VERSION`: Build number (auto-generated from git) ✨
+
+**Git Integration**: Build numbers auto-increment based on commit count, ensuring unique builds for every commit. The pre-commit hook automatically updates build numbers so you never have to think about it! 🧠
 
 ## Development Commands
 
@@ -103,7 +151,7 @@ The app uses a **properly normalized** SwiftData schema with four main entities:
 - **Author**: Author information with cultural diversity metadata (gender, region)
 - **UserLibraryEntry**: User's relationship to a work (reading status, progress, ratings)
 
-### Recent Implementation Updates (v1.1)
+### 🚀 Recent Implementation Updates (v1.1+)
 
 #### Edition Metadata System
 - **EditionMetadataView**: iOS 26 Liquid Glass metadata card with interactive components
@@ -112,10 +160,16 @@ The app uses a **properly normalized** SwiftData schema with four main entities:
 - **Context Menus**: Rich interaction with status change submenus and quick rating
 
 #### Key Components Added
-- **StarRatingView**: Interactive 5-star rating with haptic feedback
+- **StarRatingView**: Interactive 5-star rating with haptic feedback ⭐
 - **ReadingStatusPicker**: Modal picker for reading status changes
-- **NotesEditorView**: Full-screen notes editing with TextEditor
+- **NotesEditorView**: Full-screen notes editing with TextEditor 📝
 - **Enhanced Context Menus**: Status changes, rating, and library management
+
+#### 🛠️ DevOps & Automation (Latest!)
+- **Complete Build Automation**: Smart versioning scripts that Just Work™
+- **Git Hooks**: Auto-updating build numbers on every commit
+- **Release Scripts**: One-command releases with tagging and changelog support
+- **Version Management**: Semantic versioning with git-based build numbers
 
 ### Key Relationships
 ```
@@ -317,16 +371,22 @@ struct LibraryView: View {
 
 This architecture emphasizes simplicity, modern Swift patterns, and forward compatibility while maintaining clean separation of concerns through the SPM package structure.
 
-## Known Issues & Troubleshooting
+## 🐛 Known Issues & Troubleshooting
 
-### ✅ Resolved Issues
+### ✅ Resolved Issues (Hall of Fame!)
 
-#### Navigation Fix (v1.1.1) - RESOLVED
+#### Navigation Fix (v1.1.1) - RESOLVED 🎉
 - **Issue**: NavigationLink taps from book cards to WorkDetailView not triggering
-- **Root Cause**: Conflicting gesture recognizers in iOS26FloatingBookCard
+- **Root Cause**: Conflicting gesture recognizers in iOS26FloatingBookCard (classic SwiftUI shenanigans!)
 - **Solution**: Removed pressEvents modifier and moved press animations to BookCardButtonStyle
 - **Result**: Navigation now works perfectly while preserving context menus and animations
 - **Status**: ✅ **FIXED** - Both navigation and context menus working correctly
+- **Lesson Learned**: SwiftUI gestures can be... particular about their friendships 🤝
+
+### 🚀 Current Status
+The app is currently in a great state! Navigation works smoothly, the automation scripts are handling all the tedious version management, and the iOS 26 Liquid Glass theming is looking absolutely gorgeous.
+
+**Pro tip**: If you run into any weird build issues, try the clean command first - it fixes 90% of Xcode's mood swings! 😅
 
 ### Debugging Commands
 ```javascript
