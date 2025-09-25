@@ -102,9 +102,13 @@ public struct iOS26LiquidLibraryView: View {
                     .buttonStyle(GlassButtonStyle())
                 }
             }
+            .navigationDestination(for: Work.self) { work in
+                WorkDetailView(work: work)
+            }
             .sheet(isPresented: $showingDiversityInsights) {
                 CulturalDiversityInsightsView(works: filteredWorks)
                     .presentationDetents([.medium, .large])
+                    .iOS26SheetGlass()
             }
         }
     }
@@ -198,10 +202,13 @@ public struct iOS26LiquidLibraryView: View {
                 columns: adaptiveColumns(for: geometry.size),
                 spacing: 20
             ) { work in
-                iOS26FloatingBookCard(
-                    work: work,
-                    namespace: layoutTransition
-                )
+                NavigationLink(value: work) {
+                    iOS26FloatingBookCard(
+                        work: work,
+                        namespace: layoutTransition
+                    )
+                }
+                .buttonStyle(.plain)
                 .glassEffectID("book-\(work.id)", in: layoutTransition)
             }
         }
@@ -212,8 +219,11 @@ public struct iOS26LiquidLibraryView: View {
         GeometryReader { geometry in
             LazyVGrid(columns: adaptiveColumns(for: geometry.size), spacing: 16) {
                 ForEach(filteredWorks, id: \.id) { work in
-                    iOS26AdaptiveBookCard(work: work)
-                        .glassEffectID("adaptive-\(work.id)", in: layoutTransition)
+                    NavigationLink(value: work) {
+                        iOS26AdaptiveBookCard(work: work)
+                    }
+                    .buttonStyle(.plain)
+                    .glassEffectID("adaptive-\(work.id)", in: layoutTransition)
                 }
             }
         }
@@ -223,8 +233,11 @@ public struct iOS26LiquidLibraryView: View {
     private var liquidListLayout: some View {
         LazyVStack(spacing: 12) {
             ForEach(filteredWorks, id: \.id) { work in
-                iOS26LiquidListRow(work: work)
-                    .glassEffectID("list-\(work.id)", in: layoutTransition)
+                NavigationLink(value: work) {
+                    iOS26LiquidListRow(work: work)
+                }
+                .buttonStyle(.plain)
+                .glassEffectID("list-\(work.id)", in: layoutTransition)
             }
         }
     }

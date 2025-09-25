@@ -21,27 +21,20 @@ struct iOS26FloatingBookCard: View {
     }
 
     var body: some View {
-        NavigationLink(destination: WorkDetailView(work: work)) {
-            VStack(spacing: 12) {
-                // FLOATING COVER IMAGE (Main V1.0 Requirement)
-                floatingCoverImage
-                    // .glassEffectID("cover-\(work.id)", in: namespace)
+        VStack(spacing: 12) {
+            // FLOATING COVER IMAGE (Main V1.0 Requirement)
+            floatingCoverImage
+                .glassEffectID("cover-\(work.id)", in: namespace)
 
-                // SMALL INFO CARD BELOW (V1.0 Requirement)
-                smallInfoCard
-                    // .glassEffectID("info-\(work.id)", in: namespace)
-            }
+            // SMALL INFO CARD BELOW (V1.0 Requirement)
+            smallInfoCard
+                .glassEffectID("info-\(work.id)", in: namespace)
         }
-        .buttonStyle(.plain)
         .scaleEffect(isPressed ? 0.95 : 1.0)
         .animation(.smooth(duration: 0.2), value: isPressed)
-        .onLongPressGesture(minimumDuration: 0.5) {
-            // Long press for quick actions
-            showingQuickActions.toggle()
-
-            // Haptic feedback
-            let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
-            impactFeedback.impactOccurred()
+        .contentShape(Rectangle())
+        .onTapGesture {
+            // Navigate to detail view - handled by parent NavigationLink
         }
         .contextMenu {
             quickActionsMenu
@@ -49,7 +42,12 @@ struct iOS26FloatingBookCard: View {
         .sheet(isPresented: $showingQuickActions) {
             QuickActionsSheet(work: work)
                 .presentationDetents([.medium])
+                .iOS26SheetGlass()
         }
+        .pressEvents(
+            onPress: { isPressed = true },
+            onRelease: { isPressed = false }
+        )
     }
 
     // MARK: - Floating Cover Image
@@ -85,7 +83,7 @@ struct iOS26FloatingBookCard: View {
             }
             .frame(height: 240) // Consistent card height
             .clipShape(RoundedRectangle(cornerRadius: 16))
-            // .glassEffect(.regular.tint(.white.opacity(0.1)))
+            .glassEffect(.regular, tint: .white.opacity(0.1))
             .shadow(
                 color: .black.opacity(0.15),
                 radius: 12,
@@ -134,18 +132,6 @@ struct iOS26FloatingBookCard: View {
                 }
             }
         }
-        .onTapGesture {
-            // Haptic feedback for tap
-            let selectionFeedback = UISelectionFeedbackGenerator()
-            selectionFeedback.selectionChanged()
-
-            // Navigate to book detail (implement navigation)
-            // NavigationManager.shared.navigateToBookDetail(work: work)
-        }
-        .pressEvents(
-            onPress: { isPressed = true },
-            onRelease: { isPressed = false }
-        )
     }
 
     // MARK: - Small Info Card Below
@@ -226,20 +212,32 @@ struct iOS26FloatingBookCard: View {
     private var quickActionsMenu: some View {
         Group {
             if let userEntry = userEntry {
-                // Existing library entry actions
-                Button("Mark as Reading", systemImage: "book.pages") {
-                    updateReadingStatus(.reading)
-                }
-
-                Button("Mark as Read", systemImage: "checkmark.circle") {
-                    updateReadingStatus(.read)
-                }
-
-                if userEntry.readingStatus != .wishlist {
-                    Button("Add to Wishlist", systemImage: "heart") {
-                        updateReadingStatus(.wishlist)
+                // Status change submenu
+                Menu("Change Status", systemImage: "bookmark") {
+                    ForEach(ReadingStatus.allCases.filter { $0 != userEntry.readingStatus }, id: \.self) { status in
+                        Button(status.displayName, systemImage: status.systemImage) {
+                            updateReadingStatus(status)
+                        }
                     }
                 }
+
+                Divider()
+
+                // Quick rating (if owned)
+                if !userEntry.isWishlistItem {
+                    Menu("Rate Book", systemImage: "star") {
+                        ForEach(1...5, id: \.self) { rating in
+                            Button("\(rating) Stars") {
+                                setRating(Double(rating))
+                            }
+                        }
+                        Button("Remove Rating") {
+                            setRating(0)
+                        }
+                    }
+                }
+
+                Divider()
 
                 Button("Remove from Library", systemImage: "trash", role: .destructive) {
                     removeFromLibrary()
@@ -253,10 +251,6 @@ struct iOS26FloatingBookCard: View {
                 Button("Add to Wishlist", systemImage: "heart") {
                     addToWishlist()
                 }
-            }
-
-            Button("View Details", systemImage: "info.circle") {
-                // Navigate to detail view
             }
         }
     }
@@ -275,8 +269,18 @@ struct iOS26FloatingBookCard: View {
         userEntry.touch()
 
         // Haptic feedback
-        let notificationFeedback = UINotificationFeedbackGenerator()
-        notificationFeedback.notificationOccurred(.success)
+        triggerHapticFeedback(.success)
+    }
+
+    private func setRating(_ rating: Double) {
+        guard let userEntry = userEntry, !userEntry.isWishlistItem else { return }
+
+        userEntry.personalRating = rating > 0 ? rating : nil
+        userEntry.rating = rating > 0 ? Int(rating) : nil
+        userEntry.touch()
+
+        // Haptic feedback
+        triggerHapticFeedback(.success)
     }
 
     private func addToLibrary() {
@@ -287,22 +291,29 @@ struct iOS26FloatingBookCard: View {
             status: .toRead
         )
 
-        // Add to SwiftData context (implement based on your context management)
-        // modelContext.insert(entry)
+        work.userLibraryEntries.append(entry)
+        triggerHapticFeedback(.success)
     }
 
     private func addToWishlist() {
         let entry = UserLibraryEntry.createWishlistEntry(for: work)
-
-        // Add to SwiftData context
-        // modelContext.insert(entry)
+        work.userLibraryEntries.append(entry)
+        triggerHapticFeedback(.success)
     }
 
     private func removeFromLibrary() {
         guard let userEntry = userEntry else { return }
 
-        // Remove from SwiftData context
-        // modelContext.delete(userEntry)
+        if let index = work.userLibraryEntries.firstIndex(of: userEntry) {
+            work.userLibraryEntries.remove(at: index)
+        }
+
+        triggerHapticFeedback(.warning)
+    }
+
+    private func triggerHapticFeedback(_ type: UINotificationFeedbackGenerator.FeedbackType) {
+        let notificationFeedback = UINotificationFeedbackGenerator()
+        notificationFeedback.notificationOccurred(type)
     }
 }
 
