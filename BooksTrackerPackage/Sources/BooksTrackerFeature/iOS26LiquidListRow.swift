@@ -51,9 +51,17 @@ struct iOS26LiquidListRow: View {
             showingQuickActions = true
             triggerHapticFeedback()
         }
-        .pressEvents(
-            onPress: { isPressed = true },
-            onRelease: { isPressed = false }
+        .simultaneousGesture(
+            // Use simultaneousGesture to avoid blocking NavigationLink
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in
+                    if !isPressed {
+                        isPressed = true
+                    }
+                }
+                .onEnded { _ in
+                    isPressed = false
+                }
         )
         .contextMenu {
             quickActionsMenu

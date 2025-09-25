@@ -208,7 +208,7 @@ public struct iOS26LiquidLibraryView: View {
                         namespace: layoutTransition
                     )
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(BookCardButtonStyle())
                 .glassEffectID("book-\(work.id)", in: layoutTransition)
             }
         }
@@ -507,6 +507,16 @@ struct MetricView: View {
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
+    }
+}
+
+// MARK: - Book Card Button Style
+
+struct BookCardButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
+            .animation(.smooth(duration: 0.2), value: configuration.isPressed)
     }
 }
 

@@ -7,7 +7,6 @@ struct iOS26FloatingBookCard: View {
     let work: Work
     let namespace: Namespace.ID
 
-    @State private var isPressed = false
     @State private var showingQuickActions = false
 
     // Current user's library entry for this work
@@ -30,12 +29,7 @@ struct iOS26FloatingBookCard: View {
             smallInfoCard
                 .glassEffectID("info-\(work.id)", in: namespace)
         }
-        .scaleEffect(isPressed ? 0.95 : 1.0)
-        .animation(.smooth(duration: 0.2), value: isPressed)
         .contentShape(Rectangle())
-        .onTapGesture {
-            // Navigate to detail view - handled by parent NavigationLink
-        }
         .contextMenu {
             quickActionsMenu
         }
@@ -44,10 +38,6 @@ struct iOS26FloatingBookCard: View {
                 .presentationDetents([.medium])
                 .iOS26SheetGlass()
         }
-        .pressEvents(
-            onPress: { isPressed = true },
-            onRelease: { isPressed = false }
-        )
     }
 
     // MARK: - Floating Cover Image
@@ -446,30 +436,7 @@ struct QuickActionButton: View {
     }
 }
 
-// MARK: - Press Events Modifier
-
-struct PressEvents: ViewModifier {
-    let onPress: () -> Void
-    let onRelease: () -> Void
-
-    func body(content: Content) -> some View {
-        content
-            .scaleEffect(1.0)
-            .onLongPressGesture(minimumDuration: 0, maximumDistance: .infinity, pressing: { pressing in
-                if pressing {
-                    onPress()
-                } else {
-                    onRelease()
-                }
-            }, perform: {})
-    }
-}
-
-extension View {
-    func pressEvents(onPress: @escaping () -> Void, onRelease: @escaping () -> Void) -> some View {
-        modifier(PressEvents(onPress: onPress, onRelease: onRelease))
-    }
-}
+// MARK: - Press Events Modifier (Removed - using simultaneousGesture instead)
 
 // MARK: - Pressed Button Style
 

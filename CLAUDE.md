@@ -319,11 +319,14 @@ This architecture emphasizes simplicity, modern Swift patterns, and forward comp
 
 ## Known Issues & Troubleshooting
 
-### Navigation Issues (v1.1)
-- **Book Card Navigation**: NavigationLink taps from book cards to WorkDetailView not triggering
-- **Context Menus**: Working correctly with proper haptic feedback
-- **Symptoms**: Taps on book cards don't navigate, but long-press context menus function
-- **Status**: Under investigation - may be related to button layering or gesture conflicts
+### ✅ Resolved Issues
+
+#### Navigation Fix (v1.1.1) - RESOLVED
+- **Issue**: NavigationLink taps from book cards to WorkDetailView not triggering
+- **Root Cause**: Conflicting gesture recognizers in iOS26FloatingBookCard
+- **Solution**: Removed pressEvents modifier and moved press animations to BookCardButtonStyle
+- **Result**: Navigation now works perfectly while preserving context menus and animations
+- **Status**: ✅ **FIXED** - Both navigation and context menus working correctly
 
 ### Debugging Commands
 ```javascript
