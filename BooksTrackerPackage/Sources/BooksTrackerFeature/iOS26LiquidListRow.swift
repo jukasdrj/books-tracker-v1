@@ -8,7 +8,6 @@ struct iOS26LiquidListRow: View {
     let displayStyle: ListRowStyle
 
     @Environment(\.iOS26ThemeStore) private var themeStore
-    @State private var isPressed = false
     @State private var showingQuickActions = false
 
     // Current user's library entry for this work
@@ -42,27 +41,6 @@ struct iOS26LiquidListRow: View {
         .background {
             liquidRowBackground
         }
-        .scaleEffect(isPressed ? 0.98 : 1.0)
-        .animation(.smooth(duration: 0.15), value: isPressed)
-        .onTapGesture {
-            handleTapGesture()
-        }
-        .onLongPressGesture(minimumDuration: 0.3) {
-            showingQuickActions = true
-            triggerHapticFeedback()
-        }
-        .simultaneousGesture(
-            // Use simultaneousGesture to avoid blocking NavigationLink
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in
-                    if !isPressed {
-                        isPressed = true
-                    }
-                }
-                .onEnded { _ in
-                    isPressed = false
-                }
-        )
         .contextMenu {
             quickActionsMenu
         }
@@ -443,13 +421,6 @@ struct iOS26LiquidListRow: View {
 
     // MARK: - Actions
 
-    private func handleTapGesture() {
-        let selectionFeedback = UISelectionFeedbackGenerator()
-        selectionFeedback.selectionChanged()
-
-        // Navigate to book detail
-        // NavigationManager.shared.navigateToBookDetail(work: work)
-    }
 
     private func triggerHapticFeedback() {
         let impactFeedback = UIImpactFeedbackGenerator(style: .medium)

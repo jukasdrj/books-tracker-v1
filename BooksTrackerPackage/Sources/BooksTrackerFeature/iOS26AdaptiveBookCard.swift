@@ -108,9 +108,6 @@ struct iOS26AdaptiveBookCard: View {
             }
             .frame(maxWidth: .infinity)
         }
-        .onTapGesture {
-            handleTapGesture()
-        }
     }
 
     private var standardCard: some View {
@@ -141,9 +138,6 @@ struct iOS26AdaptiveBookCard: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .onTapGesture {
-            handleTapGesture()
         }
         .onLongPressGesture {
             showingQuickActions = true
@@ -195,9 +189,6 @@ struct iOS26AdaptiveBookCard: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .onTapGesture {
-            handleTapGesture()
         }
         .onLongPressGesture {
             showingQuickActions = true
@@ -265,9 +256,6 @@ struct iOS26AdaptiveBookCard: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .onTapGesture {
-            handleTapGesture()
         }
         .onLongPressGesture {
             showingQuickActions = true
@@ -463,13 +451,6 @@ struct iOS26AdaptiveBookCard: View {
 
     // MARK: - Actions
 
-    private func handleTapGesture() {
-        let selectionFeedback = UISelectionFeedbackGenerator()
-        selectionFeedback.selectionChanged()
-
-        // Navigate to book detail
-        // NavigationManager.shared.navigateToBookDetail(work: work)
-    }
 
     private func triggerHapticFeedback() {
         let impactFeedback = UIImpactFeedbackGenerator(style: .medium)

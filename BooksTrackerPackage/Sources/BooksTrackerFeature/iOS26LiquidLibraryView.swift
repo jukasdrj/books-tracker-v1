@@ -222,7 +222,7 @@ public struct iOS26LiquidLibraryView: View {
                     NavigationLink(value: work) {
                         iOS26AdaptiveBookCard(work: work)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(BookCardButtonStyle())
                     .glassEffectID("adaptive-\(work.id)", in: layoutTransition)
                 }
             }
@@ -236,7 +236,7 @@ public struct iOS26LiquidLibraryView: View {
                 NavigationLink(value: work) {
                     iOS26LiquidListRow(work: work)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(BookCardButtonStyle())
                 .glassEffectID("list-\(work.id)", in: layoutTransition)
             }
         }
