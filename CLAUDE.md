@@ -103,6 +103,20 @@ The app uses a **properly normalized** SwiftData schema with four main entities:
 - **Author**: Author information with cultural diversity metadata (gender, region)
 - **UserLibraryEntry**: User's relationship to a work (reading status, progress, ratings)
 
+### Recent Implementation Updates (v1.1)
+
+#### Edition Metadata System
+- **EditionMetadataView**: iOS 26 Liquid Glass metadata card with interactive components
+- **WorkDetailView**: Immersive book detail screen with blurred cover background
+- **Navigation Integration**: NavigationLink wrapping for all library layouts
+- **Context Menus**: Rich interaction with status change submenus and quick rating
+
+#### Key Components Added
+- **StarRatingView**: Interactive 5-star rating with haptic feedback
+- **ReadingStatusPicker**: Modal picker for reading status changes
+- **NotesEditorView**: Full-screen notes editing with TextEditor
+- **Enhanced Context Menus**: Status changes, rating, and library management
+
 ### Key Relationships
 ```
 Work 1:many Edition (Work can have multiple editions)
@@ -302,3 +316,23 @@ struct LibraryView: View {
 ```
 
 This architecture emphasizes simplicity, modern Swift patterns, and forward compatibility while maintaining clean separation of concerns through the SPM package structure.
+
+## Known Issues & Troubleshooting
+
+### Navigation Issues (v1.1)
+- **Book Card Navigation**: NavigationLink taps from book cards to WorkDetailView not triggering
+- **Context Menus**: Working correctly with proper haptic feedback
+- **Symptoms**: Taps on book cards don't navigate, but long-press context menus function
+- **Status**: Under investigation - may be related to button layering or gesture conflicts
+
+### Debugging Commands
+```javascript
+// Test app with logs
+launch_app_logs_sim({
+    simulatorUuid: "SIMULATOR_UUID",
+    bundleId: "com.bookstrack.BooksTracker"
+})
+
+// Capture UI hierarchy for debugging
+describe_ui({ simulatorUuid: "SIMULATOR_UUID" })
+```
