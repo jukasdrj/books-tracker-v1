@@ -134,6 +134,17 @@ async function handleAutoSearch(request, env, ctx) {
     result.cached = false;
     result.queryAnalysis = queryAnalysis;
 
+    // Add API identifiers for SwiftData model synchronization
+    if (usedProvider === 'google-books' && result.items) {
+        result.items = result.items.map(item => ({
+            ...item,
+            volumeInfo: {
+                ...item.volumeInfo,
+                googleBooksVolumeID: item.id || null
+            }
+        }));
+    }
+
     setCachedData(cacheKey, result, 86400, env, ctx); // Cache for 24 hours
 
     return new Response(JSON.stringify(result), {
@@ -286,7 +297,9 @@ function transformISBNdbToStandardFormat(isbndbData, provider) {
                 pageCount: book.pages || 0,
                 categories: (book.subjects && typeof book.subjects === 'string') ? book.subjects.split(',').map(s => s.trim()) : (book.subjects || []),
                 imageLinks: book.image ? { thumbnail: book.image, smallThumbnail: book.image } : undefined,
-                language: book.language || 'en'
+                language: book.language || 'en',
+                // API identifiers for SwiftData model synchronization
+                isbndbID: book.id || book.isbn13 || book.isbn || null
             }
         })),
         provider: provider
@@ -410,6 +423,8 @@ function transformOpenLibraryToStandardFormat(data) {
                 imageLinks: doc.cover_i ? {
                     thumbnail: `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg`
                 } : undefined,
+                // API identifiers for SwiftData model synchronization
+                openLibraryID: doc.key || null
             }
         }))
     };

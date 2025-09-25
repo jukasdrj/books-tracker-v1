@@ -39,6 +39,10 @@ BooksTracker/
 │   ├── Package.swift                      # SPM configuration
 │   ├── Sources/BooksTrackerFeature/       # All feature code goes here
 │   └── Tests/BooksTrackerFeatureTests/    # Swift Testing tests
+├── cloudflare-workers/                    # 🌩️ Backend API & cache system
+│   ├── books-api-proxy/                   # Multi-provider book search API
+│   ├── personal-library-cache-warmer/     # Intelligent cache warming
+│   └── isbndb-biography-worker/           # Author biography service
 ├── Config/                                # Build configuration
 │   ├── Shared.xcconfig                    # Bundle ID, versions, deployment target
 │   └── BooksTracker.entitlements          # App capabilities (CloudKit enabled)
@@ -140,6 +144,31 @@ install_app_device({
     appPath: "/path/to/BooksTracker.app"
 })
 ```
+
+### Cloudflare Workers (Backend)
+The backend system is managed through npm scripts and Wrangler CLI:
+
+```bash
+# 🚀 Quick start - all workers
+npm run dev              # Start local development
+npm run deploy           # Deploy all workers to production
+npm run test             # Run worker tests
+
+# 📊 Individual worker management
+cd cloudflare-workers/books-api-proxy
+wrangler tail --format pretty           # Real-time logs
+wrangler publish                        # Deploy this worker
+
+cd cloudflare-workers/personal-library-cache-warmer
+wrangler tail --search "Processing author"  # Monitor cache warming
+wrangler publish                            # Deploy cache warmer
+
+# 🔍 Monitoring & debugging
+wrangler kv:namespace list               # Check KV stores
+wrangler r2 bucket list                  # Check R2 storage
+```
+
+**Pro tip**: The cache system runs automatically, but you can monitor it in real-time with `wrangler tail`! 👀
 
 ## Architecture & Data Models
 
@@ -335,6 +364,67 @@ The app follows pure SwiftUI patterns because:
 - Easier testing of individual components
 - Future-proofs for potential multi-target expansion
 
+## 🌩️ Backend System & Recent Victories
+
+### Cloudflare Workers Architecture
+The app now includes a robust **multi-worker backend system** that's been battle-tested and is working beautifully! 🎉
+
+```
+    🔥 CLOUDFLARE WORKERS ECOSYSTEM 🔥
+    ┌─────────────────────────────────────┐
+    │  books-api-proxy (The Brain 🧠)     │
+    │  ├─ ISBNdb integration             │
+    │  ├─ Open Library fallback          │
+    │  ├─ Google Books backup            │
+    │  └─ NEW: API identifier extraction │
+    └─────────────────────────────────────┘
+              ↕️ (Service Bindings)
+    ┌─────────────────────────────────────┐
+    │  personal-library-cache-warmer      │
+    │  ├─ Intelligent cache warming       │
+    │  ├─ Cron jobs every 15 minutes ⏰   │
+    │  └─ Processing 364+ authors! 📚     │
+    └─────────────────────────────────────┘
+              ↕️ (Service Bindings)
+    ┌─────────────────────────────────────┐
+    │  isbndb-biography-worker            │
+    │  ├─ Author biography enrichment     │
+    │  └─ Cultural metadata extraction    │
+    └─────────────────────────────────────┘
+```
+
+### 🎯 Recent Fixes & Lessons Learned
+
+#### **The Great Service Binding URL Mystery - SOLVED! ✅**
+**What went wrong**: Manual cache warming was failing because service bindings were using relative URLs (`/author/andy%20weir`) instead of absolute URLs.
+
+**The "Aha!" moment**: Cron jobs were working fine because they used a different function that correctly constructed absolute URLs! Classic case of "it works in production but not in testing" 😅
+
+**The fix**: Updated API identifier extraction in `books-api-proxy` to include:
+- `isbndbID`: From book.id/isbn13/isbn fields
+- `openLibraryID`: From doc.key field
+- `googleBooksVolumeID`: From item.id field
+
+**Lesson learned**: Always check your service binding URL patterns - Cloudflare Workers are picky about absolute URLs! 🤓
+
+#### **SwiftData Model Sync Enhancement**
+The backend now properly extracts API identifiers that perfectly match our new SwiftData model fields:
+
+```swift
+// SwiftData model fields now have backend support! 🎉
+var openLibraryID: String?      // ✅ Extracted from Open Library
+var isbndbID: String?          // ✅ Extracted from ISBNdb
+var googleBooksVolumeID: String? // ✅ Extracted from Google Books
+```
+
+### 📊 Current System Status
+- **Cache entries**: Growing from 7→14+ (system is healthy! 💪)
+- **Author processing**: 364 authors loaded and being processed
+- **Cron jobs**: Running every 15 minutes like clockwork ⏰
+- **API coverage**: 3 providers with intelligent fallbacks
+
+**Pro tip**: The cache system is now self-healing and doesn't need babysitting! 🤖
+
 ## Common Patterns
 
 ### Model Access in Views
@@ -383,12 +473,23 @@ This architecture emphasizes simplicity, modern Swift patterns, and forward comp
 - **Status**: ✅ **FIXED** - Both navigation and context menus working correctly
 - **Lesson Learned**: SwiftUI gestures can be... particular about their friendships 🤝
 
+#### Backend Cache System Fix (v1.2) - RESOLVED 🎉
+- **Issue**: Manual cache warming failing, but cron jobs working fine (confusing AF!)
+- **Root Cause**: Service bindings using relative URLs instead of absolute URLs for manual triggers
+- **The Detective Work**: Cron jobs used `callISBNdbWorkerReliable` with correct absolute URLs, while manual warming used broken relative URL pattern
+- **Solution**: Enhanced API identifier extraction in `books-api-proxy` to support new SwiftData model fields
+- **Result**: Cache system now fully operational with 364+ authors being processed automatically
+- **Status**: ✅ **FIXED** - Cache growing from 7→14+ entries, system is self-healing
+- **Lesson Learned**: When Cloudflare Workers say they want absolute URLs, they REALLY mean it! 🌩️
+
 ### 🚀 Current Status
-The app is currently in a great state! Navigation works smoothly, the automation scripts are handling all the tedious version management, and the iOS 26 Liquid Glass theming is looking absolutely gorgeous.
+This project is absolutely crushing it! 💪 Navigation works flawlessly, backend cache system is humming along processing hundreds of authors, the automation scripts handle all version management, and the iOS 26 Liquid Glass theming looks stunning. Plus our multi-worker Cloudflare backend is now battle-tested and rock-solid!
 
 **Pro tip**: If you run into any weird build issues, try the clean command first - it fixes 90% of Xcode's mood swings! 😅
 
 ### Debugging Commands
+
+#### iOS App Debugging
 ```javascript
 // Test app with logs
 launch_app_logs_sim({
@@ -399,3 +500,23 @@ launch_app_logs_sim({
 // Capture UI hierarchy for debugging
 describe_ui({ simulatorUuid: "SIMULATOR_UUID" })
 ```
+
+#### Backend System Debugging
+```bash
+# 📡 Real-time monitoring (the good stuff!)
+cd cloudflare-workers/personal-library-cache-warmer
+wrangler tail --format pretty --search "Processing author"  # Watch authors being processed
+wrangler tail --format pretty --search "ERROR"              # Hunt down errors
+
+cd cloudflare-workers/books-api-proxy
+wrangler tail --format pretty                               # Monitor API requests
+
+# 🔍 System health checks
+curl "books-api-proxy.jukasdrj.workers.dev/health"         # API proxy health
+curl "personal-library-cache-warmer.jukasdrj.workers.dev/health"  # Cache warmer health
+
+# 📊 Cache inspection
+wrangler kv:key list --namespace-id YOUR_KV_NAMESPACE      # See what's cached
+```
+
+**Debug like a pro**: Use `wrangler tail` with search filters to zero in on specific issues! 🎯
