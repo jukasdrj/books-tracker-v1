@@ -199,108 +199,48 @@ enum MainTab: String, CaseIterable {
 
 // MARK: - Placeholder Views
 
-struct SearchView: View {
-    var body: some View {
-        GlassEffectContainer {
-            VStack(spacing: 20) {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 64))
-                    .foregroundColor(.secondary)
-
-                Text("Search Coming Soon")
-                    .font(.title2.bold())
-
-                Text("Book search and discovery features will be available in the next update.")
-                    .font(.body)
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-            .padding()
-        }
-        .padding()
-        .navigationTitle("Search")
-        .themedBackground()
-        .iOS26NavigationGlass()
-    }
-}
-
 struct InsightsView: View {
     var body: some View {
-        GlassEffectContainer {
-            VStack(spacing: 20) {
-                Image(systemName: "chart.bar")
-                    .font(.system(size: 64))
-                    .foregroundColor(.secondary)
+        VStack(spacing: 24) {
+            Image(systemName: "chart.bar")
+                .font(.system(size: 48, weight: .ultraLight))
+                .foregroundStyle(.secondary)
 
-                Text("Reading Insights")
-                    .font(.title2.bold())
+            Text("Reading Insights")
+                .font(.title2)
+                .fontWeight(.semibold)
 
-                Text("Cultural diversity analytics, reading goals, and progress tracking coming soon.")
-                    .font(.body)
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-            .padding()
+            Text("Track your reading progress and discover patterns in your literary journey")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 40)
         }
-        .padding()
         .navigationTitle("Insights")
-        .themedBackground()
-        .iOS26NavigationGlass()
     }
 }
 
 struct SettingsView: View {
-    @Environment(\.iOS26ThemeStore) private var themeStore
-
     var body: some View {
-        ScrollView {
-            VStack(spacing: 24) {
-                // Theme Selection
-                GlassEffectContainer {
-                    iOS26ThemePicker()
-                }
-                .padding()
+        VStack(spacing: 24) {
+            Image(systemName: "gear")
+                .font(.system(size: 48, weight: .ultraLight))
+                .foregroundStyle(.secondary)
 
-                // App Information
-                GlassEffectContainer {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("App Information")
-                            .font(.headline.bold())
+            Text("Settings")
+                .font(.title2)
+                .fontWeight(.semibold)
 
-                        VStack(spacing: 8) {
-                            HStack {
-                                Text("Version")
-                                Spacer()
-                                Text("1.0.0")
-                                    .foregroundColor(.secondary)
-                            }
-
-                            HStack {
-                                Text("Build")
-                                Spacer()
-                                Text("1")
-                                    .foregroundColor(.secondary)
-                            }
-
-                            HStack {
-                                Text("iOS Version")
-                                Spacer()
-                                Text("17.0+")
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                        .font(.body)
-                    }
-                    .padding()
-                }
-                .padding(.horizontal)
-            }
+            Text("Customize your reading experience and sync preferences")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 40)
         }
         .navigationTitle("Settings")
-        .themedBackground()
-        .iOS26NavigationGlass()
     }
 }
+
 
 // MARK: - Preview
 

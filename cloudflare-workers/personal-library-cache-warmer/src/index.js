@@ -32,18 +32,13 @@ let quotaUsage = {
 };
 
 /**
- * CRITICAL: Dual-format cache key storage for compatibility
- * Stores data under both legacy format (author:name) and auto-search format
- * This ensures cache warming works with books-api-proxy retrieval
+ * Store normalized Work/Edition data directly in auto-search format
+ * Eliminates legacy dual-format complexity for simplified caching
  */
-async function storeDualFormatCache(env, authorName, resultData) {
-  console.log(`📚 Storing dual-format cache for author: ${authorName}`);
-
-  // Legacy format (author:name) - for backward compatibility
-  const legacyKey = `author:${authorName.toLowerCase()}`;
+async function storeNormalizedCache(env, authorName, resultData) {
+  console.log(`📚 Storing normalized cache for author: ${authorName}`);
 
   // Auto-search format matching books-api-proxy expectations
-  // Format: auto-search:{base64_query}:{base64_params}
   const normalizedQuery = authorName.toLowerCase().trim();
   const queryB64 = btoa(normalizedQuery).replace(/[/+=]/g, '_');
   const defaultParams = {
@@ -59,16 +54,12 @@ async function storeDualFormatCache(env, authorName, resultData) {
   const paramsB64 = btoa(paramsString).replace(/[/+=]/g, '_');
   const autoSearchKey = `auto-search:${queryB64}:${paramsB64}`;
 
-  // Store under both key formats
+  // Store only enhanced Work/Edition structure
   const cacheData = JSON.stringify(resultData);
-  const promises = [
-    env.CACHE.put(legacyKey, cacheData, { expirationTtl: CACHE_TTL }),
-    env.CACHE.put(autoSearchKey, cacheData, { expirationTtl: CACHE_TTL })
-  ];
 
   try {
-    await Promise.all(promises);
-    console.log(`✅ Cached ${authorName} under keys: ${legacyKey}, ${autoSearchKey}`);
+    await env.CACHE.put(autoSearchKey, cacheData, { expirationTtl: CACHE_TTL });
+    console.log(`✅ Cached ${authorName} under auto-search key: ${autoSearchKey}`);
     return true;
   } catch (error) {
     console.error(`❌ Cache storage failed for ${authorName}:`, error);
@@ -993,96 +984,65 @@ async function processAuthorBiography(author, env, dryRun = false) {
       // Data is already available from the direct call
       const data = isbndbResult;
 
-      // Handle both legacy and new normalized formats
-      const hasNormalizedData = data.works && data.authors;
-      const totalBooks = hasNormalizedData ?
-        data.works.reduce((sum, work) => sum + work.editions.length, 0) :
-        (data.books?.length || 0);
-
-      if (data.success && totalBooks > 0) {
+      // Only process enhanced Work/Edition normalized format
+      if (data.success && data.works && data.authors) {
+        const totalEditions = data.works.reduce((sum, work) => sum + work.editions.length, 0);
         result.success = true;
-        result.foundBooks = totalBooks;
+        result.foundBooks = totalEditions;
 
-        if (hasNormalizedData) {
-          console.log(`🎯 Found ${data.works.length} works with ${totalBooks} editions for author "${author}" (normalized format)`);
-          // Convert normalized structure to legacy format for compatibility
-          result.books = data.works.flatMap(work =>
-            work.editions.map(edition => ({
-              ...edition,
-              work_title: work.title,
-              work_identifiers: work.identifiers,
-              work_authors: work.authors
-            }))
-          );
-          result.normalizedData = { works: data.works, authors: data.authors };
-        } else {
-          console.log(`📚 Found ${totalBooks} books for author "${author}" (legacy format)`);
-          result.books = data.books || [];
-        }
+        console.log(`🎯 Found ${data.works.length} works with ${totalEditions} editions for author "${author}"`);
 
-        // ENHANCED: Cache individual works/editions AND use dual-format storage for author search
+        // Store normalized data structure only
+        result.normalizedData = { works: data.works, authors: data.authors };
+
+        // Cache individual works/editions using normalized structure
         result.services.booksApi.attempted = true;
         const booksApiStart = Date.now();
 
-        // Cache items via books-api-proxy for ISBN/work lookups
-        for (const item of result.books) {
-          try {
-            // Use ISBN for caching (covers both legacy books and normalized editions)
-            if (item.isbn || item.isbn13) {
-              const isbn = item.isbn13 || item.isbn;
-              const cacheUrl = `https://books-api-proxy.jukasdrj.workers.dev/search/auto?q=${encodeURIComponent(isbn)}&maxResults=1&includeTranslations=false&showAllEditions=false`;
-              const cacheResponse = await env.BOOKS_API_PROXY.fetch(
-                new Request(cacheUrl),
-                {
-                  signal: AbortSignal.timeout(8000) // Reduced timeout for better throughput
-                }
-              );
+        // Cache editions via books-api-proxy for ISBN/work lookups
+        for (const work of result.normalizedData.works) {
+          for (const edition of work.editions) {
+            try {
+              if (edition.isbn) {
+                const cacheUrl = `https://books-api-proxy.jukasdrj.workers.dev/search/auto?q=${encodeURIComponent(edition.isbn)}&maxResults=1&includeTranslations=false&showAllEditions=false`;
+                const cacheResponse = await env.BOOKS_API_PROXY.fetch(
+                  new Request(cacheUrl),
+                  {
+                    signal: AbortSignal.timeout(8000)
+                  }
+                );
 
-              if (cacheResponse.ok) {
-                result.cachedBooks++;
-                result.services.booksApi.cacheHits++;
+                if (cacheResponse.ok) {
+                  result.cachedBooks++;
+                  result.services.booksApi.cacheHits++;
+                } else {
+                  result.errors.push(`Cache failed for "${work.title}" edition (HTTP ${cacheResponse.status})`);
+                }
               } else {
-                const title = item.work_title || item.title || 'Unknown';
-                result.errors.push(`Cache failed for "${title}" (HTTP ${cacheResponse.status})`);
+                result.errors.push(`No ISBN found for "${work.title}" edition`);
               }
-            } else {
-              const title = item.work_title || item.title || 'Unknown';
-              result.errors.push(`No ISBN found for "${title}"`);
+            } catch (cacheError) {
+              result.errors.push(`Cache error for "${work.title}" edition: ${cacheError.message}`);
             }
-          } catch (cacheError) {
-            const title = item.work_title || item.title || 'Unknown';
-            result.errors.push(`Cache error for "${title}": ${cacheError.message}`);
           }
         }
 
-        // CRITICAL: Store author results in dual-format cache for auto-search compatibility
-        if (data.success && (data.books || data.works)) {
-          console.log(`🔄 Storing enhanced dual-format cache for author: ${author}`);
-          const cacheData = hasNormalizedData ?
-            // Store normalized data with legacy compatibility
-            {
-              ...data,
-              books: result.books, // Legacy format for backward compatibility
-              format: 'enhanced_work_edition_v1'
-            } :
-            data; // Legacy format as-is
-
-          const authorCacheResult = await storeDualFormatCache(env, author, cacheData);
-          if (authorCacheResult) {
-            console.log(`✅ Successfully cached author "${author}" in enhanced dual format`);
-            result.services.booksApi.authorCached = true;
-          } else {
-            console.log(`❌ Failed to cache author "${author}" in enhanced dual format`);
-            result.services.booksApi.authorCached = false;
-          }
+        // Store author results using normalized cache format
+        const authorCacheResult = await storeNormalizedCache(env, author, data);
+        if (authorCacheResult) {
+          console.log(`✅ Successfully cached author "${author}" in normalized format`);
+          result.services.booksApi.authorCached = true;
+        } else {
+          console.log(`❌ Failed to cache author "${author}" in normalized format`);
+          result.services.booksApi.authorCached = false;
         }
 
         result.services.booksApi.responseTime = Date.now() - booksApiStart;
         result.services.booksApi.success = result.cachedBooks > 0;
 
-        console.log(`✅ Cached ${result.cachedBooks}/${result.foundBooks} books for "${author}"`);
+        console.log(`✅ Cached ${result.cachedBooks}/${result.foundBooks} editions for "${author}"`);
 
-        // ENHANCED: Cache author search via books-api-proxy to populate auto-search cache
+        // Cache author search via books-api-proxy to populate auto-search cache
         try {
           console.log(`🔍 Caching author search for "${author}" via books-api-proxy...`);
           const authorSearchUrl = `https://books-api-proxy.jukasdrj.workers.dev/search/auto?q=${encodeURIComponent(author)}&maxResults=40&includeTranslations=false&showAllEditions=false`;
@@ -1109,8 +1069,8 @@ async function processAuthorBiography(author, env, dryRun = false) {
         }
 
       } else {
-        console.log(`❌ No books found for author "${author}"`);
-        result.errors.push('No books found in ISBNdb response');
+        console.log(`❌ No works found for author "${author}" or invalid format`);
+        result.errors.push('No works found in normalized response or invalid format');
       }
 
     } catch (isbndbError) {
@@ -1869,18 +1829,18 @@ async function processMicroBatch(env, maxAuthors = 5) {
         try {
           const result = await callISBNdbWorkerReliable(author, env);
 
-          if (result.success && result.books) {
-            // Cache the result using dual-format storage for compatibility
-            await storeDualFormatCache(env, author, result);
+          if (result.success && result.works) {
+            // Cache the result using normalized storage
+            await storeNormalizedCache(env, author, result);
 
             processingState.completedAuthors.push({
               name: author,
-              books: result.books.length,
+              works: result.works.length,
               success: true,
               timestamp: new Date().toISOString()
             });
 
-            console.log(`✅ Cached ${result.books.length} books for ${author}`);
+            console.log(`✅ Cached ${result.works.length} works for ${author}`);
           } else {
             processingState.completedAuthors.push({
               name: author,

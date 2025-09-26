@@ -48,6 +48,10 @@ secret_name = "ISBN_search_key"
 binding = "ISBNDB_WORKER"
 service = "isbndb-biography-worker-production"
 
+[[services]]
+binding = "OPENLIBRARY_WORKER"
+service = "openlibrary-search-worker-production"
+
 # KV Cache for API responses - primary cache layer
 [[kv_namespaces]]
 binding = "CACHE"

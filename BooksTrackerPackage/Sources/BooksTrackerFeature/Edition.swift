@@ -158,5 +158,15 @@ public final class Edition: Identifiable {
     }
 }
 
+// MARK: - URL Extension for Cover Images
+
+extension Edition {
+    /// Convert coverImageURL string to URL for AsyncImage
+    var coverURL: URL? {
+        guard let urlString = coverImageURL, !urlString.isEmpty else { return nil }
+        return URL(string: urlString)
+    }
+}
+
 // EditionFormat is now defined in ModelTypes.swift
 

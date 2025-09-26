@@ -54,7 +54,7 @@ struct iOS26LiquidListRow: View {
     // MARK: - Cover Thumbnail
 
     private var coverThumbnail: some View {
-        AsyncImage(url: primaryEdition?.coverImageURL.flatMap(URL.init)) { image in
+        AsyncImage(url: primaryEdition?.coverURL) { image in
             image
                 .resizable()
                 .aspectRatio(2/3, contentMode: .fill)

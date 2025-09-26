@@ -45,7 +45,7 @@ struct iOS26FloatingBookCard: View {
     private var floatingCoverImage: some View {
         ZStack {
             // Book cover with shadow and glass effect
-            AsyncImage(url: primaryEdition?.coverImageURL.flatMap(URL.init)) { image in
+            AsyncImage(url: primaryEdition?.coverURL) { image in
                 image
                     .resizable()
                     .aspectRatio(2/3, contentMode: .fill)

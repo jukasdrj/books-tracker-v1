@@ -32,6 +32,12 @@ export default {
       if (path === '/search/auto') {
         return await handleAutoSearch(request, env, ctx);
       }
+      if (path.startsWith('/author/enhanced/')) {
+        return await handleEnhancedAuthorBibliography(request, env, ctx);
+      }
+      if (path.startsWith('/completeness/')) {
+        return await handleCompletenessCheck(request, env, ctx);
+      }
       if (path.startsWith('/author/')) {
         return await handleAuthorBibliography(request, env, ctx);
       }
@@ -39,11 +45,25 @@ export default {
         return new Response(JSON.stringify({
           status: 'healthy',
           timestamp: new Date().toISOString(),
-          providers: ['google-books', 'isbndb-worker', 'open-library'],
+          providers: ['google-books', 'isbndb-worker', 'openlibrary-worker'],
+          enhancedMode: {
+            available: !!env.OPENLIBRARY_WORKER,
+            endpoint: '/author/enhanced/{name}',
+            description: 'OpenLibrary → ISBNdb enhancement pipeline'
+          },
+          completenessGraph: {
+            available: !!env.CACHE,
+            endpoint: '/completeness/{name}',
+            description: 'Bibliography completeness metadata and quality scoring'
+          },
           cache: {
             system: env.API_CACHE_COLD ? 'R2+KV-Hybrid' : 'KV-Only',
             kv: env.CACHE ? 'available' : 'missing',
             r2: env.API_CACHE_COLD ? 'available' : 'missing'
+          },
+          serviceBindings: {
+            isbndb: !!env.ISBNDB_WORKER,
+            openlibrary: !!env.OPENLIBRARY_WORKER
           }
         }), {
           headers: getCORSHeaders('application/json')
@@ -281,41 +301,13 @@ async function searchOpenLibrary(query, maxResults, env) {
 // ============================================================================
 
 function transformISBNdbToStandardFormat(isbndbData, provider) {
-    if (!isbndbData || (!isbndbData.books && !isbndbData.book)) {
-        return { kind: "books#volumes", totalItems: 0, items: [] };
+    // Only handle enhanced Work/Edition format
+    if (isbndbData.format === 'enhanced_work_edition_v1' && isbndbData.works) {
+        return transformWorksToStandardFormat(isbndbData, provider);
     }
 
-    const books = isbndbData.books || (isbndbData.book ? [isbndbData.book] : []);
-
-    // ✅ SMART FILTERING: Apply quality filters before transformation
-    const filteredBooks = applyBookQualityFilters(books);
-
-    return {
-        kind: "books#volumes",
-        totalItems: filteredBooks.length,
-        items: filteredBooks.map(book => ({
-            kind: "books#volume",
-            id: book.isbn13 || book.isbn || `isbndb-${Math.random().toString(36).substr(2, 9)}`,
-            volumeInfo: {
-                title: book.title || 'Unknown Title',
-                authors: book.authors || (book.author ? [book.author] : ['Unknown Author']),
-                publishedDate: book.date_published || '',
-                publisher: book.publisher || '',
-                description: book.synopsis || '',
-                industryIdentifiers: [
-                    ...(book.isbn13 ? [{ type: "ISBN_13", identifier: book.isbn13 }] : []),
-                    ...(book.isbn ? [{ type: "ISBN_10", identifier: book.isbn }] : [])
-                ],
-                pageCount: book.pages || 0,
-                categories: (book.subjects && typeof book.subjects === 'string') ? book.subjects.split(',').map(s => s.trim()) : (book.subjects || []),
-                imageLinks: book.image ? { thumbnail: book.image, smallThumbnail: book.image } : undefined,
-                language: book.language || 'en',
-                // API identifiers for SwiftData model synchronization
-                isbndbID: book.id || book.isbn13 || book.isbn || null
-            }
-        })),
-        provider: provider
-    };
+    // No results for non-normalized format
+    return { kind: "books#volumes", totalItems: 0, items: [] };
 }
 
 /**
@@ -589,12 +581,62 @@ function classifyQuery(query) {
     return { type: 'mixed', confidence: 0.5 };
 }
 
+/**
+ * Transform enhanced Work/Edition format to standard API format
+ */
+function transformWorksToStandardFormat(worksData, provider) {
+    if (!worksData.works || !Array.isArray(worksData.works)) {
+        return { kind: "books#volumes", totalItems: 0, items: [] };
+    }
+
+    const items = [];
+
+    worksData.works.forEach(work => {
+        work.editions.forEach(edition => {
+            items.push({
+                kind: "books#volume",
+                id: edition.isbn || edition.identifiers?.isbndbID || `work-${Math.random().toString(36).substr(2, 9)}`,
+                volumeInfo: {
+                    title: work.title,
+                    authors: work.authors.map(author => author.name),
+                    publishedDate: edition.publicationDate || '',
+                    publisher: edition.publisher || '',
+                    description: edition.isbndb_metadata?.synopsis || '',
+                    industryIdentifiers: edition.isbns?.map(isbn => ({
+                        type: isbn.length === 13 ? "ISBN_13" : "ISBN_10",
+                        identifier: isbn
+                    })) || [],
+                    pageCount: edition.pageCount || 0,
+                    categories: edition.isbndb_metadata?.subjects || [],
+                    imageLinks: edition.coverImageURL ? {
+                        thumbnail: edition.coverImageURL,
+                        smallThumbnail: edition.coverImageURL
+                    } : undefined,
+                    language: work.originalLanguage || 'en',
+                    // Enhanced API identifiers for SwiftData synchronization
+                    isbndbID: edition.identifiers?.isbndbID || work.identifiers?.isbndbID,
+                    openLibraryID: edition.identifiers?.openLibraryID || work.identifiers?.openLibraryID,
+                    googleBooksVolumeID: edition.identifiers?.googleBooksVolumeID || work.identifiers?.googleBooksVolumeID
+                }
+            });
+        });
+    });
+
+    return {
+        kind: "books#volumes",
+        totalItems: items.length,
+        items,
+        provider,
+        format: 'enhanced_work_edition_v1'
+    };
+}
+
 function selectOptimalProviders(searchType, query) {
-    // ✅ ISBNdb PRIORITY: Always try ISBNdb first for all search types
+    // ISBNdb PRIORITY: Always try ISBNdb first for all search types
     // This ensures maximum cache hit rates from warming system
     return [{ name: 'isbndb' }];
 
-    // ❌ DISABLED: Google Books and Open Library fallbacks
+    // DISABLED: Google Books and Open Library fallbacks
     // Uncomment below if fallback providers are needed:
     // if (searchType === 'isbn') {
     //     return [{ name: 'isbndb' }, { name: 'google-books' }, { name: 'open-library' }];
@@ -617,4 +659,664 @@ function getCORSHeaders(contentType = 'application/json') {
         'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     };
+}
+
+// ============================================================================
+// ENHANCED MULTI-WORKER ORCHESTRATION
+// ============================================================================
+
+/**
+ * ENHANCED: Multi-worker author bibliography with OpenLibrary → ISBNdb handoff
+ * NEW ENDPOINT: /author/enhanced/{authorName}
+ */
+async function handleEnhancedAuthorBibliography(request, env, ctx) {
+  try {
+    const url = new URL(request.url);
+    const path = url.pathname;
+    const pathParts = path.split('/');
+    if (pathParts.length < 4 || !pathParts[3]) {
+      return new Response(JSON.stringify({ error: 'Author name is required for enhanced endpoint' }), {
+        status: 400,
+        headers: getCORSHeaders()
+      });
+    }
+
+    const authorName = decodeURIComponent(pathParts[3]);
+    console.log(`📚 Enhanced author bibliography request: ${authorName}`);
+
+    // Step 1: Check enhanced cache with completeness validation
+    const cachedResult = await checkEnhancedCache(authorName, env);
+
+    if (cachedResult) {
+      console.log(`✅ Enhanced cache HIT for author: ${authorName}`);
+
+      return new Response(JSON.stringify({
+        ...cachedResult,
+        cached: true,
+        cacheSource: 'ENHANCED-COMPLETE',
+        timestamp: new Date().toISOString()
+      }), {
+        status: 200,
+        headers: {
+          ...getCORSHeaders(),
+          'X-Cache': 'HIT-COMPLETE',
+          'X-Provider': 'multi-worker-complete',
+          'X-Completeness-Score': cachedResult.completenessMetadata?.completenessScore?.toString() || 'unknown',
+          'X-Confidence': cachedResult.completenessMetadata?.confidence?.toString() || 'unknown'
+        }
+      });
+    }
+
+    // Step 2: OpenLibrary → ISBNdb Pipeline
+    if (!env.OPENLIBRARY_WORKER) {
+      throw new Error('OpenLibrary worker not available');
+    }
+
+    const enhancedResult = await performEnhancedAuthorLookup(authorName, env);
+
+    // Step 3: Cache the enhanced result
+    if (env.CACHE && enhancedResult) {
+      try {
+        await env.CACHE.put(cacheKey, JSON.stringify(enhancedResult), {
+          expirationTtl: 86400 // 24 hours for complete enhanced works
+        });
+        console.log(`💾 Cached enhanced author: ${authorName}`);
+      } catch (error) {
+        console.warn('Enhanced cache write error:', error);
+      }
+    }
+
+    return new Response(JSON.stringify({
+      ...enhancedResult,
+      cached: false,
+      cacheSource: 'FRESH-ENHANCED',
+      timestamp: new Date().toISOString()
+    }), {
+      status: 200,
+      headers: {
+        ...getCORSHeaders(),
+        'X-Cache': 'MISS-ENHANCED',
+        'X-Provider': 'openlibrary+isbndb',
+        'X-Works-Count': enhancedResult.works?.length?.toString() || '0'
+      }
+    });
+
+  } catch (error) {
+    console.error('Enhanced author bibliography error:', error);
+    return new Response(JSON.stringify({
+      error: error.message,
+      authorName: pathParts[3] || 'unknown',
+      fallbackSuggestion: 'Try /author/{name} for ISBNdb-only results'
+    }), {
+      status: 500,
+      headers: getCORSHeaders()
+    });
+  }
+}
+
+/**
+ * ENHANCED: Perform OpenLibrary → ISBNdb enhancement pipeline
+ */
+async function performEnhancedAuthorLookup(authorName, env) {
+  console.log(`🔍 Starting enhanced lookup pipeline for: ${authorName}`);
+
+  // Step 1: Get authoritative works list from OpenLibrary
+  const openLibraryUrl = `https://openlibrary-search-worker-production.jukasdrj.workers.dev/author/${encodeURIComponent(authorName)}?includeEditions=false&limit=20`;
+
+  const olRequest = new Request(openLibraryUrl);
+  const olResponse = await env.OPENLIBRARY_WORKER.fetch(olRequest);
+
+  if (!olResponse.ok) {
+    throw new Error(`OpenLibrary worker error: ${olResponse.status}`);
+  }
+
+  const olData = await olResponse.json();
+  console.log(`📖 OpenLibrary found ${olData.works?.length || 0} works for ${authorName}`);
+
+  if (!olData.success || !olData.works || olData.works.length === 0) {
+    throw new Error('No works found in OpenLibrary');
+  }
+
+  // Step 2: Enhance all works with ISBNdb edition data using RPC method
+  let enhancedWorks = [];
+  let isbndbEnhancements = 0;
+
+  try {
+    if (env.ISBNDB_WORKER) {
+      console.log(`🔧 Using ISBNdb RPC enhancement for ${olData.works.length} works`);
+
+      // Call the enhancement endpoint via service binding
+      const enhancementUrl = 'https://isbndb-biography-worker-production.jukasdrj.workers.dev/enhance/works';
+      const enhancementRequest = new Request(enhancementUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          works: olData.works,
+          authorName: authorName
+        })
+      });
+
+      const enhancementResponse = await env.ISBNDB_WORKER.fetch(enhancementRequest);
+      const enhancementResult = await enhancementResponse.json();
+
+      if (enhancementResult.success) {
+        enhancedWorks = enhancementResult.works;
+        isbndbEnhancements = enhancementResult.enhancementStats.enhanced;
+        console.log(`✅ ISBNdb RPC enhanced ${isbndbEnhancements}/${olData.works.length} works`);
+      } else {
+        console.warn('ISBNdb RPC enhancement failed, using OpenLibrary-only data');
+        enhancedWorks = olData.works.map(work => ({
+          ...work,
+          isbndbEnhanced: false,
+          dataSources: ['openlibrary']
+        }));
+      }
+    } else {
+      console.warn('ISBNdb worker not available, using OpenLibrary-only data');
+      enhancedWorks = olData.works.map(work => ({
+        ...work,
+        isbndbEnhanced: false,
+        dataSources: ['openlibrary']
+      }));
+    }
+  } catch (error) {
+    console.error('ISBNdb RPC enhancement error:', error);
+    // Fallback to OpenLibrary-only data
+    enhancedWorks = olData.works.map(work => ({
+      ...work,
+      isbndbEnhanced: false,
+      dataSources: ['openlibrary']
+    }));
+  }
+
+  // Step 3: Construct enhanced response
+  const enhancedResult = {
+    success: true,
+    provider: 'openlibrary+isbndb',
+    authorInfo: olData.authorInfo,
+    works: enhancedWorks,
+    authors: olData.authors,
+    processingMetadata: {
+      ...olData.processingMetadata,
+      enhancementStage: 'completed',
+      worksProcessed: enhancedWorks.length,
+      totalWorksFound: olData.works.length,
+      isbndbEnhancements: enhancedWorks.filter(w => w.isbndbEnhanced).length,
+      openLibraryOnly: enhancedWorks.filter(w => !w.isbndbEnhanced).length
+    },
+    metadata: {
+      ...olData.metadata,
+      enhancedAt: new Date().toISOString(),
+      pipeline: 'openlibrary->isbndb',
+      processingTimeMs: Date.now() - new Date(olData.metadata?.timestamp || Date.now()).getTime()
+    }
+  };
+
+  console.log(`🎯 Enhanced lookup complete: ${enhancedWorks.length} works, ${enhancedResult.processingMetadata.isbndbEnhancements} enhanced`);
+  // Step 4: Update completeness metadata
+  await updateAuthorCompletenessGraph(authorName, enhancedResult, env);
+
+  return enhancedResult;
+}
+
+/**
+ * Search ISBNdb for a specific work by title and author
+ */
+async function searchISBNdbForWork(workTitle, authorName, env) {
+  try {
+    // Use ISBNdb's combined search endpoint for better results
+    const searchQuery = `${workTitle}`;
+    const isbndbUrl = `https://isbndb-biography-worker-production.jukasdrj.workers.dev/search/books?text=${encodeURIComponent(searchQuery)}&author=${encodeURIComponent(authorName)}&pageSize=3`;
+
+    const request = new Request(isbndbUrl);
+    const response = await env.ISBNDB_WORKER.fetch(request);
+
+    if (!response.ok) {
+      console.warn(`ISBNdb search failed for "${workTitle}": ${response.status}`);
+      return null;
+    }
+
+    const data = await response.json();
+    return data.success ? data : null;
+
+  } catch (error) {
+    console.warn(`Error searching ISBNdb for "${workTitle}":`, error);
+    return null;
+  }
+}
+
+/**
+ * Merge OpenLibrary work data with ISBNdb edition details
+ */
+function mergeWorkData(openLibraryWork, isbndbBook) {
+  return {
+    ...openLibraryWork,
+
+    // Enhanced edition details from ISBNdb
+    isbndbEnhanced: true,
+    isbn: isbndbBook.isbn || isbndbBook.isbn13,
+    publisher: isbndbBook.publisher,
+    publicationDate: isbndbBook.date_published,
+    pageCount: isbndbBook.pages,
+    binding: isbndbBook.binding,
+    coverImage: isbndbBook.image,
+    dimensions: isbndbBook.dimensions,
+    language: isbndbBook.language,
+
+    // Merge identifiers
+    identifiers: {
+      ...openLibraryWork.identifiers,
+      isbndbID: isbndbBook.id || isbndbBook.isbn13,
+      isbn: isbndbBook.isbn || isbndbBook.isbn13
+    },
+
+    // Quality scores
+    openLibraryQuality: openLibraryWork.openLibraryQuality || 75,
+    isbndbQuality: 85, // ISBNdb typically has good metadata
+    combinedQuality: Math.round(((openLibraryWork.openLibraryQuality || 75) + 85) / 2),
+
+    // Source tracking
+    dataSources: ['openlibrary', 'isbndb'],
+    enhancedAt: new Date().toISOString(),
+
+    // Best of both worlds
+    description: openLibraryWork.description || isbndbBook.synopsis,
+    covers: [
+      ...(openLibraryWork.covers || []),
+      ...(isbndbBook.image ? [isbndbBook.image] : [])
+    ].filter((cover, index, arr) => arr.indexOf(cover) === index) // Deduplicate
+  };
+}
+
+/**
+ * DEBUG: Check completeness metadata for an author
+ * ENDPOINT: /completeness/{authorName}
+ */
+async function handleCompletenessCheck(request, env, ctx) {
+  try {
+    const url = new URL(request.url);
+    const path = url.pathname;
+    const pathParts = path.split('/');
+    if (pathParts.length < 3 || !pathParts[2]) {
+      return new Response(JSON.stringify({ error: 'Author name is required for completeness check' }), {
+        status: 400,
+        headers: getCORSHeaders()
+      });
+    }
+
+    const authorName = decodeURIComponent(pathParts[2]);
+    console.log(`🔍 Completeness check for: ${authorName}`);
+
+    // Get completeness metadata
+    const completeness = await checkAuthorCompleteness(authorName, env);
+
+    if (!completeness) {
+      return new Response(JSON.stringify({
+        authorName,
+        status: 'no_completeness_data',
+        message: 'No completeness metadata found. Author may not have been processed yet.',
+        suggestion: 'Try /author/enhanced/{name} first to generate completeness data'
+      }), {
+        status: 404,
+        headers: getCORSHeaders()
+      });
+    }
+
+    // Also check if enhanced cache exists
+    const cacheKey = `author_enhanced:${authorName.toLowerCase()}`;
+    let cacheExists = false;
+    let cacheSize = 0;
+
+    if (env.CACHE) {
+      try {
+        const cached = await env.CACHE.get(cacheKey);
+        cacheExists = !!cached;
+        cacheSize = cached ? cached.length : 0;
+      } catch (error) {
+        // Ignore cache check errors
+      }
+    }
+
+    return new Response(JSON.stringify({
+      authorName,
+      status: 'completeness_available',
+      completenessMetadata: completeness,
+      cache: {
+        enhancedCacheExists: cacheExists,
+        cacheSize,
+        cacheKey
+      },
+      interpretation: {
+        isComplete: completeness.isComplete,
+        confidence: completeness.confidence,
+        qualityLevel: getQualityLevel(completeness.completenessScore),
+        recommendation: getRecommendation(completeness),
+        needsRefresh: shouldRefreshData(completeness)
+      },
+      debug: {
+        cacheGeneration: completeness.cacheGeneration,
+        lastValidated: completeness.lastValidated,
+        lastEnhanced: completeness.lastEnhanced,
+        dataSources: completeness.dataSources,
+        pipeline: completeness.pipeline
+      }
+    }), {
+      status: 200,
+      headers: {
+        ...getCORSHeaders(),
+        'X-Completeness-Score': completeness.completenessScore.toString(),
+        'X-Confidence': completeness.confidence.toString(),
+        'X-Is-Complete': completeness.isComplete.toString()
+      }
+    });
+
+  } catch (error) {
+    console.error('Completeness check error:', error);
+    return new Response(JSON.stringify({
+      error: error.message,
+      authorName: pathParts[2] || 'unknown'
+    }), {
+      status: 500,
+      headers: getCORSHeaders()
+    });
+  }
+}
+
+/**
+ * Helper functions for completeness interpretation
+ */
+function getQualityLevel(score) {
+  if (score >= 90) return 'excellent';
+  if (score >= 80) return 'good';
+  if (score >= 60) return 'fair';
+  if (score >= 40) return 'poor';
+  return 'very_poor';
+}
+
+function getRecommendation(completeness) {
+  if (completeness.isComplete && completeness.confidence >= 80) {
+    return 'Data is complete and high-confidence. Use cached results.';
+  }
+  if (completeness.confidence < 50) {
+    return 'Low confidence data. Consider refreshing from sources.';
+  }
+  if (!completeness.isComplete) {
+    return 'Incomplete bibliography. May need additional sources or manual curation.';
+  }
+  return 'Moderate quality data. Usable but could be improved.';
+}
+
+function shouldRefreshData(completeness) {
+  const age = Date.now() - new Date(completeness.lastValidated).getTime();
+  const daysSinceValidation = age / (24 * 60 * 60 * 1000);
+
+  return (
+    daysSinceValidation > 7 ||           // Older than 7 days
+    completeness.confidence < 50 ||      // Low confidence
+    !completeness.isComplete             // Incomplete data
+  );
+}
+
+// ============================================================================
+// AUTHOR BIBLIOGRAPHY COMPLETENESS GRAPH
+// ============================================================================
+
+/**
+ * Check if we have complete bibliography for an author
+ */
+async function checkAuthorCompleteness(authorName, env) {
+  if (!env.CACHE) return null;
+
+  try {
+    const completenessKey = `completeness:${authorName.toLowerCase()}`;
+    const cached = await env.CACHE.get(completenessKey);
+
+    if (!cached) return null;
+
+    const completenessData = JSON.parse(cached);
+
+    // Check if completeness data is still valid (7 days)
+    const age = Date.now() - new Date(completenessData.lastValidated).getTime();
+    const maxAge = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+    if (age > maxAge) {
+      console.log(`⏰ Completeness data expired for ${authorName}`);
+      return null;
+    }
+
+    return completenessData;
+
+  } catch (error) {
+    console.warn('Error checking author completeness:', error);
+    return null;
+  }
+}
+
+/**
+ * Update author completeness metadata after successful lookup
+ */
+async function updateAuthorCompletenessGraph(authorName, enhancedResult, env) {
+  if (!env.CACHE) return;
+
+  try {
+    const completenessKey = `completeness:${authorName.toLowerCase()}`;
+
+    // Calculate completeness metrics
+    const metrics = calculateCompletenessMetrics(enhancedResult);
+
+    const completenessData = {
+      authorName: authorName,
+      isComplete: metrics.isComplete,
+      confidence: metrics.confidence,
+      completenessScore: metrics.completenessScore,
+
+      // Work inventory
+      coreWorksFound: metrics.coreWorksFound,
+      totalWorksProcessed: enhancedResult.works?.length || 0,
+      expectedCoreWorks: metrics.expectedCoreWorks,
+
+      // Data quality
+      authoritativeSource: 'openlibrary', // OpenLibrary is our authoritative source
+      enhancementCoverage: {
+        isbndbEnhanced: enhancedResult.processingMetadata?.isbndbEnhancements || 0,
+        openLibraryOnly: enhancedResult.processingMetadata?.openLibraryOnly || 0,
+        enhancementRate: metrics.enhancementRate
+      },
+
+      // Provider coverage analysis
+      providerCoverage: {
+        openlibrary: {
+          available: true,
+          worksCount: enhancedResult.works?.length || 0,
+          quality: metrics.openLibraryQuality
+        },
+        isbndb: {
+          available: true,
+          worksCount: enhancedResult.processingMetadata?.isbndbEnhancements || 0,
+          quality: metrics.isbndbQuality
+        }
+      },
+
+      // Timestamps and validation
+      lastValidated: new Date().toISOString(),
+      lastEnhanced: new Date().toISOString(),
+      cacheGeneration: 1,
+
+      // Quality indicators
+      qualityIndicators: {
+        hasAuthorInfo: !!enhancedResult.authorInfo,
+        hasWorkDetails: enhancedResult.works?.length > 0,
+        hasISBNs: metrics.worksWithISBNs,
+        hasCoverImages: metrics.worksWithCovers,
+        hasPublicationDates: metrics.worksWithDates
+      },
+
+      // Source tracking
+      dataSources: ['openlibrary', 'isbndb'],
+      pipeline: 'openlibrary->isbndb'
+    };
+
+    // Store completeness data with 7-day expiration
+    await env.CACHE.put(completenessKey, JSON.stringify(completenessData), {
+      expirationTtl: 7 * 24 * 60 * 60 // 7 days
+    });
+
+    console.log(`📊 Updated completeness for ${authorName}: ${metrics.completenessScore}% complete, ${metrics.confidence}% confidence`);
+
+  } catch (error) {
+    console.warn('Error updating author completeness:', error);
+  }
+}
+
+/**
+ * Calculate completeness metrics for an author's bibliography
+ */
+function calculateCompletenessMetrics(enhancedResult) {
+  const works = enhancedResult.works || [];
+  const totalWorks = works.length;
+
+  if (totalWorks === 0) {
+    return {
+      isComplete: false,
+      confidence: 0,
+      completenessScore: 0,
+      coreWorksFound: 0,
+      expectedCoreWorks: 0,
+      enhancementRate: 0,
+      openLibraryQuality: 0,
+      isbndbQuality: 0,
+      worksWithISBNs: 0,
+      worksWithCovers: 0,
+      worksWithDates: 0
+    };
+  }
+
+  // Count core works (using our filtering logic)
+  const coreWorks = works.filter(work =>
+    work.title &&
+    !work.title.toLowerCase().includes('collection') &&
+    !work.title.toLowerCase().includes('set') &&
+    work.title.length < 100 // Reasonable title length
+  );
+
+  // Quality metrics
+  const worksWithISBNs = works.filter(w => w.isbn || w.identifiers?.isbn).length;
+  const worksWithCovers = works.filter(w =>
+    (w.covers && w.covers.length > 0) ||
+    w.coverImage
+  ).length;
+  const worksWithDates = works.filter(w =>
+    w.firstPublicationYear ||
+    w.publicationDate
+  ).length;
+
+  // Enhancement metrics
+  const isbndbEnhanced = works.filter(w => w.isbndbEnhanced).length;
+  const enhancementRate = totalWorks > 0 ? (isbndbEnhanced / totalWorks) * 100 : 0;
+
+  // Author-specific expectations (this could be enhanced with known author data)
+  const expectedCoreWorks = estimateExpectedCoreWorks(enhancedResult.authorInfo);
+
+  // Completeness calculation
+  const coreWorksRatio = expectedCoreWorks > 0 ? (coreWorks.length / expectedCoreWorks) : 1;
+  const qualityRatio = totalWorks > 0 ? (worksWithISBNs + worksWithCovers + worksWithDates) / (totalWorks * 3) : 0;
+
+  const completenessScore = Math.min(100, Math.round(
+    (coreWorksRatio * 60) + // 60% weight for having core works
+    (qualityRatio * 30) +   // 30% weight for data quality
+    (enhancementRate * 0.1)  // 10% weight for enhancement coverage
+  ));
+
+  // Confidence based on data quality and consistency
+  const confidence = Math.min(100, Math.round(
+    (enhancedResult.authorInfo?.name ? 20 : 0) + // Author info available
+    (totalWorks >= expectedCoreWorks ? 30 : (totalWorks / expectedCoreWorks) * 30) + // Work count
+    (enhancementRate > 50 ? 25 : enhancementRate * 0.5) + // Enhancement coverage
+    (qualityRatio * 25) // Data quality
+  ));
+
+  return {
+    isComplete: completenessScore >= 80 && confidence >= 70,
+    confidence,
+    completenessScore,
+    coreWorksFound: coreWorks.length,
+    expectedCoreWorks,
+    enhancementRate: Math.round(enhancementRate),
+    openLibraryQuality: 85, // OpenLibrary typically has good work-level data
+    isbndbQuality: enhancementRate > 0 ? 85 : 0,
+    worksWithISBNs,
+    worksWithCovers,
+    worksWithDates
+  };
+}
+
+/**
+ * Estimate expected core works for an author based on available info
+ */
+function estimateExpectedCoreWorks(authorInfo) {
+  if (!authorInfo) return 5; // Default assumption
+
+  // Use author's work count if available
+  if (authorInfo.workCount) {
+    // Filter out likely translations and collections (rough estimate)
+    const estimatedCore = Math.ceil(authorInfo.workCount * 0.3); // ~30% are likely core works
+    return Math.min(estimatedCore, 20); // Cap at 20 for performance
+  }
+
+  // Default for unknown authors
+  return 5;
+}
+
+/**
+ * Enhanced cache check that includes completeness validation
+ */
+async function checkEnhancedCache(authorName, env) {
+  if (!env.CACHE) return null;
+
+  try {
+    // Check both regular cache and completeness data
+    const cacheKey = `author_enhanced:${authorName.toLowerCase()}`;
+    const cached = await env.CACHE.get(cacheKey);
+
+    if (!cached) return null;
+
+    const cachedResult = JSON.parse(cached);
+
+    // Check completeness metadata
+    const completeness = await checkAuthorCompleteness(authorName, env);
+
+    if (completeness) {
+      // Add completeness info to cached result
+      cachedResult.completenessMetadata = {
+        isComplete: completeness.isComplete,
+        confidence: completeness.confidence,
+        completenessScore: completeness.completenessScore,
+        lastValidated: completeness.lastValidated,
+        coreWorksFound: completeness.coreWorksFound,
+        expectedCoreWorks: completeness.expectedCoreWorks
+      };
+
+      // If confidence is high and data is complete, use cached result
+      if (completeness.confidence >= 70 && completeness.isComplete) {
+        console.log(`✅ High-confidence complete cache for ${authorName} (${completeness.confidence}% confidence, ${completeness.completenessScore}% complete)`);
+        return cachedResult;
+      } else {
+        console.log(`⚠️ Low-confidence cache for ${authorName} (${completeness.confidence}% confidence, ${completeness.completenessScore}% complete) - considering refresh`);
+
+        // If data is old or low confidence, we might want to refresh
+        const age = Date.now() - new Date(completeness.lastValidated).getTime();
+        const shouldRefresh = age > (24 * 60 * 60 * 1000) || completeness.confidence < 50; // 24 hours or low confidence
+
+        if (!shouldRefresh) {
+          return cachedResult;
+        }
+      }
+    }
+
+    return null; // Indicate cache miss or needs refresh
+
+  } catch (error) {
+    console.warn('Enhanced cache check error:', error);
+    return null;
+  }
 }

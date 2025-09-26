@@ -41,6 +41,8 @@ export class ISBNdbWorker extends WorkerEntrypoint {
         return await handleSearchRequest(request, this.env, path, url);
       } else if (path.startsWith('/cache/author/') && request.method === 'POST') {
         return await handleCacheRequest(request, this.env, path);
+      } else if (path === '/enhance/works' && request.method === 'POST') {
+        return await handleWorksEnhancement(request, this.env);
       } else if (path === '/health') {
         return await handleHealthCheck(this.env);
       }
@@ -130,8 +132,173 @@ export class ISBNdbWorker extends WorkerEntrypoint {
       return { status: 'error', error: error.message };
     }
   }
+
+  // RPC Method: Enhance OpenLibrary works with ISBNdb edition data
+  async enhanceWorksWithEditions(works, authorName) {
+    try {
+      console.log(`🔧 RPC: enhanceWorksWithEditions for "${authorName}" (${works.length} works)`);
+
+      const enhancedWorks = [];
+      let enhancementCount = 0;
+
+      for (const work of works) {
+        const enhanced = { ...work };
+
+        try {
+          // Search for editions by title and author
+          const searchQuery = `${work.title} ${authorName}`;
+          const isbndbUrl = `https://dummy-url.com/search/books?text=${encodeURIComponent(searchQuery)}&author=${encodeURIComponent(authorName)}&pageSize=5`;
+          const searchResponse = await handleSearchRequest(null, this.env, '/search/books', new URL(isbndbUrl));
+          const searchResult = await searchResponse.json();
+
+          if (searchResult.success && searchResult.books && searchResult.books.length > 0) {
+            // Find best matching editions
+            const matchingEditions = searchResult.books.filter(book => {
+              const titleMatch = book.title && work.title &&
+                book.title.toLowerCase().includes(work.title.toLowerCase().split(':')[0].trim());
+              const authorMatch = book.authors && book.authors.some(author =>
+                author.toLowerCase().includes(authorName.toLowerCase().split(' ')[0]));
+              return titleMatch && authorMatch;
+            });
+
+            if (matchingEditions.length > 0) {
+              enhanced.editions = matchingEditions.map(book => ({
+                isbn: book.isbn || book.isbn13,
+                isbn13: book.isbn13,
+                title: book.title,
+                publisher: book.publisher,
+                publishDate: book.date_published,
+                pageCount: book.pages,
+                format: book.binding,
+                language: book.language,
+                edition: book.edition,
+                isbndbID: book.id || book.isbn13 || book.isbn,
+                source: 'isbndb'
+              }));
+
+              // Extract best external identifiers
+              const bestEdition = matchingEditions[0];
+              enhanced.isbndbID = bestEdition.id || bestEdition.isbn13 || bestEdition.isbn;
+              enhanced.isbndbEnhanced = true;
+              enhanced.dataSources = [...(work.dataSources || []), 'isbndb'];
+              enhancementCount++;
+
+              console.log(`✅ Enhanced "${work.title}" with ${enhanced.editions.length} editions`);
+            }
+          }
+
+          // Rate limiting
+          await new Promise(resolve => setTimeout(resolve, 1200)); // 1.2s between requests
+
+        } catch (error) {
+          console.warn(`⚠️ Failed to enhance "${work.title}":`, error.message);
+          enhanced.isbndbEnhanced = false;
+        }
+
+        enhancedWorks.push(enhanced);
+      }
+
+      console.log(`✅ RPC: Enhanced ${enhancementCount}/${works.length} works for "${authorName}"`);
+      return {
+        success: true,
+        works: enhancedWorks,
+        enhancementStats: {
+          totalWorks: works.length,
+          enhanced: enhancementCount,
+          enhancementRate: enhancementCount / works.length
+        }
+      };
+
+    } catch (error) {
+      console.error(`❌ RPC: Error enhancing works for "${authorName}":`, error);
+      return { success: false, error: error.message, works: works };
+    }
+  }
 }
 
+/**
+ * Standalone enhancement logic for HTTP endpoint
+ */
+async function enhanceWorksWithEditionsLogic(works, authorName, env) {
+  try {
+    console.log(`🔧 Standalone: enhanceWorksWithEditions for "${authorName}" (${works.length} works)`);
+
+    const enhancedWorks = [];
+    let enhancementCount = 0;
+
+    for (const work of works) {
+      const enhanced = { ...work };
+
+      try {
+        // Search for editions by title and author
+        const searchQuery = `${work.title} ${authorName}`;
+        const isbndbUrl = `https://dummy-url.com/search/books?text=${encodeURIComponent(searchQuery)}&author=${encodeURIComponent(authorName)}&pageSize=5`;
+        const searchResponse = await handleSearchRequest(null, env, '/search/books', new URL(isbndbUrl));
+        const searchResult = await searchResponse.json();
+
+        if (searchResult.success && searchResult.books && searchResult.books.length > 0) {
+          // Find best matching editions
+          const matchingEditions = searchResult.books.filter(book => {
+            const titleMatch = book.title && work.title &&
+              book.title.toLowerCase().includes(work.title.toLowerCase().split(':')[0].trim());
+            const authorMatch = book.authors && book.authors.some(author =>
+              author.toLowerCase().includes(authorName.toLowerCase().split(' ')[0]));
+            return titleMatch && authorMatch;
+          });
+
+          if (matchingEditions.length > 0) {
+            enhanced.editions = matchingEditions.map(book => ({
+              isbn: book.isbn || book.isbn13,
+              isbn13: book.isbn13,
+              title: book.title,
+              publisher: book.publisher,
+              publishDate: book.date_published,
+              pageCount: book.pages,
+              format: book.binding,
+              language: book.language,
+              edition: book.edition,
+              isbndbID: book.id || book.isbn13 || book.isbn,
+              source: 'isbndb'
+            }));
+
+            // Extract best external identifiers
+            const bestEdition = matchingEditions[0];
+            enhanced.isbndbID = bestEdition.id || bestEdition.isbn13 || bestEdition.isbn;
+            enhanced.isbndbEnhanced = true;
+            enhanced.dataSources = [...(work.dataSources || []), 'isbndb'];
+            enhancementCount++;
+
+            console.log(`✅ Enhanced "${work.title}" with ${enhanced.editions.length} editions`);
+          }
+        }
+
+        // Rate limiting
+        await new Promise(resolve => setTimeout(resolve, 1200)); // 1.2s between requests
+
+      } catch (error) {
+        console.warn(`⚠️ Failed to enhance "${work.title}":`, error.message);
+        enhanced.isbndbEnhanced = false;
+      }
+
+      enhancedWorks.push(enhanced);
+    }
+
+    console.log(`✅ Standalone: Enhanced ${enhancementCount}/${works.length} works for "${authorName}"`);
+    return {
+      success: true,
+      works: enhancedWorks,
+      enhancementStats: {
+        totalWorks: works.length,
+        enhanced: enhancementCount,
+        enhancementRate: enhancementCount / works.length
+      }
+    };
+
+  } catch (error) {
+    console.error(`❌ Standalone: Error enhancing works for "${authorName}":`, error);
+    return { success: false, error: error.message, works: works };
+  }
+}
 
 /**
  * Handle author biography requests - Pattern 1: Author works in English
@@ -161,10 +328,13 @@ async function handleAuthorRequest(request, env, path, url) {
       return new Response(JSON.stringify({
         success: true,
         author: authorName,
-        books: cached.books,
-        totalBooks: cached.books.length,
+        works: cached.works,
+        authors: cached.authors,
+        totalWorks: cached.works?.length || 0,
+        totalEditions: cached.works?.reduce((sum, work) => sum + work.editions.length, 0) || 0,
         cached: true,
-        timestamp: cached.timestamp
+        timestamp: cached.timestamp,
+        format: 'enhanced_work_edition_v1'
       }), {
         status: 200,
         headers: {
@@ -199,30 +369,16 @@ async function handleAuthorRequest(request, env, path, url) {
     // Process books using Work/Edition normalization
     const processedData = normalizeWorksFromISBNdb(bibliography.books, authorName);
 
-    // Legacy format for backward compatibility
-    const processedBooks = processedData.works.flatMap(work =>
-      work.editions.map(edition => ({
-        ...edition,
-        // Add work-level data for legacy compatibility
-        work_title: work.title,
-        work_identifiers: work.identifiers,
-        work_authors: work.authors
-      }))
-    );
-
-    // Cache both normalized and legacy formats
+    // NORMALIZED: Store only enhanced Work/Edition structure
     const cacheData = {
-      // NEW: Normalized Work/Edition structure
+      // Primary normalized Work/Edition structure
       works: processedData.works,
       authors: processedData.authors,
-
-      // Legacy format for backward compatibility
-      books: processedBooks,
 
       // Metadata
       timestamp: new Date().toISOString(),
       source: 'isbndb',
-      total: bibliography.total || processedBooks.length,
+      total: bibliography.total || processedData.works.reduce((sum, work) => sum + work.editions.length, 0),
       format: 'enhanced_work_edition_v1'
     };
 
@@ -230,16 +386,19 @@ async function handleAuthorRequest(request, env, path, url) {
       expirationTtl: 86400 // 24 hours
     });
 
-    console.log(`Successfully fetched ${processedBooks.length} books for ${authorName}`);
+    console.log(`Successfully fetched ${processedData.works.length} works with ${processedData.works.reduce((sum, work) => sum + work.editions.length, 0)} editions for ${authorName}`);
 
     return new Response(JSON.stringify({
       success: true,
       author: authorName,
-      books: processedBooks,
-      totalBooks: processedBooks.length,
+      works: processedData.works,
+      authors: processedData.authors,
+      totalWorks: processedData.works.length,
+      totalEditions: processedData.works.reduce((sum, work) => sum + work.editions.length, 0),
       total: bibliography.total,
       cached: false,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      format: 'enhanced_work_edition_v1'
     }), {
       status: 200,
       headers: {
@@ -465,24 +624,13 @@ async function handleCacheRequest(request, env, path) {
 
     // Process with work normalization
     const processedData = normalizeWorksFromISBNdb(bibliography.books, authorName);
-    const processedBooks = processedData.works.flatMap(work =>
-      work.editions.map(edition => ({
-        ...edition,
-        work_title: work.title,
-        work_identifiers: work.identifiers,
-        work_authors: work.authors
-      }))
-    );
 
     // Store normalized data in both KV and R2
     const cacheKey = `author:${authorName.toLowerCase()}`;
     const cacheData = {
-      // NEW: Normalized Work/Edition structure
+      // Primary normalized Work/Edition structure
       works: processedData.works,
       authors: processedData.authors,
-
-      // Legacy format for backward compatibility
-      books: processedBooks,
 
       timestamp: new Date().toISOString(),
       source: 'isbndb',
@@ -504,7 +652,8 @@ async function handleCacheRequest(request, env, path) {
       success: true,
       message: 'Author bibliography cached successfully',
       author: authorName,
-      booksCount: processedBooks.length,
+      worksCount: processedData.works.length,
+      editionsCount: processedData.works.reduce((sum, work) => sum + work.editions.length, 0),
       cached: {
         kv: true,
         r2: true
@@ -522,6 +671,46 @@ async function handleCacheRequest(request, env, path) {
       error: 'Failed to cache author bibliography',
       author: authorName,
       details: error.message
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+}
+
+/**
+ * Handle works enhancement requests via HTTP endpoint
+ */
+async function handleWorksEnhancement(request, env) {
+  try {
+    const body = await request.json();
+    const { works, authorName } = body;
+
+    if (!works || !Array.isArray(works) || !authorName) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'Missing required fields: works (array) and authorName (string)'
+      }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    console.log(`🔧 HTTP: handleWorksEnhancement for "${authorName}" (${works.length} works)`);
+
+    // Call the enhancement logic directly
+    const result = await enhanceWorksWithEditionsLogic(works, authorName, env);
+
+    return new Response(JSON.stringify(result), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+  } catch (error) {
+    console.error('Works enhancement error:', error);
+    return new Response(JSON.stringify({
+      success: false,
+      error: error.message
     }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' }
