@@ -90,6 +90,7 @@ public struct SearchView: View {
                 updatePerformanceText()
             },
             onSuggestionTap: { suggestion in
+                searchModel.searchText = suggestion
                 searchModel.search(query: suggestion)
                 updatePerformanceText()
             }
@@ -148,6 +149,11 @@ public struct SearchView: View {
                 }
                 .padding(.top, 40)
 
+                // Recent searches section
+                if !searchModel.recentSearches.isEmpty {
+                    recentSearchesSection
+                }
+
                 // Trending books grid
                 if !searchModel.trendingBooks.isEmpty {
                     trendingBooksSection
@@ -161,6 +167,54 @@ public struct SearchView: View {
             insertion: .opacity.combined(with: .scale(scale: 0.95)),
             removal: .opacity.combined(with: .scale(scale: 1.05))
         ))
+    }
+
+    private var recentSearchesSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text("Recent Searches")
+                    .font(.title3)
+                    .fontWeight(.semibold)
+
+                Spacer()
+
+                Button("Clear") {
+                    searchModel.clearRecentSearches()
+                }
+                .font(.subheadline)
+                .foregroundColor(themeStore.primaryColor)
+            }
+
+            LazyVGrid(columns: [
+                GridItem(.adaptive(minimum: 120), spacing: 12)
+            ], spacing: 12) {
+                ForEach(Array(searchModel.recentSearches.prefix(6)), id: \.self) { search in
+                    Button {
+                        searchModel.searchText = search
+                        searchModel.search(query: search)
+                        updatePerformanceText()
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "clock")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+
+                            Text(search)
+                                .font(.subheadline)
+                                .lineLimit(1)
+
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(.ultraThinMaterial)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Search for \(search)")
+                }
+            }
+        }
     }
 
     private var trendingBooksSection: some View {
@@ -271,6 +325,8 @@ public struct SearchView: View {
                     }
                     .buttonStyle(.plain)
                     .padding(.horizontal, 16)
+                    .accessibilityLabel("Book: \(result.displayTitle) by \(result.displayAuthors)")
+                    .accessibilityHint("Tap to view book details")
                 }
 
                 Spacer(minLength: 120) // Account for search bar

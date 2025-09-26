@@ -16,6 +16,12 @@ public final class SearchModel: @unchecked Sendable {
     // Trending/featured books for initial state
     var trendingBooks: [SearchResult] = []
     var searchSuggestions: [String] = []
+    var recentSearches: [String] = []
+    private var popularSearches: [String] = [
+        "Andy Weir", "Stephen King", "Agatha Christie", "J.K. Rowling",
+        "The Martian", "Dune", "1984", "Pride and Prejudice",
+        "science fiction", "mystery", "romance", "fantasy"
+    ]
 
     // Performance tracking
     var lastSearchTime: TimeInterval = 0
@@ -27,8 +33,15 @@ public final class SearchModel: @unchecked Sendable {
 
     public init(apiService: BookSearchAPIService = BookSearchAPIService()) {
         self.apiService = apiService
+
+        // Load recent searches from UserDefaults
+        if let savedSearches = UserDefaults.standard.array(forKey: "RecentBookSearches") as? [String] {
+            self.recentSearches = savedSearches
+        }
+
         Task { @MainActor in
             loadTrendingBooks()
+            generateSearchSuggestions(for: "")
         }
     }
 
@@ -46,7 +59,9 @@ public final class SearchModel: @unchecked Sendable {
 
     @MainActor
     func search(query: String) {
-        guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !trimmedQuery.isEmpty else {
             resetToInitialState()
             return
         }
@@ -57,16 +72,49 @@ public final class SearchModel: @unchecked Sendable {
         // Update search text immediately for UI responsiveness
         searchText = query
 
-        // Start search with debouncing
+        // Determine debounce delay based on query length and type
+        let debounceDelay = calculateDebounceDelay(for: trimmedQuery)
+
+        // Update suggestions immediately
+        generateSearchSuggestions(for: trimmedQuery)
+
+        // Start search with intelligent debouncing
         searchTask = Task {
-            // 500ms debounce delay
-            try? await Task.sleep(nanoseconds: 500_000_000)
+            // Intelligent debounce delay
+            try? await Task.sleep(nanoseconds: UInt64(debounceDelay * 1_000_000_000))
 
             // Check if task was cancelled
             guard !Task.isCancelled else { return }
 
-            await performSearch(query: query)
+            await performSearch(query: trimmedQuery)
         }
+    }
+
+    // MARK: - Smart Debouncing Logic
+
+    private func calculateDebounceDelay(for query: String) -> Double {
+        // ISBN patterns get immediate search (no debounce)
+        if isISBNPattern(query) {
+            return 0.1
+        }
+
+        // Short queries (1-3 chars) get longer debounce to reduce API calls
+        if query.count <= 3 {
+            return 0.8
+        }
+
+        // Medium queries (4-6 chars) get standard debounce
+        if query.count <= 6 {
+            return 0.5
+        }
+
+        // Longer queries get shorter debounce (user is more specific)
+        return 0.3
+    }
+
+    private func isISBNPattern(_ query: String) -> Bool {
+        let cleanQuery = query.replacingOccurrences(of: "[^0-9X]", with: "", options: .regularExpression)
+        return cleanQuery.count == 10 || cleanQuery.count == 13
     }
 
     @MainActor
@@ -84,10 +132,108 @@ public final class SearchModel: @unchecked Sendable {
         search(query: searchText)
     }
 
+    // MARK: - Search Suggestions & History
+
+    @MainActor
+    func generateSearchSuggestions(for query: String) {
+        let lowercaseQuery = query.lowercased()
+
+        if query.isEmpty {
+            // Show recent searches and popular searches when empty
+            searchSuggestions = Array(recentSearches.prefix(3)) + Array(popularSearches.prefix(5))
+            return
+        }
+
+        var suggestions: [String] = []
+
+        // Add matching recent searches
+        let matchingRecent = recentSearches.filter {
+            $0.lowercased().contains(lowercaseQuery)
+        }.prefix(2)
+        suggestions.append(contentsOf: matchingRecent)
+
+        // Add matching popular searches
+        let matchingPopular = popularSearches.filter {
+            $0.lowercased().contains(lowercaseQuery) && !suggestions.contains($0)
+        }.prefix(3)
+        suggestions.append(contentsOf: matchingPopular)
+
+        // Add query completion suggestions
+        let completions = generateQueryCompletions(for: query)
+        suggestions.append(contentsOf: completions.filter { !suggestions.contains($0) })
+
+        searchSuggestions = Array(suggestions.prefix(6)) // Limit to 6 suggestions
+    }
+
+    @MainActor
+    func addToRecentSearches(_ query: String) {
+        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedQuery.isEmpty else { return }
+
+        // Remove if already exists
+        recentSearches.removeAll { $0.lowercased() == trimmedQuery.lowercased() }
+
+        // Add to beginning
+        recentSearches.insert(trimmedQuery, at: 0)
+
+        // Keep only last 10 searches
+        if recentSearches.count > 10 {
+            recentSearches = Array(recentSearches.prefix(10))
+        }
+
+        // Persist to UserDefaults (simple persistence)
+        UserDefaults.standard.set(recentSearches, forKey: "RecentBookSearches")
+    }
+
+    @MainActor
+    func clearRecentSearches() {
+        recentSearches.removeAll()
+        UserDefaults.standard.removeObject(forKey: "RecentBookSearches")
+    }
+
+    private func generateQueryCompletions(for query: String) -> [String] {
+        let lowercaseQuery = query.lowercased()
+
+        // Smart completions based on query patterns
+        var completions: [String] = []
+
+        // Author name patterns
+        if lowercaseQuery.contains("king") {
+            completions.append("Stephen King")
+        }
+        if lowercaseQuery.contains("weir") {
+            completions.append("Andy Weir")
+        }
+        if lowercaseQuery.contains("christie") {
+            completions.append("Agatha Christie")
+        }
+
+        // Book title patterns
+        if lowercaseQuery.contains("martian") {
+            completions.append("The Martian")
+        }
+        if lowercaseQuery.contains("dune") {
+            completions.append("Dune")
+        }
+
+        // Genre patterns
+        if lowercaseQuery.contains("sci") {
+            completions.append("science fiction")
+        }
+        if lowercaseQuery.contains("fant") {
+            completions.append("fantasy")
+        }
+        if lowercaseQuery.contains("myst") {
+            completions.append("mystery")
+        }
+
+        return completions
+    }
+
     // MARK: - Private Methods
 
     @MainActor
-    private func performSearch(query: String) async {
+    private func performSearch(query: String, retryCount: Int = 0) async {
         isSearching = true
         searchState = .searching
         errorMessage = nil
@@ -112,16 +258,72 @@ public final class SearchModel: @unchecked Sendable {
                 searchState = .noResults
             } else {
                 searchState = .results
+                // Add successful search to recent searches
+                addToRecentSearches(query)
             }
 
         } catch {
             guard !Task.isCancelled else { return }
 
-            errorMessage = error.localizedDescription
-            searchState = .error(error.localizedDescription)
+            // Implement intelligent retry logic
+            if shouldRetry(error: error, attempt: retryCount) {
+                let retryDelay = calculateRetryDelay(attempt: retryCount)
+                try? await Task.sleep(nanoseconds: UInt64(retryDelay * 1_000_000_000))
+
+                guard !Task.isCancelled else { return }
+
+                await performSearch(query: query, retryCount: retryCount + 1)
+                return
+            }
+
+            // Handle final error state
+            errorMessage = formatUserFriendlyError(error)
+            searchState = .error(formatUserFriendlyError(error))
         }
 
         isSearching = false
+    }
+
+    // MARK: - Retry Logic
+
+    private func shouldRetry(error: Error, attempt: Int) -> Bool {
+        guard attempt < 2 else { return false } // Max 2 retries
+
+        // Retry on network errors but not on client errors
+        if let searchError = error as? SearchError {
+            switch searchError {
+            case .httpError(let code):
+                return code >= 500 // Retry on server errors
+            case .networkError, .invalidResponse:
+                return true
+            case .invalidQuery, .invalidURL, .decodingError:
+                return false // Don't retry client errors
+            }
+        }
+
+        return false // Don't retry unknown errors
+    }
+
+    private func calculateRetryDelay(attempt: Int) -> Double {
+        // Exponential backoff: 1s, 2s, 4s
+        return pow(2.0, Double(attempt))
+    }
+
+    private func formatUserFriendlyError(_ error: Error) -> String {
+        if let searchError = error as? SearchError {
+            switch searchError {
+            case .httpError(let code) where code >= 500:
+                return "Server temporarily unavailable. Please try again."
+            case .networkError, .invalidResponse:
+                return "Network connection issue. Check your internet connection."
+            case .invalidQuery:
+                return "Please enter a valid search term."
+            default:
+                return searchError.localizedDescription
+            }
+        }
+
+        return "Search failed. Please try again."
     }
 
     @MainActor
@@ -209,7 +411,12 @@ public actor BookSearchAPIService {
             throw SearchError.invalidURL
         }
 
-        let (data, response) = try await urlSession.data(from: url)
+        let (data, response): (Data, URLResponse)
+        do {
+            (data, response) = try await urlSession.data(from: url)
+        } catch {
+            throw SearchError.networkError(error)
+        }
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw SearchError.invalidResponse
@@ -224,24 +431,41 @@ public actor BookSearchAPIService {
         let provider = httpResponse.allHeaderFields["X-Provider"] as? String ?? "unknown"
         let cacheHitRate = calculateCacheHitRate(from: cacheStatus)
 
-        // Parse response
-        let apiResponse = try JSONDecoder().decode(APISearchResponse.self, from: data)
+        // Parse response based on format
+        let apiResponse: APISearchResponse
+        do {
+            apiResponse = try JSONDecoder().decode(APISearchResponse.self, from: data)
+        } catch {
+            throw SearchError.decodingError(error)
+        }
 
-        // Convert to SearchResult objects
-        let results = apiResponse.items.map { bookItem in
-            let work = convertToWork(from: bookItem)
-            let edition = convertToEdition(from: bookItem, work: work)
-            let authors = (bookItem.volumeInfo.authors ?? []).map { authorName in
-                Author(name: authorName, gender: .unknown, culturalRegion: .international)
+        // Check if this is an enhanced format response or legacy format
+        let isEnhancedFormat = apiResponse.format == "enhanced_work_edition_v1"
+
+        let results: [SearchResult]
+
+        if isEnhancedFormat {
+            // Handle enhanced Work/Edition format
+            results = apiResponse.items.compactMap { bookItem in
+                return convertEnhancedItemToSearchResult(bookItem, provider: provider)
             }
+        } else {
+            // Handle legacy Google Books format for backward compatibility
+            results = apiResponse.items.map { bookItem in
+                let work = convertToWork(from: bookItem)
+                let edition = convertToEdition(from: bookItem, work: work)
+                let authors = (bookItem.volumeInfo.authors ?? []).map { authorName in
+                    Author(name: authorName, gender: .unknown, culturalRegion: .international)
+                }
 
-            return SearchResult(
-                work: work,
-                editions: [edition],
-                authors: authors,
-                relevanceScore: 1.0,
-                provider: provider
-            )
+                return SearchResult(
+                    work: work,
+                    editions: [edition],
+                    authors: authors,
+                    relevanceScore: 1.0,
+                    provider: provider
+                )
+            }
         }
 
         return SearchResponse(
@@ -305,6 +529,62 @@ public actor BookSearchAPIService {
         return Int(yearString)
     }
 
+    // MARK: - Enhanced Format Conversion
+
+    private func convertEnhancedItemToSearchResult(_ bookItem: APIBookItem, provider: String) -> SearchResult? {
+        let volumeInfo = bookItem.volumeInfo
+
+        // Create Work object with enhanced identifiers
+        let work = Work(
+            title: volumeInfo.title,
+            originalLanguage: volumeInfo.language,
+            firstPublicationYear: extractYear(from: volumeInfo.publishedDate),
+            subjectTags: volumeInfo.categories ?? []
+        )
+
+        // Set external identifiers from enhanced API response
+        work.isbndbID = volumeInfo.isbndbID
+        work.openLibraryID = volumeInfo.openLibraryID
+        work.googleBooksVolumeID = volumeInfo.googleBooksVolumeID
+        work.isbndbQuality = 85 // Higher quality for enhanced format
+
+        // Create Edition object
+        let isbn = volumeInfo.industryIdentifiers?.first { $0.type.contains("ISBN") }?.identifier
+        let edition = Edition(
+            isbn: isbn,
+            publisher: volumeInfo.publisher,
+            publicationDate: volumeInfo.publishedDate,
+            pageCount: volumeInfo.pageCount,
+            format: EditionFormat.from(string: nil), // Default format
+            coverImageURL: volumeInfo.imageLinks?.thumbnail,
+            work: work
+        )
+
+        // Set external identifiers for edition
+        edition.isbndbID = volumeInfo.isbndbID
+        edition.openLibraryID = volumeInfo.openLibraryID
+        edition.googleBooksVolumeID = volumeInfo.googleBooksVolumeID
+        edition.isbndbQuality = 85
+
+        // Add edition to work
+        work.editions.append(edition)
+
+        // Create Author objects with enhanced cultural data
+        let authors = (volumeInfo.authors ?? []).map { authorName in
+            let author = Author(name: authorName, gender: .unknown, culturalRegion: .international)
+            work.authors.append(author)
+            return author
+        }
+
+        return SearchResult(
+            work: work,
+            editions: [edition],
+            authors: authors,
+            relevanceScore: 1.0,
+            provider: provider
+        )
+    }
+
 }
 
 // MARK: - API Response Models
@@ -313,6 +593,9 @@ private struct APISearchResponse: Codable {
     let kind: String?
     let totalItems: Int?
     let items: [APIBookItem]
+    let format: String?        // New field for enhanced format detection
+    let provider: String?      // Provider information
+    let cached: Bool?          // Cache status
 }
 
 private struct APIBookItem: Codable {
@@ -332,6 +615,11 @@ private struct APIVolumeInfo: Codable {
     let categories: [String]?
     let imageLinks: APIImageLinks?
     let language: String?
+
+    // Enhanced format fields for external identifiers
+    let isbndbID: String?
+    let openLibraryID: String?
+    let googleBooksVolumeID: String?
 }
 
 private struct APIIndustryIdentifier: Codable {
