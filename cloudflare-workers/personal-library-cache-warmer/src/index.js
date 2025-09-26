@@ -1,14 +1,19 @@
 /**
- * Personal Library Cache Warmer - CloudFlare Worker
+ * Personal Library Cache Warmer - Work/Edition Normalization Enhanced
  *
- * Intelligent cache warming strategy for personal library data:
+ * Intelligent cache warming strategy with SwiftData-aligned normalization:
  * 1. Author-first consolidation to minimize API calls
- * 2. ISBN multiplication via bibliography searches
- * 3. Quality validation and cross-referencing
- * 4. Progressive enhancement with comprehensive coverage
+ * 2. Work/Edition normalization matching SwiftData models
+ * 3. External API identifier capture (openLibraryID, isbndbID, googleBooksVolumeID)
+ * 4. ISBN multiplication via bibliography searches
+ * 5. Quality validation and cross-referencing
+ * 6. Progressive enhancement with comprehensive coverage
+ *
+ * NEW: Processes normalized Work/Edition structures from ISBNdb worker
+ * while maintaining backward compatibility with legacy cache formats
  *
  * Target: 500+ books, ~150 unique authors, <200 total API calls
- */
+ */"
 
 // OPTIMIZED FOR PAID TIER: Maximize ISBNdb quota utilization (5000+ calls/day)
 const RATE_LIMIT_INTERVAL = 800; // 0.8 seconds (450% faster) - 4500 calls/hour possible
@@ -17,6 +22,14 @@ const MAX_RETRIES = 3;
 const CACHE_TTL = 86400 * 7; // 7 days for warming cache
 const AGGRESSIVE_BATCH_SIZE = 50; // For cron jobs - maximum throughput
 const DAILY_API_QUOTA = 5000; // Track daily usage against quota
+
+// FIXED: Global quota tracking object
+let quotaUsage = {
+  calls: 0,
+  authors: 0,
+  startTime: Date.now(),
+  resetTime: Date.now() + 86400000 // 24 hours from start
+};
 
 /**
  * CRITICAL: Dual-format cache key storage for compatibility
@@ -930,22 +943,43 @@ async function processAuthorBiography(author, env, dryRun = false) {
       const data = await response.json();
       result.services.isbndb.success = true;
 
-      if (data.success && data.books && data.books.length > 0) {
+      // Handle both legacy and new normalized formats
+      const hasNormalizedData = data.works && data.authors;
+      const totalBooks = hasNormalizedData ?
+        data.works.reduce((sum, work) => sum + work.editions.length, 0) :
+        (data.books?.length || 0);
+
+      if (data.success && totalBooks > 0) {
         result.success = true;
-        result.foundBooks = data.books.length;
-        result.books = data.books;
+        result.foundBooks = totalBooks;
 
-        console.log(`📚 Found ${data.books.length} books for author "${author}"`);
+        if (hasNormalizedData) {
+          console.log(`🎯 Found ${data.works.length} works with ${totalBooks} editions for author "${author}" (normalized format)`);
+          // Convert normalized structure to legacy format for compatibility
+          result.books = data.works.flatMap(work =>
+            work.editions.map(edition => ({
+              ...edition,
+              work_title: work.title,
+              work_identifiers: work.identifiers,
+              work_authors: work.authors
+            }))
+          );
+          result.normalizedData = { works: data.works, authors: data.authors };
+        } else {
+          console.log(`📚 Found ${totalBooks} books for author "${author}" (legacy format)`);
+          result.books = data.books || [];
+        }
 
-        // ENHANCED: Cache individual books AND use dual-format storage for author search
+        // ENHANCED: Cache individual works/editions AND use dual-format storage for author search
         result.services.booksApi.attempted = true;
         const booksApiStart = Date.now();
 
-        // Cache individual books via books-api-proxy for ISBN lookups
-        for (const book of data.books) {
+        // Cache items via books-api-proxy for ISBN/work lookups
+        for (const item of result.books) {
           try {
-            if (book.isbn || book.isbn13) {
-              const isbn = book.isbn13 || book.isbn;
+            // Use ISBN for caching (covers both legacy books and normalized editions)
+            if (item.isbn || item.isbn13) {
+              const isbn = item.isbn13 || item.isbn;
               const cacheUrl = `https://books-api-proxy.jukasdrj.workers.dev/search/auto?q=${encodeURIComponent(isbn)}&maxResults=1&includeTranslations=false&showAllEditions=false`;
               const cacheResponse = await env.BOOKS_API_PROXY.fetch(
                 new Request(cacheUrl),
@@ -958,25 +992,37 @@ async function processAuthorBiography(author, env, dryRun = false) {
                 result.cachedBooks++;
                 result.services.booksApi.cacheHits++;
               } else {
-                result.errors.push(`Cache failed for "${book.title}" (HTTP ${cacheResponse.status})`);
+                const title = item.work_title || item.title || 'Unknown';
+                result.errors.push(`Cache failed for "${title}" (HTTP ${cacheResponse.status})`);
               }
             } else {
-              result.errors.push(`No ISBN found for book "${book.title}"`);
+              const title = item.work_title || item.title || 'Unknown';
+              result.errors.push(`No ISBN found for "${title}"`);
             }
           } catch (cacheError) {
-            result.errors.push(`Cache error for "${book.title}": ${cacheError.message}`);
+            const title = item.work_title || item.title || 'Unknown';
+            result.errors.push(`Cache error for "${title}": ${cacheError.message}`);
           }
         }
 
         // CRITICAL: Store author results in dual-format cache for auto-search compatibility
-        if (data.success && data.books) {
-          console.log(`🔄 Storing dual-format cache for author: ${author}`);
-          const authorCacheResult = await storeDualFormatCache(env, author, data);
+        if (data.success && (data.books || data.works)) {
+          console.log(`🔄 Storing enhanced dual-format cache for author: ${author}`);
+          const cacheData = hasNormalizedData ?
+            // Store normalized data with legacy compatibility
+            {
+              ...data,
+              books: result.books, // Legacy format for backward compatibility
+              format: 'enhanced_work_edition_v1'
+            } :
+            data; // Legacy format as-is
+
+          const authorCacheResult = await storeDualFormatCache(env, author, cacheData);
           if (authorCacheResult) {
-            console.log(`✅ Successfully cached author "${author}" in dual format`);
+            console.log(`✅ Successfully cached author "${author}" in enhanced dual format`);
             result.services.booksApi.authorCached = true;
           } else {
-            console.log(`❌ Failed to cache author "${author}" in dual format`);
+            console.log(`❌ Failed to cache author "${author}" in enhanced dual format`);
             result.services.booksApi.authorCached = false;
           }
         }
@@ -1250,13 +1296,55 @@ async function handleResultsRequest(request, env, ctx) {
 }
 
 async function handleHealthCheck(env) {
-  return new Response(JSON.stringify({
-    status: 'healthy',
-    timestamp: new Date().toISOString()
-  }), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' }
-  });
+  try {
+    // Get ACTUAL cache statistics from KV namespace
+    const keys = await env.CACHE.list();
+    const authorKeys = keys.keys.filter(key => key.name.startsWith('author:')).length;
+    const autoSearchKeys = keys.keys.filter(key => key.name.startsWith('auto-search:')).length;
+    const progressKeys = keys.keys.filter(key => key.name.startsWith('progress_')).length;
+    const libraryData = await env.CACHE.get('current_library', 'json');
+
+    // TRUTH: Show only actual cached data, no fake processing claims
+    return new Response(JSON.stringify({
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      cache: {
+        totalKeys: keys.keys.length,
+        authorEntries: authorKeys,
+        autoSearchEntries: autoSearchKeys,
+        progressEntries: progressKeys,
+        actualCachedAuthors: authorKeys, // This is the real number!
+        libraryDataUploaded: !!libraryData,
+        uniqueAuthorsInLibrary: libraryData ? (libraryData.authors || []).length : 0,
+        totalBooksInLibrary: libraryData ? libraryData.totalBooks : 0
+      },
+      services: {
+        kv: 'connected',
+        isbndbWorker: 'configured',
+        booksApiProxy: 'configured'
+      },
+      reality: {
+        cacheEmpty: keys.keys.length === 0,
+        needsCacheWarming: authorKeys === 0 && !!libraryData,
+        readyForProduction: authorKeys > 0 && !!libraryData
+      }
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  } catch (error) {
+    return new Response(JSON.stringify({
+      status: 'error',
+      timestamp: new Date().toISOString(),
+      error: error.message,
+      cache: {
+        accessible: false
+      }
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
 }
 
 async function handleTestCron(request, env, ctx) {

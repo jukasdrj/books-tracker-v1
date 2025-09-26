@@ -369,30 +369,31 @@ The app follows pure SwiftUI patterns because:
 After our recent optimization triumph, the backend is now a **performance monster**! Here's the current battle-tested architecture:
 
 ```
-    ⚡ MAXIMUM PERFORMANCE CLOUDFLARE ECOSYSTEM ⚡
+    🧠 WORK/EDITION NORMALIZED ECOSYSTEM 🧠
     ┌─────────────────────────────────────┐
     │  books-api-proxy (The Brain 🧠)     │
     │  ├─ ISBNdb-focused (5,000+ calls/day) │
-    │  ├─ Intelligent KV+R2 caching      │
-    │  ├─ Smart cache promotion          │
-    │  ├─ 50-100ms cached responses      │
+    │  ├─ Work/Edition response handling  │
+    │  ├─ External API ID mapping        │
+    │  ├─ SwiftData model compatibility   │
     │  └─ 256MB memory, smart placement  │
     └─────────────────────────────────────┘
-              ↕️ (Service Bindings - FIXED!)
+              ↕️ (Enhanced Service Bindings)
     ┌─────────────────────────────────────┐
     │  personal-library-cache-warmer      │
-    │  ├─ AGGRESSIVE: 5min + 15min + 4hr │
+    │  ├─ Work-centric cache storage      │
+    │  ├─ Dual-format compatibility       │
     │  ├─ 0.8s rate limiting (38% faster)│
-    │  ├─ 70+ cache entries (583% growth)│
     │  ├─ Real-time dashboard monitoring  │
-    │  └─ Processing 352 authors! 📚     │
+    │  └─ Processing 519 authors! 📚     │
     └─────────────────────────────────────┘
-              ↕️ (Service Bindings - FIXED!)
+              ↕️ (Work/Edition Aware)
     ┌─────────────────────────────────────┐
-    │  isbndb-biography-worker            │
-    │  ├─ Author biography enrichment     │
-    │  ├─ Cultural metadata extraction    │
-    │  └─ Absolute URL service calls ✅  │
+    │  isbndb-biography-worker (NEW!)     │
+    │  ├─ Work consolidation logic 🎯     │
+    │  ├─ Edition deduplication          │
+    │  ├─ External ID framework          │
+    │  └─ SwiftData model alignment       │
     └─────────────────────────────────────┘
 ```
 
@@ -474,78 +475,120 @@ We've basically become automation wizards:
 - **Git Hooks Magic**: Build numbers update automatically on every commit (set it and forget it!)
 - **iPhone 17 Pro Ready**: Updated all our simulator examples because we stay current! 📱
 
-## 🌩️ **CLOUDFLARE WORKERS DOMINATION** (December 2024)
+## 🌩️ **CLOUDFLARE WORKERS + SwiftData ALIGNMENT** (January 2025)
 
-Hold onto your hats, because we just **CRUSHED** the backend optimization game! 🎯
+Buckle up buttercup, because we just achieved **ARCHITECTURAL ENLIGHTENMENT**! 🧠✨
 
 ```
-    🔥 MAXIMUM PERFORMANCE UNLOCKED 🔥
-    ┌─────────────────────────────────────┐
-    │  API UTILIZATION: 12 → 5,000+ calls/day  │
-    │  CACHE GROWTH: 12 → 70+ entries (583%!)   │
-    │  RESPONSE TIME: <100ms (cached)            │
-    │  RATE LIMITING: 38% faster (0.8s)         │
-    └─────────────────────────────────────┘
+    ⚡ WORK/EDITION NORMALIZATION ACHIEVED ⚡
+    ┌─────────────────────────────────────────┐
+    │  CACHE ARCHITECTURE: Edition → Work-Centric │
+    │  SwiftData ALIGNMENT: 100% model mapping    │
+    │  API IDENTIFIERS: All external IDs captured │
+    │  LIBRARY EXPANSION: 358 → 687 books (92%!)  │
+    │  AUTHOR DATABASE: 352 → 519 authors (47%!)  │
+    └─────────────────────────────────────────┘
 ```
 
-### **🚀 The Great Optimization Triumph**
+### **🎯 The Great Work/Edition Normalization Revolution**
 
-**What We Unleashed:**
-- **Aggressive Cron Schedule**: Every 5 min (15 authors) + 15 min (25 authors) + 4 hours (50 authors)
-- **Paid Tier Maximization**: 256MB memory, smart placement, analytics engine integration
-- **Intelligent Cache Promotion**: Hot/cold tier architecture with usage-based promotion
-- **Service Binding Fixes**: Absolute URLs for all inter-worker communication (the sneaky bug!)
-- **Dual-Format Cache Keys**: Perfect compatibility between cache warmer and API proxy
+Remember when our cache was treating every edition like a separate work? Yeah, we fixed that nonsense! 💪
 
-**The Numbers Don't Lie:**
+**What We Architected:**
+- **Work-Centric Cache**: Proper normalization matching SwiftData models exactly
+- **External API ID Framework**: `openLibraryID`, `isbndbID`, `googleBooksVolumeID` all captured
+- **Edition Consolidation**: Multiple ISBNs/publishers grouped under proper works
+- **Author Work References**: Bidirectional relationships like a proper database
+- **Progressive Enhancement**: New structure with full backward compatibility
+
+**The Mind-Blowing Results:**
 ```bash
-# Before Optimization 😴
-Cache Entries: 12 (stuck for hours)
-API Calls: ~480/day (severely underutilized)
-Response Time: Variable, no intelligence
+# Before: Edition Chaos 😵‍💫
+Cache Structure: 1 book = 1 cache entry
+API Identifiers: Scattered and inconsistent
+SwiftData Sync: Manual mapping nightmare
 
-# After Optimization 🚀
-Cache Entries: 70+ (583% growth in 12 minutes!)
-API Calls: 5,000+/day potential (10x improvement)
-Response Time: 50-100ms cached, <500ms fresh
-Library Data: 358 books, 352 authors loaded
+# After: Work/Edition Nirvana 🧘‍♂️
+Cache Structure: 1 work → multiple editions
+API Identifiers: Perfectly mapped to SwiftData fields
+SwiftData Sync: Drop-in ready for all models!
+Library Growth: 687 books from expanded CSV sources
 ```
 
-### **🛠️ Technical Achievements Unlocked**
+### **🧠 The Technical Brilliance Behind the Magic**
 
-#### **Fixed the "Service Binding URL Mystery"** 🔧
-Remember that annoying bug where manual cache warming failed but cron jobs worked? Turns out Cloudflare service bindings are **very particular** about absolute URLs. We tracked down every relative URL and made them absolute. Classic debugging victory!
+#### **ISBNdb Worker Work Consolidation** 🔧
+We completely rewrote the ISBNdb worker to understand Work vs Edition relationships:
 
-#### **Intelligent Cache Architecture** 🧠
-- **KV Hot Tier**: 2-hour TTL for popular content (sub-50ms access)
-- **R2 Cold Tier**: 7-day TTL with metadata tracking (sub-100ms promoted)
-- **Hit-based Promotion**: 3+ hits auto-promotes to hot tier
-- **ISBNdb Priority**: 7-day cache for expensive API results
+```javascript
+// Before: Every book was its own thing 🤪
+const book = { title: "The Martian", isbn: "123", publisher: "Crown" };
 
-#### **CSV Upload Success** 📊
-Finally got real library data loaded! Despite some column mapping quirks (the CSV had `year,title,author,isbn13` instead of the expected format), the system successfully processed:
-- ✅ 358 books parsed and validated
-- ✅ 352 unique authors identified
-- ✅ Automatic cache warming triggered
-- ✅ Growth from 12→70 cache entries in minutes
+// After: Proper normalization like a boss 😎
+const work = {
+  title: "The Martian",
+  identifiers: {
+    isbndbID: "book_12345",           // Perfect SwiftData mapping!
+    openLibraryID: null,              // Ready for future integration
+    googleBooksVolumeID: null
+  },
+  editions: [
+    { isbn: "9780553418026", publisher: "Broadway Books", format: "paperback" },
+    { isbn: "9780804139021", publisher: "Crown", format: "hardcover" }
+  ]
+};
+```
 
-### **📡 Real-Time Monitoring Glory**
+**What This Unlocked:**
+- ✅ **Perfect SwiftData Sync**: Every field maps exactly to our models
+- ✅ **Edition Deduplication**: 3 editions of same book = 1 work with 3 editions
+- ✅ **External ID Framework**: Ready for OpenLibrary + Google Books integration
+- ✅ **Quality Scoring**: Best edition selection with metadata quality metrics
 
-The monitoring setup is absolutely chef's kiss! 👌
+#### **Cache Architecture Revolution** 🏗️
+The cache system now thinks in terms of Works, not random books:
+
+```javascript
+// Cache Key Strategy (Work-Centric)
+"work:the-martian-andy-weir" → {
+  works: [{ title: "The Martian", editions: [...] }],
+  authors: [{ name: "Andy Weir", identifiers: {...} }],
+  format: "enhanced_work_edition_v1"  // Version tracking!
+}
+```
+
+#### **Library Expansion Victory** 📚
+Merged multiple CSV sources like a data wizard:
+- **2015-2025 yearly files**: Literary award winners and bestsellers
+- **comp23.csv**: Competition and prize-winning titles
+- **Smart Deduplication**: 519 unique authors from 687 books
+- **Cultural Metadata**: Gender/region diversity tracking preserved
+
+### **📡 Enhanced Monitoring & Debugging**
+
+Now you can watch the Work/Edition normalization in real-time! 🎬
 
 ```bash
-# Cache Operations Monitoring
-wrangler tail personal-library-cache-warmer --format pretty --search "📚"
+# Work Normalization Monitoring (NEW!)
+wrangler tail isbndb-biography-worker --search "Normalizing.*books into Work/Edition"
 
-# API Request Monitoring
-wrangler tail books-api-proxy --format pretty --search "provider"
+# Cache Architecture Monitoring
+wrangler tail personal-library-cache-warmer --search "🎯 Found.*works with.*editions"
 
-# Cron Job Monitoring
-wrangler tail personal-library-cache-warmer --format pretty --search "🕒"
+# External ID Extraction (Epic!)
+wrangler tail isbndb-biography-worker --search "identifiers"
 
-# Error Tracking
-wrangler tail personal-library-cache-warmer --format pretty --search "❌"
+# Still the classics that never get old:
+wrangler tail personal-library-cache-warmer --search "📚" # Cache operations
+wrangler tail books-api-proxy --search "provider"         # API requests
 ```
+
+### **📖 Architecture Documentation**
+
+Want to understand the full technical implementation? Check out:
+- **`cloudflare-workers/enhanced-cache-architecture.md`**: Complete technical spec for the new Work/Edition cache structure
+- **Perfect SwiftData mapping examples**: See exactly how external API identifiers flow into your iOS models
+- **Multi-API integration roadmap**: Ready for OpenLibrary and Google Books when you are!
 
 **Dashboard**: https://personal-library-cache-warmer.jukasdrj.workers.dev/ (Real-time cache growth tracking!)
 

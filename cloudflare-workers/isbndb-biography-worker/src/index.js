@@ -1,11 +1,14 @@
 /**
- * ISBNdb Biography Worker - Enhanced with Proven Query Patterns
+ * ISBNdb Biography Worker - Work/Edition Normalization Enhanced
  *
- * Implements 4 validated ISBNdb API patterns for reliable book data retrieval:
+ * Implements 4 validated ISBNdb API patterns with SwiftData-aligned normalization:
  * 1. Author works in English: /author/{name}?language=en
  * 2. Book by ISBN: /book/{isbn}?with_prices=0
  * 3. Title search: /books/{title}?column=title&language=en&shouldMatchAll=1
  * 4. Combined search: /search/books?author=X&text=Y&publisher=Z
+ *
+ * NEW: Consolidates editions into proper Work/Edition/Author structure
+ * matching SwiftData models with external API identifiers
  *
  * Success target: >90% success rate with test authors
  */
@@ -118,18 +121,34 @@ async function handleAuthorRequest(request, env, path, url) {
       });
     }
 
-    // Process and filter books
-    const processedBooks = bibliography.books
-      .filter(book => book.title && book.authors)
-      .map(book => selectBestEdition([book]))
-      .filter(book => book !== null);
+    // Process books using Work/Edition normalization
+    const processedData = normalizeWorksFromISBNdb(bibliography.books, authorName);
 
-    // Cache the results
+    // Legacy format for backward compatibility
+    const processedBooks = processedData.works.flatMap(work =>
+      work.editions.map(edition => ({
+        ...edition,
+        // Add work-level data for legacy compatibility
+        work_title: work.title,
+        work_identifiers: work.identifiers,
+        work_authors: work.authors
+      }))
+    );
+
+    // Cache both normalized and legacy formats
     const cacheData = {
+      // NEW: Normalized Work/Edition structure
+      works: processedData.works,
+      authors: processedData.authors,
+
+      // Legacy format for backward compatibility
       books: processedBooks,
+
+      // Metadata
       timestamp: new Date().toISOString(),
       source: 'isbndb',
-      total: bibliography.total || processedBooks.length
+      total: bibliography.total || processedBooks.length,
+      format: 'enhanced_work_edition_v1'
     };
 
     await env.KV_CACHE.put(cacheKey, JSON.stringify(cacheData), {
@@ -369,17 +388,30 @@ async function handleCacheRequest(request, env, path) {
       });
     }
 
-    const processedBooks = bibliography.books
-      .filter(book => book.title && book.authors)
-      .map(book => selectBestEdition([book]))
-      .filter(book => book !== null);
+    // Process with work normalization
+    const processedData = normalizeWorksFromISBNdb(bibliography.books, authorName);
+    const processedBooks = processedData.works.flatMap(work =>
+      work.editions.map(edition => ({
+        ...edition,
+        work_title: work.title,
+        work_identifiers: work.identifiers,
+        work_authors: work.authors
+      }))
+    );
 
-    // Store in both KV and R2
+    // Store normalized data in both KV and R2
     const cacheKey = `author:${authorName.toLowerCase()}`;
     const cacheData = {
+      // NEW: Normalized Work/Edition structure
+      works: processedData.works,
+      authors: processedData.authors,
+
+      // Legacy format for backward compatibility
       books: processedBooks,
+
       timestamp: new Date().toISOString(),
-      source: 'isbndb'
+      source: 'isbndb',
+      format: 'enhanced_work_edition_v1'
     };
 
     // KV storage (hot cache)
@@ -701,6 +733,235 @@ function calculateEditionScore(book, originalISBN) {
   if (book.subjects && book.subjects.length > 0) score += 3;
 
   return score;
+}
+
+/**
+ * ENHANCED: Normalize ISBNdb books into Work/Edition/Author structure
+ * Matches SwiftData model normalization with external API identifiers
+ */
+function normalizeWorksFromISBNdb(books, searchAuthor) {
+  if (!books || !Array.isArray(books)) {
+    return { works: [], authors: [] };
+  }
+
+  const worksMap = new Map();
+  const authorsMap = new Map();
+  const processedAuthor = searchAuthor?.toLowerCase();
+
+  console.log(`Normalizing ${books.length} books into Work/Edition structure`);
+
+  books.forEach(book => {
+    if (!book.title || !book.authors) return;
+
+    // Generate work identifier - prefer title + primary author
+    const primaryAuthor = Array.isArray(book.authors) ? book.authors[0] : book.authors;
+    const workKey = generateWorkKey(book.title, primaryAuthor);
+
+    // Process authors first
+    const authorsList = Array.isArray(book.authors) ? book.authors : [book.authors];
+    const processedAuthors = [];
+
+    authorsList.forEach(authorName => {
+      const authorKey = authorName.toLowerCase();
+
+      if (!authorsMap.has(authorKey)) {
+        authorsMap.set(authorKey, {
+          name: authorName,
+          identifiers: {
+            openLibraryID: null,        // To be filled by OpenLibrary integration
+            isbndbID: null,             // ISBNdb doesn't provide author IDs consistently
+            googleBooksID: null,        // To be filled by Google Books integration
+            goodreadsID: null           // Future integration
+          },
+          // Infer basic metadata from context
+          gender: 'unknown',
+          culturalRegion: null,
+          nationality: null,
+          works: []
+        });
+      }
+
+      processedAuthors.push(authorsMap.get(authorKey));
+    });
+
+    // Create or update work
+    if (!worksMap.has(workKey)) {
+      worksMap.set(workKey, {
+        title: book.title,
+        originalLanguage: book.language || 'en',
+        firstPublicationYear: extractYear(book.date_published),
+
+        // External API identifiers (SwiftData Work model)
+        identifiers: {
+          openLibraryID: null,              // To be filled by OpenLibrary integration
+          isbndbID: book.id || book.isbn13, // Use book ID or ISBN as work identifier
+          googleBooksVolumeID: null,        // To be filled by Google Books integration
+          goodreadsID: null                 // Future integration
+        },
+
+        // Authors for this work
+        authors: processedAuthors.map(author => ({
+          name: author.name,
+          identifiers: author.identifiers
+        })),
+
+        // Editions of this work
+        editions: []
+      });
+    }
+
+    const work = worksMap.get(workKey);
+
+    // Create edition from ISBNdb book data
+    const edition = {
+      // ISBN support - multiple ISBNs per edition
+      isbn: book.isbn13 || book.isbn,
+      isbns: collectISBNs(book),
+
+      // Edition metadata
+      publisher: book.publisher,
+      publicationDate: book.date_published,
+      pageCount: book.pages ? parseInt(book.pages) : null,
+      format: normalizeFormat(book.binding),
+      coverImageURL: book.image,
+      editionTitle: extractEditionTitle(book.title, work.title),
+
+      // External API identifiers (SwiftData Edition model)
+      identifiers: {
+        openLibraryID: null,        // To be filled by OpenLibrary integration
+        isbndbID: book.id,          // ISBNdb book ID
+        googleBooksVolumeID: null,  // To be filled by Google Books integration
+        goodreadsID: null           // Future integration
+      },
+
+      // ISBNdb-specific metadata
+      isbndb_metadata: {
+        lastSync: new Date().toISOString(),
+        quality: calculateEditionScore(book),
+        source: 'isbndb',
+        subjects: book.subjects || [],
+        synopsis: book.synopsis
+      }
+    };
+
+    // Add edition to work (avoid duplicates by ISBN)
+    const existingEdition = work.editions.find(e =>
+      e.isbn === edition.isbn ||
+      e.isbns.some(isbn => edition.isbns.includes(isbn))
+    );
+
+    if (!existingEdition) {
+      work.editions.push(edition);
+    } else {
+      // Merge edition data (keep highest quality)
+      if (edition.isbndb_metadata.quality > (existingEdition.isbndb_metadata?.quality || 0)) {
+        Object.assign(existingEdition, edition);
+      }
+    }
+  });
+
+  const works = Array.from(worksMap.values());
+  const authors = Array.from(authorsMap.values());
+
+  // Update author works references
+  authors.forEach(author => {
+    author.works = works
+      .filter(work => work.authors.some(workAuthor =>
+        workAuthor.name.toLowerCase() === author.name.toLowerCase()
+      ))
+      .map(work => ({
+        workIdentifier: generateWorkKey(work.title, work.authors[0].name),
+        title: work.title,
+        firstPublicationYear: work.firstPublicationYear
+      }));
+  });
+
+  console.log(`Normalized into ${works.length} works and ${authors.length} authors`);
+  return { works, authors };
+}
+
+/**
+ * Generate consistent work identifier from title and primary author
+ */
+function generateWorkKey(title, primaryAuthor) {
+  const cleanTitle = title.toLowerCase()
+    .replace(/[^a-z0-9\s]/g, '')
+    .replace(/\s+/g, '-')
+    .substring(0, 50);
+
+  const cleanAuthor = primaryAuthor.toLowerCase()
+    .replace(/[^a-z0-9\s]/g, '')
+    .replace(/\s+/g, '-')
+    .substring(0, 30);
+
+  return `${cleanTitle}-${cleanAuthor}`;
+}
+
+/**
+ * Collect all ISBNs from ISBNdb book object
+ */
+function collectISBNs(book) {
+  const isbns = [];
+  if (book.isbn13) isbns.push(book.isbn13);
+  if (book.isbn) isbns.push(book.isbn);
+  if (book.isbn10) isbns.push(book.isbn10);
+
+  // Remove duplicates
+  return [...new Set(isbns)];
+}
+
+/**
+ * Normalize ISBNdb binding format to SwiftData EditionFormat
+ */
+function normalizeFormat(binding) {
+  if (!binding) return 'unknown';
+
+  const bindingLower = binding.toLowerCase();
+  if (bindingLower.includes('hardcover') || bindingLower.includes('hardback')) return 'hardcover';
+  if (bindingLower.includes('paperback') || bindingLower.includes('softcover')) return 'paperback';
+  if (bindingLower.includes('trade paperback')) return 'paperback';
+  if (bindingLower.includes('mass market')) return 'massMarketPaperback';
+  if (bindingLower.includes('ebook') || bindingLower.includes('kindle')) return 'ebook';
+  if (bindingLower.includes('audiobook') || bindingLower.includes('audio')) return 'audiobook';
+
+  return 'unknown';
+}
+
+/**
+ * Extract edition title (e.g., "Deluxe Edition", "Abridged") from full title
+ */
+function extractEditionTitle(fullTitle, workTitle) {
+  if (!fullTitle || !workTitle) return null;
+
+  const editionMarkers = [
+    'deluxe edition', 'special edition', 'anniversary edition', 'collector\'s edition',
+    'abridged', 'unabridged', 'expanded edition', 'revised edition',
+    'large print', 'mass market edition'
+  ];
+
+  const fullTitleLower = fullTitle.toLowerCase();
+  const workTitleLower = workTitle.toLowerCase();
+
+  // Find edition markers in title
+  for (const marker of editionMarkers) {
+    if (fullTitleLower.includes(marker) && !workTitleLower.includes(marker)) {
+      return marker.split(' ').map(word =>
+        word.charAt(0).toUpperCase() + word.slice(1)
+      ).join(' ');
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Extract year from date string
+ */
+function extractYear(dateString) {
+  if (!dateString) return null;
+
+  const match = dateString.match(/\d{4}/);
+  return match ? parseInt(match[0]) : null;
 }
 
 /**
