@@ -18,14 +18,14 @@ Hey there! 👋 Welcome to the BooksTracker project docs. This file is your frie
 
 ## Project Overview
 
-This is a **BooksTracker** iOS application built with **Swift 6.1+** and **SwiftUI**, targeting **iOS 17.0+**. The app tracks personal book libraries with cultural diversity insights. It uses a **workspace + Swift Package Manager (SPM)** architecture for clean separation between the app shell and feature code.
+This is a **BooksTracker** iOS application built with **Swift 6.1+** and **SwiftUI**, targeting **iOS 26.0+**. The app tracks personal book libraries with cultural diversity insights. It uses a **workspace + Swift Package Manager (SPM)** architecture for clean separation between the app shell and feature code.
 
 ### Core Technologies
 - **SwiftUI** for UI with native state management (@State, @Observable, @Environment)
 - **SwiftData** for persistence with CloudKit sync enabled
 - **Swift Concurrency** (async/await, @MainActor) with strict mode
 - **Swift Testing** framework (not XCTest) with @Test macros and #expect assertions
-- **iOS 26 Liquid Glass** design system (forward-compatible with iOS 17+)
+- **iOS 26 Liquid Glass** design system (forward-compatible with iOS 18+)
 
 ### Project Structure
 ```
@@ -96,14 +96,14 @@ list_sims({})
 build_sim({
     workspacePath: "/path/to/BooksTracker.xcworkspace",
     scheme: "BooksTracker",
-    simulatorName: "iPhone 16"
+    simulatorName: "iPhone 17 Pro"
 })
 
 // Build and run in one step
 build_run_sim({
     workspacePath: "/path/to/BooksTracker.xcworkspace",
     scheme: "BooksTracker",
-    simulatorName: "iPhone 16"
+    simulatorName: "iPhone 17 Pro"
 })
 
 // Clean build
@@ -123,7 +123,7 @@ swift_package_test({
 test_sim({
     workspacePath: "/path/to/BooksTracker.xcworkspace",
     scheme: "BooksTracker",
-    simulatorName: "iPhone 16"
+    simulatorName: "iPhone 17 Pro"
 })
 ```
 
@@ -295,7 +295,6 @@ func trackingProgress() async throws {
     // Test implementation
 }
 ```
-
 ## Adding New Features
 
 ### Development Workflow
@@ -424,6 +423,52 @@ var googleBooksVolumeID: String? // ✅ Extracted from Google Books
 - **API coverage**: 3 providers with intelligent fallbacks
 
 **Pro tip**: The cache system is now self-healing and doesn't need babysitting! 🤖
+
+## 🎉 Recent Achievements & Victory Lap!
+
+### Latest Wins (December 2024)
+Based on our recent commits, here's what we've been absolutely crushing lately:
+
+#### **🧠 Super Smart Documentation Updates**
+- **The Great Emoji-fication**: Spruced up all our docs with friendly banter and helpful emojis because life's too short for boring documentation! 📚✨
+- **Automation Guide Excellence**: Created comprehensive guides for our build automation that actually make sense (revolutionary, we know!)
+- **Version Target Updates**: Bumped from iOS 17→26 targeting because we're forward-thinking like that! 🚀
+
+#### **🎯 Navigation Conflicts - CONQUERED!**
+Here's the tea on our recent SwiftUI wrestling match:
+
+**The Problem**: Navigation was being a drama queen across all our library layout views. Classic SwiftUI gesture confusion! 😤
+
+**The Investigation**: Spent quality time debugging why our beautiful book cards weren't playing nice with NavigationLink. Turns out gesture recognizers were having territorial disputes.
+
+**The Victory**:
+- Fixed gesture conflicts in `iOS26FloatingBookCard` ✅
+- Preserved all the fancy context menus and animations ✅
+- Navigation now works flawlessly across ALL library views ✅
+- User experience is now buttery smooth! 🧈
+
+**Lesson Learned**: SwiftUI gestures need couples therapy sometimes. When in doubt, simplify the gesture stack! 🤝
+
+#### **⚡ Backend Infrastructure Dominance**
+Our Cloudflare Workers ecosystem is now running like a Swiss watch:
+
+- **API Identifier Sync**: Perfect harmony between our SwiftData models and backend API extraction
+- **Cache System Reliability**: From broken manual warming to rock-solid automation
+- **Multi-Provider Resilience**: ISBNdb → Open Library → Google Books fallbacks working flawlessly
+- **Real-time Monitoring**: `wrangler tail` gives us god-mode visibility into everything
+
+**Current Stats That Make Us Happy**:
+- 🏃‍♂️ Processing 364+ authors automatically
+- 📈 Cache entries growing healthy (7→14+)
+- ⏰ Cron jobs humming every 15 minutes
+- 🛡️ Self-healing when things go sideways
+
+#### **🛠️ Developer Experience Excellence**
+We've basically become automation wizards:
+
+- **One-Command Everything**: `./Scripts/release.sh` handles versioning, tagging, commits - chef's kiss! 👌
+- **Git Hooks Magic**: Build numbers update automatically on every commit (set it and forget it!)
+- **iPhone 17 Pro Ready**: Updated all our simulator examples because we stay current! 📱
 
 ## Common Patterns
 
