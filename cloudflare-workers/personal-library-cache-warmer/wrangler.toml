@@ -32,6 +32,7 @@ service = "books-api-proxy"
 [[services]]
 binding = "ISBNDB_WORKER"
 service = "isbndb-biography-worker-production"
+entrypoint = "ISBNdbWorker"
 
 [[kv_namespaces]]
 binding = "CACHE"

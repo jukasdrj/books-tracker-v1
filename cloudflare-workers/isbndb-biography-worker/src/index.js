@@ -17,27 +17,32 @@
 const RATE_LIMIT_KEY = 'isbndb_last_request';
 const RATE_LIMIT_INTERVAL = 1000; // 1 second between requests
 
-export default {
-  async fetch(request, env, ctx) {
+// Import WorkerEntrypoint for proper RPC implementation
+import { WorkerEntrypoint } from "cloudflare:workers";
+
+// RPC Class extending WorkerEntrypoint for proper service binding
+export class ISBNdbWorker extends WorkerEntrypoint {
+  // HTTP fetch method for backward compatibility
+  async fetch(request) {
     const url = new URL(request.url);
     const path = url.pathname;
 
-    console.log(`${request.method} ${path}`);
+    console.log(`${request.method} ${path} (via WorkerEntrypoint)`);
 
     try {
       // Route handling with proven ISBNdb patterns
       if (path.startsWith('/author/') && request.method === 'GET') {
-        return await handleAuthorRequest(request, env, path, url);
+        return await handleAuthorRequest(request, this.env, path, url);
       } else if (path.startsWith('/book/') && request.method === 'GET') {
-        return await handleBookRequest(request, env, path, url);
+        return await handleBookRequest(request, this.env, path, url);
       } else if (path.startsWith('/books/') && request.method === 'GET') {
-        return await handleBooksRequest(request, env, path, url);
+        return await handleBooksRequest(request, this.env, path, url);
       } else if (path.startsWith('/search/books') && request.method === 'GET') {
-        return await handleSearchRequest(request, env, path, url);
+        return await handleSearchRequest(request, this.env, path, url);
       } else if (path.startsWith('/cache/author/') && request.method === 'POST') {
-        return await handleCacheRequest(request, env, path);
+        return await handleCacheRequest(request, this.env, path);
       } else if (path === '/health') {
-        return await handleHealthCheck(env);
+        return await handleHealthCheck(this.env);
       }
 
       return new Response(JSON.stringify({ error: 'Endpoint not found' }), {
@@ -46,7 +51,7 @@ export default {
       });
 
     } catch (error) {
-      console.error('Request handler error:', error);
+      console.error('WorkerEntrypoint fetch handler error:', error);
       return new Response(JSON.stringify({
         error: 'Internal server error',
         details: error.message
@@ -56,7 +61,77 @@ export default {
       });
     }
   }
-};
+
+  // RPC Method: Get author bibliography with Work/Edition normalization
+  async getAuthorBibliography(authorName) {
+    try {
+      console.log(`🔧 RPC: getAuthorBibliography("${authorName}")`);
+
+      // Extract path from author name for compatibility with existing function
+      const path = `/author/${encodeURIComponent(authorName)}`;
+      const url = new URL(`https://dummy-url.com${path}`);
+
+      // Call existing handler but return raw data instead of Response
+      const response = await handleAuthorRequest(null, this.env, path, url);
+      const result = await response.json();
+
+      console.log(`✅ RPC: Author "${authorName}" returned ${result.books?.length || 0} books`);
+      return result;
+    } catch (error) {
+      console.error(`❌ RPC: Error getting author "${authorName}":`, error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // RPC Method: Get book details by ISBN
+  async getBookDetails(isbn) {
+    try {
+      console.log(`🔧 RPC: getBookDetails("${isbn}")`);
+
+      const path = `/book/${encodeURIComponent(isbn)}`;
+      const url = new URL(`https://dummy-url.com${path}`);
+
+      const response = await handleBookRequest(null, this.env, path, url);
+      const result = await response.json();
+
+      console.log(`✅ RPC: Book "${isbn}" details retrieved`);
+      return result;
+    } catch (error) {
+      console.error(`❌ RPC: Error getting book "${isbn}":`, error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // RPC Method: Search books by title
+  async searchBooksByTitle(title) {
+    try {
+      console.log(`🔧 RPC: searchBooksByTitle("${title}")`);
+
+      const path = `/books/${encodeURIComponent(title)}`;
+      const url = new URL(`https://dummy-url.com${path}`);
+
+      const response = await handleBooksRequest(null, this.env, path, url);
+      const result = await response.json();
+
+      console.log(`✅ RPC: Title search "${title}" returned ${result.books?.length || 0} books`);
+      return result;
+    } catch (error) {
+      console.error(`❌ RPC: Error searching title "${title}":`, error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // RPC Method: Health check
+  async getHealthStatus() {
+    try {
+      const response = await handleHealthCheck(this.env);
+      return await response.json();
+    } catch (error) {
+      return { status: 'error', error: error.message };
+    }
+  }
+}
+
 
 /**
  * Handle author biography requests - Pattern 1: Author works in English
@@ -993,3 +1068,6 @@ async function enforceRateLimit(env) {
     // Don't fail the request due to rate limiting issues
   }
 }
+
+// Export ISBNdbWorker as default for RPC service bindings
+export default ISBNdbWorker;

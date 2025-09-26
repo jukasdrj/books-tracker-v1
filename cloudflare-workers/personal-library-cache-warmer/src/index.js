@@ -92,30 +92,66 @@ function addCORSHeaders(response) {
 }
 
 export default {
-  // NEW: Reliable cron-based cache warming
+  // FIXED: Enhanced cron-based cache warming with better error handling
   async scheduled(event, env, ctx) {
     const cron = event.cron;
-    console.log(`🕒 Cron trigger: ${cron} at ${new Date().toISOString()}`);
+    const cronStart = new Date().toISOString();
+    console.log(`🕒 CRON EXECUTION START: ${cron} at ${cronStart}`);
 
     try {
+      let result;
       switch (cron) {
         case '*/15 * * * *': // Every 15 minutes - AGGRESSIVE micro-batch processing
-          await processMicroBatch(env, 25); // Process 25 authors (5x increase)
+          console.log('⚡ Executing 15-minute micro-batch (25 authors)');
+          result = await processMicroBatch(env, 25);
+          console.log('✅ 15-minute batch result:', result);
           break;
         case '*/5 * * * *': // Every 5 minutes - HIGH-FREQUENCY batch (NEW)
-          await processMicroBatch(env, 15); // Additional high-frequency processing
+          console.log('⚡ Executing 5-minute micro-batch (15 authors)');
+          result = await processMicroBatch(env, 15);
+          console.log('✅ 5-minute batch result:', result);
           break;
         case '0 */4 * * *': // Every 4 hours - MEDIUM batch processing (NEW)
-          await processMicroBatch(env, AGGRESSIVE_BATCH_SIZE); // Process 50 authors
+          console.log('⚡ Executing 4-hour batch (50 authors)');
+          result = await processMicroBatch(env, AGGRESSIVE_BATCH_SIZE);
+          console.log('✅ 4-hour batch result:', result);
           break;
         case '0 2 * * *': // Daily - full library verification
-          await verifyAndRepairCache(env);
+          console.log('⚡ Executing daily cache verification');
+          result = await verifyAndRepairCache(env);
+          console.log('✅ Daily verification result:', result);
           break;
         default:
-          console.log(`Unknown cron pattern: ${cron}`);
+          console.log(`❌ Unknown cron pattern: ${cron}`);
+          return;
       }
+
+      // Store cron execution record for debugging
+      await env.CACHE.put(`cron_execution_${Date.now()}`, JSON.stringify({
+        cron,
+        startTime: cronStart,
+        endTime: new Date().toISOString(),
+        result,
+        success: true
+      }), { expirationTtl: 86400 });
+
+      console.log(`🎯 CRON EXECUTION COMPLETE: ${cron} - SUCCESS`);
+
     } catch (error) {
-      console.error('Scheduled task error:', error);
+      console.error(`💥 CRON EXECUTION FAILED: ${cron}`, error);
+
+      // Store error for debugging
+      await env.CACHE.put(`cron_error_${Date.now()}`, JSON.stringify({
+        cron,
+        startTime: cronStart,
+        endTime: new Date().toISOString(),
+        error: error.message,
+        stack: error.stack,
+        success: false
+      }), { expirationTtl: 86400 });
+
+      // Re-throw to ensure Cloudflare logs the cron failure
+      throw error;
     }
   },
 
@@ -152,6 +188,8 @@ export default {
         response = await handleManualWarmingTrigger(request, env, ctx);
       } else if (path === '/debug-kv' && request.method === 'GET') {
         response = await handleKVDebug(request, env, ctx);
+      } else if (path === '/debug-cron' && request.method === 'GET') {
+        response = await handleCronDebug(request, env, ctx);
       } else if (path === '/' || path === '/dashboard') {
         response = await serveDashboard();
       } else {
@@ -542,24 +580,33 @@ async function handleWarmRequest(request, env, ctx) {
       });
     }
 
-    // Execute warming strategy with debugging
+    // FIXED: Use micro-batch processing to avoid CPU timeouts
+    console.log('🚀 Manual trigger: Starting micro-batch processing chain');
+
+    // Process initial batch immediately (don't wait for cron)
     ctx.waitUntil(
       (async () => {
         try {
-          console.log('🚀 Original warming task starting:', new Date().toISOString());
-          console.log('📊 Strategy:', strategy, 'DryRun:', dryRun);
-          const result = await executeWarmingStrategy(strategy, libraryData, env, dryRun);
-          console.log('✅ Original warming task completed');
-          return result;
+          console.log('⚡ Processing initial micro-batch of 25 authors');
+          const result = await processMicroBatch(env, 25);
+          console.log('✅ Initial micro-batch completed:', result);
+
+          // Store manual trigger state for tracking
+          await env.CACHE.put('manual_trigger_active', JSON.stringify({
+            startTime: new Date().toISOString(),
+            strategy,
+            dryRun,
+            processedBatches: 1
+          }), { expirationTtl: 3600 });
+
         } catch (error) {
-          console.error('💥 Original warming task failed:', error);
-          await env.CACHE.put(`error_original_${Date.now()}`, JSON.stringify({
+          console.error('💥 Manual micro-batch failed:', error);
+          await env.CACHE.put(`error_manual_${Date.now()}`, JSON.stringify({
             error: error.message,
             stack: error.stack,
             timestamp: new Date().toISOString(),
             strategy, dryRun
           }), { expirationTtl: 3600 });
-          throw error;
         }
       })()
     );
@@ -570,8 +617,8 @@ async function handleWarmRequest(request, env, ctx) {
 
     return new Response(JSON.stringify({
       success: true,
-      message: `Cache warming started with ${strategy} strategy`,
-      estimatedTime: calculateEstimatedTime(authorsArray.length),
+      message: `Manual micro-batch processing started (25 authors immediately, then cron continues)`,
+      strategy: 'micro_batch_reliable',
       totalAuthors: authorsArray.length,
       totalBooks: libraryData.totalBooks,
       dryRun
@@ -925,25 +972,26 @@ async function processAuthorBiography(author, env, dryRun = false) {
     const isbndbStart = Date.now();
 
     try {
-      // ✅ FIXED: Service bindings require absolute URLs
-      const isbndbUrl = `https://isbndb-biography-worker-production.jukasdrj.workers.dev/author/${encodeURIComponent(author)}?page=1&pageSize=50&language=en`;
-      console.log(`📡 Calling ISBNdb worker: ${isbndbUrl}`);
+      // ✅ CRITICAL FIX: Use reliable service binding with fallback
+      console.log(`📡 Calling ISBNdb worker via service binding for: ${author}`);
 
-      const response = await env.ISBNDB_WORKER.fetch(
-        new Request(isbndbUrl),
-        {
-          signal: AbortSignal.timeout(30000) // 30 second timeout
-        }
-      );
+      const isbndbResult = await callISBNdbWorkerReliable(author, env);
 
-      result.services.isbndb.responseTime = Date.now() - isbndbStart;
-
-      if (!response.ok) {
-        throw new Error(`ISBNdb worker HTTP ${response.status}: ${response.statusText}`);
+      if (!isbndbResult.success) {
+        throw new Error(isbndbResult.error || 'ISBNdb worker call failed');
       }
 
-      const data = await response.json();
+      // Convert the result to the expected response format
+      const response = {
+        ok: true,
+        json: async () => isbndbResult
+      };
+
+      result.services.isbndb.responseTime = Date.now() - isbndbStart;
       result.services.isbndb.success = true;
+
+      // Data is already available from the direct call
+      const data = isbndbResult;
 
       // Handle both legacy and new normalized formats
       const hasNormalizedData = data.works && data.authors;
@@ -1804,6 +1852,7 @@ async function processMicroBatch(env, maxAuthors = 5) {
     // Process next batch of authors
     const startIndex = processingState.currentAuthorIndex;
     const endIndex = Math.min(startIndex + maxAuthors, libraryData.authors.length);
+    let authorsToProcess = []; // Declare authorsToProcess in the proper scope
 
     if (startIndex >= libraryData.authors.length) {
       console.log('✅ All authors processed, resetting for next cycle');
@@ -1812,7 +1861,7 @@ async function processMicroBatch(env, maxAuthors = 5) {
       processingState.startTime = new Date().toISOString();
       processingState.completedAuthors = [];
     } else {
-      const authorsToProcess = libraryData.authors.slice(startIndex, endIndex);
+      authorsToProcess = libraryData.authors.slice(startIndex, endIndex);
       console.log(`📚 Processing authors ${startIndex} to ${endIndex-1}: ${authorsToProcess.join(', ')}`);
 
       // Process each author reliably
@@ -1874,7 +1923,7 @@ async function processMicroBatch(env, maxAuthors = 5) {
 
     return {
       success: true,
-      processed: authorsToProcess?.length || 0,
+      processed: authorsToProcess.length || 0,
       totalProcessed: processingState.processedAuthors,
       totalAuthors: processingState.totalAuthors,
       nextBatch: processingState.currentAuthorIndex < processingState.totalAuthors
@@ -1891,21 +1940,59 @@ async function processMicroBatch(env, maxAuthors = 5) {
  */
 async function callISBNdbWorkerReliable(author, env) {
   try {
-    // ✅ FIXED: Service bindings require absolute URLs
-    const response = await fetch(
-      `https://isbndb-biography-worker-production.jukasdrj.workers.dev/author/${encodeURIComponent(author)}`,
-      {
-        signal: AbortSignal.timeout(25000) // Well under 30s limit
-      }
-    );
+    // ✅ NEW: Use RPC method call for better performance and reliability
+    console.log(`🚀 RPC: Calling getAuthorBibliography("${author}")`);
+    console.log(`📡 RPC binding available:`, !!env.ISBNDB_WORKER);
 
-    if (!response.ok) {
-      throw new Error(`ISBNdb worker responded with ${response.status}`);
+    // Direct RPC method call - much cleaner than HTTP!
+    const result = await env.ISBNDB_WORKER.getAuthorBibliography(author);
+
+    if (result.success !== false) {
+      console.log(`✅ RPC success: ${result.books?.length || 0} books for ${author}`);
+      return result;
+    } else {
+      console.error(`❌ RPC method failed:`, result.error);
+      throw new Error(result.error || 'RPC method call failed');
     }
 
-    return await response.json();
   } catch (error) {
-    console.error(`❌ Error calling ISBNdb worker for ${author}:`, error);
+    console.error(`❌ RPC call failed for ${author}:`, error.message);
+
+    // Fallback: try HTTP-style service binding
+    try {
+      console.log(`🔄 Fallback: HTTP service binding for ${author}`);
+      const fullUrl = `https://isbndb-biography-worker-production.jukasdrj.workers.dev/author/${encodeURIComponent(author)}`;
+
+      const response = await env.ISBNDB_WORKER.fetch(fullUrl, {
+        signal: AbortSignal.timeout(25000)
+      });
+
+      if (response.ok) {
+        const fallbackResult = await response.json();
+        console.log(`✅ HTTP fallback success: ${fallbackResult.books?.length || 0} books for ${author}`);
+        return fallbackResult;
+      }
+    } catch (fallbackError) {
+      console.error(`❌ HTTP fallback also failed for ${author}:`, fallbackError.message);
+    }
+
+    // Final fallback: direct HTTPS call
+    try {
+      console.log(`🔄 Final fallback: Direct HTTPS for ${author}`);
+      const directUrl = `https://isbndb-biography-worker-production.jukasdrj.workers.dev/author/${encodeURIComponent(author)}`;
+      const directResponse = await fetch(directUrl, {
+        signal: AbortSignal.timeout(25000)
+      });
+
+      if (directResponse.ok) {
+        const directResult = await directResponse.json();
+        console.log(`✅ Direct HTTPS success: ${directResult.books?.length || 0} books for ${author}`);
+        return directResult;
+      }
+    } catch (directError) {
+      console.error(`❌ All methods failed for ${author}:`, directError.message);
+    }
+
     return { success: false, error: error.message };
   }
 }
@@ -1987,6 +2074,56 @@ async function handleKVDebug(request, env, ctx) {
       totalKeys: allKeys.keys.length,
       sampleKeys,
       timestamp: new Date().toISOString()
+    }, null, 2), {
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+  } catch (error) {
+    return new Response(JSON.stringify({
+      error: error.message,
+      stack: error.stack
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+}
+
+async function handleCronDebug(request, env, ctx) {
+  try {
+    // Get all cron execution records
+    const allKeys = await env.CACHE.list();
+    const cronKeys = allKeys.keys.filter(key =>
+      key.name.startsWith('cron_execution_') || key.name.startsWith('cron_error_')
+    );
+
+    // Get recent cron executions
+    const cronHistory = await Promise.all(
+      cronKeys.slice(-10).map(async (key) => {
+        const data = await env.CACHE.get(key.name, 'json');
+        return {
+          key: key.name,
+          ...data
+        };
+      })
+    );
+
+    // Check processing state
+    let processingState = await env.CACHE.get('processing_state', 'json');
+
+    return new Response(JSON.stringify({
+      cronHistory: cronHistory.sort((a, b) => b.startTime?.localeCompare(a.startTime) || 0),
+      cronKeysFound: cronKeys.length,
+      processingState,
+      lastCronExecution: cronHistory.length > 0 ? cronHistory[0] : null,
+      cronTriggersConfigured: [
+        '*/5 * * * *',   // Every 5 minutes
+        '*/15 * * * *',  // Every 15 minutes
+        '0 */4 * * *',   // Every 4 hours
+        '0 2 * * *'      // Daily at 2 AM
+      ],
+      currentTime: new Date().toISOString(),
+      timezone: 'UTC'
     }, null, 2), {
       headers: { 'Content-Type': 'application/json' }
     });
