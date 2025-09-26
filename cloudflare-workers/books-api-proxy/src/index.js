@@ -89,10 +89,19 @@ async function handleAutoSearch(request, env, ctx) {
 
     const forceRefresh = url.searchParams.get('force') === 'true';
     if (!forceRefresh) {
-        const cached = await getCachedData(cacheKey, env);
+        const cached = await getCachedData(cacheKey, env, ctx);
         if (cached) {
-            return new Response(JSON.stringify({ ...cached.data, cached: true, cacheSource: cached.source }), {
-                headers: { ...getCORSHeaders(), 'X-Cache': `HIT-${cached.source}` }
+            return new Response(JSON.stringify({
+                ...cached.data,
+                cached: true,
+                cacheSource: cached.source,
+                hitCount: cached.hitCount || 0
+            }), {
+                headers: {
+                    ...getCORSHeaders(),
+                    'X-Cache': `HIT-${cached.source}`,
+                    'X-Cache-Hits': (cached.hitCount || 0).toString()
+                }
             });
         }
     }
@@ -145,7 +154,10 @@ async function handleAutoSearch(request, env, ctx) {
         }));
     }
 
-    setCachedData(cacheKey, result, 86400, env, ctx); // Cache for 24 hours
+    // INTELLIGENT CACHING: ISBNdb results get high priority due to API cost
+    const priority = usedProvider === 'isbndb' ? 'high' : 'normal';
+    const cacheTtl = usedProvider === 'isbndb' ? 86400 * 7 : 86400; // 7 days for ISBNdb, 1 day for others
+    setCachedData(cacheKey, result, cacheTtl, env, ctx, priority);
 
     return new Response(JSON.stringify(result), {
         headers: { ...getCORSHeaders(), 'X-Cache': 'MISS', 'X-Provider': usedProvider }
@@ -443,25 +455,101 @@ function createCacheKey(type, query, params = {}) {
     return `${type}:${btoa(hashInput).replace(/[/+=]/g, '')}`;
 }
 
-async function getCachedData(cacheKey, env) {
+/**
+ * INTELLIGENT CACHE RETRIEVAL with automatic promotion and hit tracking
+ * Implements hot/cold tier architecture with usage-based promotion
+ */
+async function getCachedData(cacheKey, env, ctx) {
     const kvData = await env.CACHE?.get(cacheKey, 'json');
-    if (kvData) return { data: kvData, source: 'KV-HOT' };
+    if (kvData) {
+        // Track cache hit for analytics
+        await trackCacheHit(cacheKey, 'KV-HOT', env, ctx);
+        return { data: kvData, source: 'KV-HOT' };
+    }
 
     const r2Object = await env.API_CACHE_COLD?.get(cacheKey);
     if (r2Object) {
         const jsonData = await r2Object.json();
-        ctx.waitUntil(env.CACHE?.put(cacheKey, JSON.stringify(jsonData), { expirationTtl: 86400 }));
-        return { data: jsonData, source: 'R2-COLD' };
+        const metadata = r2Object.customMetadata || {};
+        const hitCount = parseInt(metadata.hitCount || '0') + 1;
+
+        // INTELLIGENT PROMOTION: Promote frequently accessed data to KV hot cache
+        const shouldPromote = hitCount >= 3 || metadata.priority === 'high';
+        const kvTtl = shouldPromote ? 7200 : 3600; // 2 hours for promoted, 1 hour for regular
+
+        if (ctx) {
+            ctx.waitUntil(Promise.all([
+                // Promote to KV with longer TTL for popular content
+                env.CACHE?.put(cacheKey, JSON.stringify(jsonData), { expirationTtl: kvTtl }),
+                // Update R2 metadata with hit count
+                env.API_CACHE_COLD?.put(cacheKey, JSON.stringify(jsonData), {
+                    customMetadata: { ...metadata, hitCount: hitCount.toString(), lastAccessed: Date.now().toString() }
+                }),
+                // Track cache promotion analytics
+                trackCacheHit(cacheKey, shouldPromote ? 'R2-PROMOTED' : 'R2-COLD', env, ctx)
+            ]));
+        }
+
+        return { data: jsonData, source: shouldPromote ? 'R2-PROMOTED' : 'R2-COLD', hitCount };
     }
     return null;
 }
 
-function setCachedData(cacheKey, data, ttlSeconds, env, ctx) {
+/**
+ * INTELLIGENT CACHE STORAGE with tiered TTL and priority classification
+ */
+function setCachedData(cacheKey, data, ttlSeconds, env, ctx, priority = 'normal') {
     const jsonData = JSON.stringify(data);
-    ctx.waitUntil(Promise.all([
-        env.CACHE?.put(cacheKey, jsonData, { expirationTtl: Math.min(ttlSeconds, 86400) }),
-        env.API_CACHE_COLD?.put(cacheKey, jsonData, { customMetadata: { ttl: ttlSeconds } })
-    ]));
+    const isHighPriority = priority === 'high' || (data.provider === 'isbndb' && data.items?.length > 0);
+
+    // TIERED TTL STRATEGY
+    const kvTtl = isHighPriority ? 7200 : Math.min(ttlSeconds, 3600); // 2 hours for high priority
+    const r2Ttl = isHighPriority ? ttlSeconds * 2 : ttlSeconds; // Extended R2 storage for important data
+
+    const cacheOperations = [
+        // KV Hot Cache - shorter TTL but faster access
+        env.CACHE?.put(cacheKey, jsonData, { expirationTtl: kvTtl }),
+        // R2 Cold Cache - longer TTL with metadata
+        env.API_CACHE_COLD?.put(cacheKey, jsonData, {
+            customMetadata: {
+                ttl: r2Ttl.toString(),
+                priority,
+                created: Date.now().toString(),
+                provider: data.provider || 'unknown',
+                itemCount: (data.items?.length || 0).toString()
+            }
+        })
+    ];
+
+    if (ctx) {
+        ctx.waitUntil(Promise.all(cacheOperations.filter(Boolean)));
+    }
+}
+
+/**
+ * Track cache hit analytics for optimization insights
+ */
+async function trackCacheHit(cacheKey, source, env, ctx) {
+    if (!ctx) return;
+
+    const analyticsData = {
+        timestamp: Date.now(),
+        cacheKey: cacheKey.substring(0, 50), // Truncate for privacy
+        source,
+        date: new Date().toISOString().split('T')[0]
+    };
+
+    // Store in KV with daily aggregation
+    const dailyKey = `cache_analytics_${analyticsData.date}`;
+    ctx.waitUntil(
+        env.CACHE?.get(dailyKey, 'json')
+            .then(existing => {
+                const stats = existing || { date: analyticsData.date, hits: {} };
+                stats.hits[source] = (stats.hits[source] || 0) + 1;
+                return env.CACHE?.put(dailyKey, JSON.stringify(stats), { expirationTtl: 86400 * 7 });
+            })
+            .catch(err => console.error('Analytics tracking failed:', err))
+    );
 }
 
 function validateSearchParams(url) {

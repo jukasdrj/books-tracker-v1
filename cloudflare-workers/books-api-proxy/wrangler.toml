@@ -4,9 +4,16 @@ main = "src/index.js"
 compatibility_date = "2024-09-17"
 compatibility_flags = ["nodejs_compat"]
 
-# Paid Plan CPU Limits
-limits = { cpu_ms = 30000, memory_mb = 128 }
+# PAID TIER OPTIMIZATION: Maximum performance configuration
+[limits]
+cpu_ms = 30000         # Maximum CPU allocation
+memory_mb = 256        # Doubled memory for caching operations
+
 keep_vars = true
+
+# Smart placement for optimal global performance
+[placement]
+mode = "smart"
 
 # Basic observability
 [observability]
@@ -57,8 +64,11 @@ binding = "LIBRARY_DATA"
 bucket_name = "personal-library-data"
 
 # Environment variables for configuration
+# PAID TIER OPTIMIZED CONFIGURATION
 [vars]
-CACHE_HOT_TTL = "3600"         # KV cache TTL: 1 hour
-CACHE_COLD_TTL = "604800"      # R2 cache TTL: 7 days
+CACHE_HOT_TTL = "7200"         # KV cache TTL: 2 hours (increased)
+CACHE_COLD_TTL = "1209600"     # R2 cache TTL: 14 days (doubled)
 MAX_RESULTS_DEFAULT = "40"     # Default max results
-RATE_LIMIT_MS = "100"          # Rate limiting between API calls
+RATE_LIMIT_MS = "50"           # Aggressive rate limiting (50% faster)
+CONCURRENCY_LIMIT = "10"       # Concurrent request processing
+AGGRESSIVE_CACHING = "true"    # Enable aggressive caching strategies
