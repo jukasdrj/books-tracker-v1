@@ -150,7 +150,7 @@ struct iOS26LiquidListRow: View {
 
     private var culturalDiversityIndicator: some View {
         HStack(spacing: 2) {
-            Image(systemName: "globe")
+            Image(systemName: "globe.americas.fill")
                 .font(.caption2)
                 .foregroundColor(themeStore.culturalColors.international)
 

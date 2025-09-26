@@ -8,6 +8,7 @@ struct iOS26FloatingBookCard: View {
     let namespace: Namespace.ID
 
     @State private var showingQuickActions = false
+    @Environment(\.iOS26ThemeStore) private var themeStore
 
     // Current user's library entry for this work
     private var userEntry: UserLibraryEntry? {
@@ -20,7 +21,7 @@ struct iOS26FloatingBookCard: View {
     }
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 10) {
             // FLOATING COVER IMAGE (Main V1.0 Requirement)
             floatingCoverImage
                 .glassEffectID("cover-\(work.id)", in: namespace)
@@ -43,158 +44,147 @@ struct iOS26FloatingBookCard: View {
     // MARK: - Floating Cover Image
 
     private var floatingCoverImage: some View {
-        ZStack {
-            // Book cover with shadow and glass effect
-            AsyncImage(url: primaryEdition?.coverURL) { image in
-                image
-                    .resizable()
-                    .aspectRatio(2/3, contentMode: .fill)
-            } placeholder: {
+        AsyncImage(url: primaryEdition?.coverURL) { image in
+            image
+                .resizable()
+                .aspectRatio(2/3, contentMode: .fill)
+        } placeholder: {
+            // Refined Placeholder with Theme Colors
+            ZStack {
                 Rectangle()
-                    .fill(LinearGradient(
-                        colors: [.blue.opacity(0.3), .purple.opacity(0.2)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ))
-                    .overlay {
-                        VStack(spacing: 8) {
-                            Image(systemName: "book.closed")
-                                .font(.title)
-                                .foregroundColor(.white.opacity(0.8))
+                    .fill(themeStore.primaryColor.gradient.opacity(0.3))
+                
+                VStack(spacing: 8) {
+                    Image(systemName: "book.closed")
+                        .font(.largeTitle)
+                        .foregroundColor(.white.opacity(0.8))
 
-                            Text(work.title)
-                                .font(.caption.bold())
-                                .foregroundColor(.white.opacity(0.9))
-                                .lineLimit(2)
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal, 8)
-                        }
-                    }
+                    Text(work.title)
+                        .font(.caption.bold())
+                        .foregroundColor(.white.opacity(0.9))
+                        .lineLimit(2)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 8)
+                }
             }
-            .frame(height: 240) // Consistent card height
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-            .glassEffect(.regular, tint: .white.opacity(0.1))
-            .shadow(
-                color: .black.opacity(0.15),
-                radius: 12,
-                x: 0,
-                y: 8
-            )
-
+        }
+        .frame(height: 240) // Consistent card height
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .glassEffect(.regular, tint: .white.opacity(0.1))
+        .shadow(
+            color: .black.opacity(0.15),
+            radius: 12,
+            x: 0,
+            y: 8
+        )
+        .overlay(alignment: .topTrailing) {
             // Status indicator overlay
             if let userEntry = userEntry {
-                VStack {
-                    HStack {
-                        Spacer()
-                        statusIndicator(for: userEntry.readingStatus)
-                    }
-                    Spacer()
-                }
-                .padding(12)
+                statusIndicator(for: userEntry.readingStatus)
+                    .padding(8)
             }
-
+        }
+        .overlay(alignment: .topLeading) {
             // Cultural diversity indicator
             if let primaryAuthor = work.primaryAuthor,
                primaryAuthor.representsMarginalizedVoices() {
-                VStack {
-                    HStack {
-                        culturalDiversityBadge
-                        Spacer()
-                    }
-                    Spacer()
-                }
-                .padding(12)
+                culturalDiversityBadge
+                    .padding(8)
             }
-
+        }
+        .overlay(alignment: .bottom) {
             // Reading progress overlay for active books
             if let userEntry = userEntry,
                userEntry.readingStatus == .reading,
                userEntry.readingProgress > 0 {
-                VStack {
-                    Spacer()
-
-                    ProgressView(value: userEntry.readingProgress)
-                        .progressViewStyle(LinearProgressViewStyle(tint: .white))
-                        .scaleEffect(y: 2)
-                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 4))
-                        .padding(.horizontal, 12)
-                        .padding(.bottom, 8)
-                }
+                ProgressView(value: userEntry.readingProgress)
+                    .progressViewStyle(LinearProgressViewStyle(tint: .white.opacity(0.8)))
+                    .scaleEffect(y: 1.5, anchor: .bottom)
+                    .padding(10)
+                    .background(.black.opacity(0.2))
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
             }
         }
     }
 
-    // MARK: - Small Info Card Below
+    // MARK: - Refined Small Info Card
 
     private var smallInfoCard: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            // Book title (primary info)
+        VStack(alignment: .leading, spacing: 4) {
             Text(work.title)
-                .font(.subheadline.bold())
+                .font(.subheadline.weight(.bold))
                 .foregroundColor(.primary)
                 .lineLimit(2)
-                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true) // Prevents text from truncating prematurely
 
-            // Author name
             Text(work.authorNames)
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .lineLimit(1)
-
-            // Status and edition info
-            HStack(spacing: 8) {
+            
+            // Refined metadata row for status and format
+            HStack {
                 if let userEntry = userEntry {
-                    Label(userEntry.readingStatus.displayName, systemImage: userEntry.readingStatus.systemImage)
-                        .font(.caption2)
-                        .foregroundColor(userEntry.readingStatus.color)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(userEntry.readingStatus.color.opacity(0.2), in: Capsule())
+                    infoCardStatus(for: userEntry.readingStatus)
                 }
-
+                
                 Spacer()
 
                 if let edition = primaryEdition {
-                    Text(edition.format.icon)
+                    // ✅ FIX: Use Image(systemName:) for proper icon display
+                    Image(systemName: edition.format.icon)
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
             }
+            .padding(.top, 2)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 4) // Slight padding to align with cover
+        .padding(.horizontal, 6)
     }
 
     // MARK: - Status Indicators
 
     private func statusIndicator(for status: ReadingStatus) -> some View {
         Circle()
-            .fill(status.color)
-            .frame(width: 24, height: 24)
+            .fill(status.color.gradient)
+            .frame(width: 28, height: 28)
             .overlay {
                 Image(systemName: status.systemImage)
-                    .font(.caption.bold())
+                    .font(.caption.weight(.bold))
                     .foregroundColor(.white)
             }
-            // .glassEffect(.regular.interactive()) // Commented for build compatibility
-            .shadow(color: status.color.opacity(0.3), radius: 4, x: 0, y: 2)
+            .glassEffect(.subtle)
+            .shadow(color: status.color.opacity(0.4), radius: 5, x: 0, y: 2)
+    }
+    
+    // ✅ NEW: Compact status indicator for the info card
+    private func infoCardStatus(for status: ReadingStatus) -> some View {
+        HStack(spacing: 4) {
+            Circle()
+                .fill(status.color)
+                .frame(width: 8, height: 8)
+            Text(status.displayName)
+                .font(.caption2.weight(.medium))
+                .foregroundColor(status.color)
+        }
     }
 
     private var culturalDiversityBadge: some View {
         HStack(spacing: 4) {
-            Image(systemName: "globe")
+            Image(systemName: "globe.americas.fill")
                 .font(.caption2)
-                .foregroundColor(.white)
+                .foregroundColor(.white.opacity(0.9))
 
             if let region = work.primaryAuthor?.culturalRegion {
                 Text(region.emoji)
                     .font(.caption2)
             }
         }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 3)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
         .background(.ultraThinMaterial, in: Capsule())
-        // .glassEffect(.regular.tint(.white.opacity(0.2)))
+        .glassEffect(.subtle)
     }
 
     // MARK: - Quick Actions

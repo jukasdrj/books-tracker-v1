@@ -329,7 +329,7 @@ struct iOS26AdaptiveBookCard: View {
 
     private var culturalDiversityBadge: some View {
         HStack(spacing: 4) {
-            Image(systemName: "globe")
+            Image(systemName: "globe.americas.fill")
                 .font(.caption2)
                 .foregroundColor(.white)
 
