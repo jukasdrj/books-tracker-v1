@@ -13,7 +13,7 @@
  * while maintaining backward compatibility with legacy cache formats
  *
  * Target: 500+ books, ~150 unique authors, <200 total API calls
- */"
+ */
 
 // OPTIMIZED FOR PAID TIER: Maximize ISBNdb quota utilization (5000+ calls/day)
 const RATE_LIMIT_INTERVAL = 800; // 0.8 seconds (450% faster) - 4500 calls/hour possible
@@ -150,6 +150,8 @@ export default {
         response = await handleTestCron(request, env, ctx);
       } else if (path === '/trigger-warming' && request.method === 'POST') {
         response = await handleManualWarmingTrigger(request, env, ctx);
+      } else if (path === '/debug-kv' && request.method === 'GET') {
+        response = await handleKVDebug(request, env, ctx);
       } else if (path === '/' || path === '/dashboard') {
         response = await serveDashboard();
       } else {
@@ -1954,5 +1956,48 @@ async function verifyAndRepairCache(env) {
 
   } catch (error) {
     console.error('❌ Cache verification error:', error);
+  }
+}
+
+async function handleKVDebug(request, env, ctx) {
+  try {
+    // Test KV operations
+    const testKey = `debug_test_${Date.now()}`;
+    const testValue = { timestamp: new Date().toISOString(), test: true };
+
+    // Write test
+    await env.CACHE.put(testKey, JSON.stringify(testValue), { expirationTtl: 300 });
+
+    // Read test
+    const readBack = await env.CACHE.get(testKey, 'json');
+
+    // List all keys
+    const allKeys = await env.CACHE.list();
+
+    // Get some sample keys for debugging
+    const sampleKeys = allKeys.keys.slice(0, 10).map(k => ({
+      name: k.name,
+      metadata: k.metadata
+    }));
+
+    return new Response(JSON.stringify({
+      kvNamespaceId: 'b9cade63b6db48fd80c109a013f38fdb',
+      testWrite: { key: testKey, success: !!readBack },
+      testRead: readBack,
+      totalKeys: allKeys.keys.length,
+      sampleKeys,
+      timestamp: new Date().toISOString()
+    }, null, 2), {
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+  } catch (error) {
+    return new Response(JSON.stringify({
+      error: error.message,
+      stack: error.stack
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 }
