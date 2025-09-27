@@ -1,21 +1,24 @@
 /**
- * OpenLibrary Search Worker - Authoritative Works Discovery
+ * OpenLibrary Search Worker - Modular Search Specialist
  *
- * Implements OpenLibrary API patterns with SwiftData-aligned normalization:
- * 1. Author discovery: /search/authors.json?q={name}
- * 2. Author works: /authors/{key}/works.json
- * 3. Work details: /works/{key}.json
- * 4. Work editions: /works/{key}/editions.json
+ * Clean modular architecture matching ISBNdb worker pattern:
+ * 1. Author bibliography: /author/{name}?pageSize=20
+ * 2. Book by ISBN: /book/{isbn}
+ * 3. Title search: /books/{title}?pageSize=20
+ * 4. General search: /search/books?text={query}&pageSize=20
  *
- * Purpose: Get clean, complete author works lists as authoritative source
- * Complements ISBNdb worker which provides rich edition metadata
+ * Returns standardized Work/Edition/Author format for seamless proxy integration
+ * Implements proper User-Agent compliance and optimized rate limiting
  *
- * Success target: >95% author disambiguation and complete works discovery
+ * Success target: >95% search reliability with <200ms avg response time
  */
 
-// Rate limiting for OpenLibrary (more generous than ISBNdb)
+// Rate limiting storage (matching ISBNdb worker pattern)
 const RATE_LIMIT_KEY = 'openlibrary_last_request';
-const RATE_LIMIT_INTERVAL = 200; // 200ms between requests (5 req/sec)
+const RATE_LIMIT_INTERVAL = 200; // 200ms between requests (5 req/sec - OpenLibrary friendly)
+
+// User-Agent for OpenLibrary API compliance
+const USER_AGENT = 'BooksTracker/1.0 (nerd@ooheynerds.com) OpenLibraryWorker/1.0.0';
 
 // Import WorkerEntrypoint for proper RPC implementation
 import { WorkerEntrypoint } from "cloudflare:workers";
@@ -30,15 +33,17 @@ export class OpenLibraryWorker extends WorkerEntrypoint {
     console.log(`${request.method} ${path} (via OpenLibrary WorkerEntrypoint)`);
 
     try {
-      // Route handling with proven OpenLibrary patterns
+      // Route handling with clean ISBNdb-style patterns
       if (path.startsWith('/author/') && request.method === 'GET') {
-        return await handleAuthorWorksRequest(request, this.env, path, url);
-      } else if (path.startsWith('/work/') && request.method === 'GET') {
-        return await handleWorkDetailsRequest(request, this.env, path, url);
-      } else if (path.startsWith('/search/authors') && request.method === 'GET') {
-        return await handleAuthorSearchRequest(request, this.env, path, url);
+        return await handleAuthorRequest(request, this.env, path, url);
+      } else if (path.startsWith('/book/') && request.method === 'GET') {
+        return await handleBookRequest(request, this.env, path, url);
+      } else if (path.startsWith('/books/') && request.method === 'GET') {
+        return await handleBooksRequest(request, this.env, path, url);
+      } else if (path.startsWith('/search/books') && request.method === 'GET') {
+        return await handleSearchRequest(request, this.env, path, url);
       } else if (path.startsWith('/cache/author/') && request.method === 'POST') {
-        return await handleCacheWorksRequest(request, this.env, path);
+        return await handleCacheRequest(request, this.env, path);
       } else if (path === '/health') {
         return await handleHealthCheck(this.env);
       }
@@ -60,100 +65,81 @@ export class OpenLibraryWorker extends WorkerEntrypoint {
     }
   }
 
-  // RPC Method: Get complete author works (authoritative source)
-  async getAuthorWorks(authorName) {
+  // RPC Method: Get author bibliography with Work/Edition normalization
+  async getAuthorBibliography(authorName) {
     try {
-      console.log(`🔧 RPC: getAuthorWorks("${authorName}")`);
+      console.log(`🔧 RPC: getAuthorBibliography("${authorName}")`);
 
-      // 1. Find the author
-      const authorInfo = await findAuthorByName(authorName, this.env);
-      if (!authorInfo) {
-        throw new Error(`Author not found: ${authorName}`);
-      }
+      // Extract path from author name for compatibility with existing function
+      const path = `/author/${encodeURIComponent(authorName)}`;
+      const url = new URL(`https://dummy-url.com${path}?pageSize=20`);
 
-      // 2. Get all their works
-      const works = await getAuthorWorksFromKey(authorInfo.key, this.env);
+      // Call existing handler but return raw data instead of Response
+      const response = await handleAuthorRequest(null, this.env, path, url);
+      const result = await response.json();
 
-      // 3. Get details for each work
-      const detailedWorks = await Promise.all(
-        works.slice(0, 20).map(work => // Limit to 20 works for performance
-          getWorkDetails(work.key, this.env)
-        )
-      );
-
-      // 4. Normalize to SwiftData structure
-      const normalizedData = normalizeWorksFromOpenLibrary(
-        detailedWorks.filter(Boolean),
-        authorInfo
-      );
-
-      return {
-        success: true,
-        authorKey: authorInfo.key,
-        authorName: authorInfo.name,
-        totalWorks: works.length,
-        processedWorks: detailedWorks.length,
-        ...normalizedData
-      };
-
+      console.log(`✅ RPC: Author "${authorName}" returned ${result.works?.length || 0} works`);
+      return result;
     } catch (error) {
-      console.error(`RPC getAuthorWorks error for "${authorName}":`, error);
-      throw error;
+      console.error(`❌ RPC: Error getting author "${authorName}":`, error);
+      return { success: false, error: error.message };
     }
   }
 
-  // RPC Method: Get specific work details
-  async getWorkDetails(workKey) {
+  // RPC Method: Get book details by OpenLibrary ID
+  async getBookDetails(openLibraryId) {
     try {
-      console.log(`🔧 RPC: getWorkDetails("${workKey}")`);
+      console.log(`🔧 RPC: getBookDetails("${openLibraryId}")`);
 
-      const workDetails = await getWorkDetails(workKey, this.env);
-      if (!workDetails) {
-        throw new Error(`Work not found: ${workKey}`);
-      }
+      const path = `/book/${encodeURIComponent(openLibraryId)}`;
+      const url = new URL(`https://dummy-url.com${path}`);
 
-      return normalizeWorkFromOpenLibrary(workDetails);
+      const response = await handleBookRequest(null, this.env, path, url);
+      const result = await response.json();
 
+      console.log(`✅ RPC: Book "${openLibraryId}" details retrieved`);
+      return result;
     } catch (error) {
-      console.error(`RPC getWorkDetails error for "${workKey}":`, error);
-      throw error;
+      console.error(`❌ RPC: Error getting book "${openLibraryId}":`, error);
+      return { success: false, error: error.message };
     }
   }
 
-  // RPC Method: Search and disambiguate authors
-  async searchAuthors(query, limit = 5) {
+  // RPC Method: Search books by title
+  async searchBooksByTitle(title) {
     try {
-      console.log(`🔧 RPC: searchAuthors("${query}", ${limit})`);
+      console.log(`🔧 RPC: searchBooksByTitle("${title}")`);
 
-      const searchResults = await searchAuthorsByName(query, limit, this.env);
+      const path = `/books/${encodeURIComponent(title)}`;
+      const url = new URL(`https://dummy-url.com${path}?pageSize=20`);
 
-      return {
-        success: true,
-        query,
-        totalFound: searchResults.numFound,
-        authors: searchResults.docs.map(author => ({
-          key: author.key,
-          name: author.name,
-          alternateNames: author.alternate_names || [],
-          birthDate: author.birth_date,
-          workCount: author.work_count,
-          topWork: author.top_work,
-          confidence: calculateAuthorMatchConfidence(query, author)
-        }))
-      };
+      const response = await handleBooksRequest(null, this.env, path, url);
+      const result = await response.json();
 
+      console.log(`✅ RPC: Title search "${title}" returned ${result.works?.length || 0} works`);
+      return result;
     } catch (error) {
-      console.error(`RPC searchAuthors error for "${query}":`, error);
-      throw error;
+      console.error(`❌ RPC: Error searching title "${title}":`, error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // RPC Method: Health check
+  async getHealthStatus() {
+    try {
+      const response = await handleHealthCheck(this.env);
+      return await response.json();
+    } catch (error) {
+      return { status: 'error', error: error.message };
     }
   }
 }
 
 /**
- * Handle author works discovery - Pattern 1: Complete author bibliography
- * URL: /author/andy%20weir?includeEditions=true&limit=50
+ * Handle author bibliography requests - Pattern 1: Complete author works
+ * URL: /author/andy%20weir?pageSize=20
  */
-async function handleAuthorWorksRequest(request, env, path, url) {
+async function handleAuthorRequest(request, env, path, url) {
   const authorName = decodeURIComponent(path.replace('/author/', ''));
 
   if (!authorName || authorName.trim().length === 0) {
@@ -166,15 +152,15 @@ async function handleAuthorWorksRequest(request, env, path, url) {
   }
 
   try {
-    const includeEditions = url.searchParams.get('includeEditions') === 'true';
-    const limit = parseInt(url.searchParams.get('limit')) || 20;
+    const pageSize = parseInt(url?.searchParams?.get('pageSize')) || 20;
 
-    console.log(`🔍 OpenLibrary author works request: ${authorName} (limit: ${limit})`);
+    console.log(`🔍 OpenLibrary author bibliography: ${authorName} (pageSize: ${pageSize})`);
 
     // 1. Find author by name
     const authorInfo = await findAuthorByName(authorName, env);
     if (!authorInfo) {
       return new Response(JSON.stringify({
+        success: false,
         error: 'Author not found',
         searchedName: authorName,
         suggestion: 'Try searching with different spelling or name variations'
@@ -188,53 +174,29 @@ async function handleAuthorWorksRequest(request, env, path, url) {
     const works = await getAuthorWorksFromKey(authorInfo.key, env);
 
     // 3. Get detailed info for limited set
-    const worksToProcess = works.slice(0, limit);
+    const worksToProcess = works.slice(0, pageSize);
     const detailedWorks = await Promise.all(
       worksToProcess.map(work => getWorkDetails(work.key, env))
     );
 
-    // 4. Get editions if requested
-    let editionsData = null;
-    if (includeEditions) {
-      editionsData = await Promise.all(
-        worksToProcess.slice(0, 10).map(work => // Limit editions for performance
-          getWorkEditions(work.key, env)
-        )
-      );
-    }
-
-    // 5. Normalize to SwiftData structure
+    // 4. Normalize to SwiftData Work/Edition/Author structure
     const normalizedData = normalizeWorksFromOpenLibrary(
       detailedWorks.filter(Boolean),
-      authorInfo,
-      editionsData
+      authorInfo
     );
 
     const response = {
       success: true,
+      format: 'enhanced_work_edition_v1',
       provider: 'openlibrary',
-      authorInfo: {
-        key: authorInfo.key,
-        name: authorInfo.name,
-        alternateNames: authorInfo.alternate_names || [],
-        birthDate: authorInfo.birth_date,
-        workCount: authorInfo.work_count
-      },
-      query: {
-        authorName,
-        totalWorksFound: works.length,
-        processedWorks: detailedWorks.length,
-        includeEditions
-      },
-      ...normalizedData,
+      authors: normalizedData.authors || [],
+      works: normalizedData.works || [],
       metadata: {
+        totalWorks: works.length,
+        processedWorks: detailedWorks.length,
+        pageSize,
         timestamp: new Date().toISOString(),
-        workerVersion: '1.0.0',
-        apiEndpoints: {
-          authorSearch: `/search/authors.json?q=${encodeURIComponent(authorName)}`,
-          authorWorks: `/authors/${authorInfo.key}/works.json`,
-          workDetails: worksToProcess.map(w => `/works/${w.key}.json`)
-        }
+        workerVersion: '1.0.0'
       }
     };
 
@@ -243,15 +205,15 @@ async function handleAuthorWorksRequest(request, env, path, url) {
       headers: {
         'Content-Type': 'application/json',
         'X-Provider': 'openlibrary',
-        'X-Author-Key': authorInfo.key,
         'X-Works-Count': works.length.toString()
       }
     });
 
   } catch (error) {
-    console.error('OpenLibrary author works error:', error);
+    console.error('OpenLibrary author request error:', error);
     return new Response(JSON.stringify({
-      error: 'Failed to fetch author works',
+      success: false,
+      error: 'Failed to fetch author bibliography',
       details: error.message,
       authorName
     }), {
@@ -262,15 +224,15 @@ async function handleAuthorWorksRequest(request, env, path, url) {
 }
 
 /**
- * Handle work details - Pattern 2: Individual work information
- * URL: /work/OL17091839W?includeEditions=true
+ * Handle book details requests - Pattern 2: Individual book information
+ * URL: /book/OL17091839W
  */
-async function handleWorkDetailsRequest(request, env, path, url) {
-  const workKey = path.replace('/work/', '');
+async function handleBookRequest(request, env, path, url) {
+  const bookId = path.replace('/book/', '');
 
-  if (!workKey || workKey.trim().length === 0) {
+  if (!bookId || bookId.trim().length === 0) {
     return new Response(JSON.stringify({
-      error: 'Work key is required'
+      error: 'Book ID is required'
     }), {
       status: 400,
       headers: { 'Content-Type': 'application/json' }
@@ -278,40 +240,38 @@ async function handleWorkDetailsRequest(request, env, path, url) {
   }
 
   try {
-    const includeEditions = url.searchParams.get('includeEditions') === 'true';
+    console.log(`🔍 OpenLibrary book details request: ${bookId}`);
 
-    console.log(`🔍 OpenLibrary work details request: ${workKey}`);
-
-    // Get work details
-    const workDetails = await getWorkDetails(workKey, env);
+    // Get work details (OpenLibrary work key)
+    const workDetails = await getWorkDetails(bookId, env);
     if (!workDetails) {
       return new Response(JSON.stringify({
-        error: 'Work not found',
-        workKey
+        success: false,
+        error: 'Book not found',
+        bookId
       }), {
         status: 404,
         headers: { 'Content-Type': 'application/json' }
       });
     }
 
-    // Get editions if requested
-    let editions = null;
-    if (includeEditions) {
-      editions = await getWorkEditions(workKey, env);
-    }
+    // Get editions for the work
+    const editions = await getWorkEditions(bookId, env);
 
-    // Normalize data
+    // Normalize to standard format
     const normalizedWork = normalizeWorkFromOpenLibrary(workDetails, editions);
 
     const response = {
       success: true,
+      format: 'enhanced_work_edition_v1',
       provider: 'openlibrary',
-      workKey,
-      ...normalizedWork,
+      works: [normalizedWork],
+      authors: normalizedWork.authors || [],
       metadata: {
+        bookId,
+        editionsCount: editions?.length || 0,
         timestamp: new Date().toISOString(),
-        includeEditions,
-        apiEndpoint: `/works/${workKey}.json`
+        workerVersion: '1.0.0'
       }
     };
 
@@ -320,16 +280,17 @@ async function handleWorkDetailsRequest(request, env, path, url) {
       headers: {
         'Content-Type': 'application/json',
         'X-Provider': 'openlibrary',
-        'X-Work-Key': workKey
+        'X-Book-ID': bookId
       }
     });
 
   } catch (error) {
-    console.error('OpenLibrary work details error:', error);
+    console.error('OpenLibrary book request error:', error);
     return new Response(JSON.stringify({
-      error: 'Failed to fetch work details',
+      success: false,
+      error: 'Failed to fetch book details',
       details: error.message,
-      workKey
+      bookId
     }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' }
@@ -338,16 +299,15 @@ async function handleWorkDetailsRequest(request, env, path, url) {
 }
 
 /**
- * Handle author search - Pattern 3: Author discovery and disambiguation
- * URL: /search/authors?q=andy%20weir&limit=5
+ * Handle title search requests - Pattern 3: Enhanced multi-strategy search
+ * URL: /books/project%20hail%20mary?pageSize=20
  */
-async function handleAuthorSearchRequest(request, env, path, url) {
-  const query = url.searchParams.get('q');
-  const limit = parseInt(url.searchParams.get('limit')) || 5;
+async function handleBooksRequest(request, env, path, url) {
+  const title = decodeURIComponent(path.replace('/books/', ''));
 
-  if (!query || query.trim().length === 0) {
+  if (!title || title.trim().length === 0) {
     return new Response(JSON.stringify({
-      error: 'Query parameter "q" is required'
+      error: 'Book title is required'
     }), {
       status: 400,
       headers: { 'Content-Type': 'application/json' }
@@ -355,44 +315,129 @@ async function handleAuthorSearchRequest(request, env, path, url) {
   }
 
   try {
-    console.log(`🔍 OpenLibrary author search: "${query}" (limit: ${limit})`);
+    const pageSize = parseInt(url?.searchParams?.get('pageSize')) || 20;
 
-    const searchResults = await searchAuthorsByName(query, limit, env);
+    console.log(`🔍 OpenLibrary enhanced title search: "${title}" (pageSize: ${pageSize})`);
 
-    const response = {
+    // Execute advanced multi-strategy search
+    const searchResult = await executeAdvancedTitleSearch(title, pageSize, env);
+
+    const searchResponse = {
       success: true,
+      format: 'enhanced_work_edition_v1',
       provider: 'openlibrary',
-      query,
-      totalFound: searchResults.numFound,
-      authors: searchResults.docs.map(author => ({
-        key: author.key,
-        name: author.name,
-        alternateNames: author.alternate_names || [],
-        birthDate: author.birth_date,
-        workCount: author.work_count,
-        topWork: author.top_work,
-        topSubjects: author.top_subjects || [],
-        confidence: calculateAuthorMatchConfidence(query, author)
-      })),
+      works: searchResult.works,
+      authors: extractAuthorsFromWorks(searchResult.works),
       metadata: {
+        query: title,
+        totalFound: searchResult.totalFound,
+        returned: searchResult.works.length,
+        pageSize,
+        strategiesUsed: searchResult.strategiesUsed,
+        qualityScore: calculateAverageQuality(searchResult.works),
         timestamp: new Date().toISOString(),
-        apiEndpoint: `/search/authors.json?q=${encodeURIComponent(query)}&limit=${limit}`
+        workerVersion: '1.1.0'
       }
     };
 
-    return new Response(JSON.stringify(response), {
+    return new Response(JSON.stringify(searchResponse), {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
         'X-Provider': 'openlibrary',
-        'X-Total-Found': searchResults.numFound.toString()
+        'X-Total-Found': searchResult.totalFound?.toString() || '0',
+        'X-Search-Strategy': searchResult.strategiesUsed.join(',')
       }
     });
 
   } catch (error) {
-    console.error('OpenLibrary author search error:', error);
+    console.error('OpenLibrary enhanced title search error:', error);
     return new Response(JSON.stringify({
-      error: 'Failed to search authors',
+      success: false,
+      error: 'Failed to search books by title',
+      details: error.message,
+      title
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+}
+
+/**
+ * Handle general search requests - Pattern 4: Mixed content search
+ * URL: /search/books?text=project%20hail%20mary&pageSize=20
+ */
+async function handleSearchRequest(request, env, path, url) {
+  const query = url?.searchParams?.get('text') || url?.searchParams?.get('q');
+  const author = url?.searchParams?.get('author');
+  const pageSize = parseInt(url?.searchParams?.get('pageSize')) || 20;
+
+  if (!query || query.trim().length === 0) {
+    return new Response(JSON.stringify({
+      error: 'Query parameter "text" or "q" is required'
+    }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  try {
+    console.log(`🔍 OpenLibrary general search: "${query}" (pageSize: ${pageSize})`);
+
+    // Build search query with optional author filter
+    let searchQuery = query;
+    if (author) {
+      searchQuery += ` author:${author}`;
+    }
+
+    await enforceRateLimit(env);
+    const searchUrl = `https://openlibrary.org/search.json?q=${encodeURIComponent(searchQuery)}&limit=${pageSize}`;
+
+    const response = await fetch(searchUrl, {
+      headers: { 'User-Agent': USER_AGENT }
+    });
+
+    if (!response.ok) {
+      throw new Error(`OpenLibrary search failed: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+
+    // Transform search results to Work/Edition format
+    const works = await transformSearchResultsToWorks(data.docs?.slice(0, pageSize) || [], env);
+
+    const searchResponse = {
+      success: true,
+      format: 'enhanced_work_edition_v1',
+      provider: 'openlibrary',
+      works,
+      authors: extractAuthorsFromWorks(works),
+      metadata: {
+        query,
+        author,
+        totalFound: data.numFound,
+        returned: works.length,
+        pageSize,
+        timestamp: new Date().toISOString(),
+        workerVersion: '1.0.0'
+      }
+    };
+
+    return new Response(JSON.stringify(searchResponse), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Provider': 'openlibrary',
+        'X-Total-Found': data.numFound?.toString() || '0'
+      }
+    });
+
+  } catch (error) {
+    console.error('OpenLibrary general search error:', error);
+    return new Response(JSON.stringify({
+      success: false,
+      error: 'Failed to search OpenLibrary',
       details: error.message,
       query
     }), {
@@ -403,9 +448,9 @@ async function handleAuthorSearchRequest(request, env, path, url) {
 }
 
 /**
- * Handle cache operations for author works
+ * Handle cache operations for author bibliography
  */
-async function handleCacheWorksRequest(request, env, path) {
+async function handleCacheRequest(request, env, path) {
   const authorName = decodeURIComponent(path.replace('/cache/author/', ''));
 
   if (!authorName || authorName.trim().length === 0) {
@@ -419,21 +464,25 @@ async function handleCacheWorksRequest(request, env, path) {
 
   try {
     const body = await request.json();
-    const includeEditions = body.includeEditions || false;
+    const pageSize = body.pageSize || 20;
 
-    console.log(`💾 Caching author works: ${authorName}`);
+    console.log(`💾 Caching author bibliography: ${authorName}`);
 
-    // Get complete author works
+    // Get complete author bibliography
     const worker = new OpenLibraryWorker();
     worker.env = env;
-    const authorData = await worker.getAuthorWorks(authorName);
+    const authorData = await worker.getAuthorBibliography(authorName);
+
+    if (!authorData.success) {
+      throw new Error(authorData.error || 'Failed to get author data');
+    }
 
     // Store in cache with metadata
     const cacheKey = `openlibrary:author:${authorName.toLowerCase()}`;
     const cacheData = {
       ...authorData,
       cachedAt: new Date().toISOString(),
-      includeEditions,
+      pageSize,
       provider: 'openlibrary'
     };
 
@@ -455,9 +504,10 @@ async function handleCacheWorksRequest(request, env, path) {
     });
 
   } catch (error) {
-    console.error('Cache author works error:', error);
+    console.error('Cache author bibliography error:', error);
     return new Response(JSON.stringify({
-      error: 'Failed to cache author works',
+      success: false,
+      error: 'Failed to cache author bibliography',
       details: error.message,
       authorName
     }), {
@@ -473,7 +523,9 @@ async function handleCacheWorksRequest(request, env, path) {
 async function handleHealthCheck(env) {
   try {
     // Test OpenLibrary API connectivity
-    const testResponse = await fetch('https://openlibrary.org/search/authors.json?q=test&limit=1');
+    const testResponse = await fetch('https://openlibrary.org/search.json?q=test&limit=1', {
+      headers: { 'User-Agent': USER_AGENT }
+    });
     const isApiHealthy = testResponse.ok;
 
     return new Response(JSON.stringify({
@@ -483,17 +535,21 @@ async function handleHealthCheck(env) {
       timestamp: new Date().toISOString(),
       worker: 'OpenLibraryWorker',
       version: '1.0.0',
+      format: 'enhanced_work_edition_v1',
       capabilities: [
-        'author_discovery',
-        'complete_works_listing',
+        'author_bibliography',
+        'book_details',
+        'title_search',
+        'general_search',
         'work_normalization',
         'swiftdata_compatibility'
       ],
-      patterns: {
-        'author_works': '/author/{name}?includeEditions=true',
-        'work_details': '/work/{key}?includeEditions=true',
-        'author_search': '/search/authors?q={query}&limit={n}',
-        'cache_works': 'POST /cache/author/{name}'
+      endpoints: {
+        'author_bibliography': '/author/{name}?pageSize=20',
+        'book_details': '/book/{id}',
+        'title_search': '/books/{title}?pageSize=20',
+        'general_search': '/search/books?text={query}&pageSize=20',
+        'cache_author': 'POST /cache/author/{name}'
       }
     }), {
       status: 200,
@@ -528,7 +584,10 @@ async function findAuthorByName(authorName, env) {
 
   console.log(`OpenLibrary author search: ${searchUrl}`);
 
-  const response = await fetch(searchUrl);
+  const response = await fetch(searchUrl, {
+    headers: { 'User-Agent': USER_AGENT }
+  });
+
   if (!response.ok) {
     throw new Error(`OpenLibrary author search failed: ${response.status} ${response.statusText}`);
   }
@@ -569,7 +628,10 @@ async function getAuthorWorksFromKey(authorKey, env) {
 
   console.log(`OpenLibrary author works: ${worksUrl}`);
 
-  const response = await fetch(worksUrl);
+  const response = await fetch(worksUrl, {
+    headers: { 'User-Agent': USER_AGENT }
+  });
+
   if (!response.ok) {
     throw new Error(`OpenLibrary works fetch failed: ${response.status} ${response.statusText}`);
   }
@@ -590,7 +652,10 @@ async function getWorkDetails(workKey, env) {
 
   console.log(`OpenLibrary work details: ${detailsUrl}`);
 
-  const response = await fetch(detailsUrl);
+  const response = await fetch(detailsUrl, {
+    headers: { 'User-Agent': USER_AGENT }
+  });
+
   if (!response.ok) {
     console.warn(`Failed to fetch work details for ${cleanKey}: ${response.status}`);
     return null;
@@ -610,7 +675,10 @@ async function getWorkEditions(workKey, env, limit = 20) {
 
   console.log(`OpenLibrary work editions: ${editionsUrl}`);
 
-  const response = await fetch(editionsUrl);
+  const response = await fetch(editionsUrl, {
+    headers: { 'User-Agent': USER_AGENT }
+  });
+
   if (!response.ok) {
     console.warn(`Failed to fetch editions for ${cleanKey}: ${response.status}`);
     return null;
@@ -621,21 +689,380 @@ async function getWorkEditions(workKey, env, limit = 20) {
 }
 
 /**
- * Search authors by name
+ * Transform search results to standardized Work/Edition format
  */
-async function searchAuthorsByName(query, limit, env) {
-  await enforceRateLimit(env);
+async function transformSearchResultsToWorks(searchDocs, env) {
+  const works = [];
 
-  const searchUrl = `https://openlibrary.org/search/authors.json?q=${encodeURIComponent(query)}&limit=${limit}`;
+  for (const doc of searchDocs.slice(0, 10)) { // Limit processing for performance
+    try {
+      // Basic work structure from search result
+      const work = {
+        title: doc.title,
+        subtitle: doc.subtitle,
+        originalLanguage: doc.language?.[0] || 'en',
+        firstPublicationYear: doc.first_publish_year,
+        description: doc.subtitle, // Search results don't include full descriptions
+        subjectTags: doc.subject?.slice(0, 5) || [],
 
-  console.log(`OpenLibrary author search: ${searchUrl}`);
+        // External identifiers
+        openLibraryWorkKey: doc.key,
+        openLibraryID: doc.key?.replace('/works/', ''),
+        isbndbID: null,
+        googleBooksVolumeID: null,
 
-  const response = await fetch(searchUrl);
-  if (!response.ok) {
-    throw new Error(`OpenLibrary search failed: ${response.status} ${response.statusText}`);
+        // Metadata
+        covers: doc.cover_i ? [`https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg`] : [],
+        openLibraryQuality: 75, // Standard search result quality
+        processedAt: new Date().toISOString(),
+        sourceProvider: 'openlibrary'
+      };
+
+      // Create basic editions from ISBN data if available
+      const editions = [];
+      if (doc.isbn && doc.isbn.length > 0) {
+        editions.push({
+          title: doc.title,
+          isbn: doc.isbn[0],
+          publisher: doc.publisher?.[0],
+          publicationDate: doc.first_publish_year?.toString(),
+          pageCount: doc.number_of_pages_median,
+          format: 'unknown',
+          language: doc.language?.[0] || 'en',
+
+          // External identifiers
+          openLibraryID: doc.edition_key?.[0],
+          workKey: doc.key,
+
+          // Metadata
+          covers: doc.cover_i ? [`https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg`] : [],
+          sourceProvider: 'openlibrary'
+        });
+      }
+
+      work.editions = editions;
+      works.push(work);
+
+    } catch (error) {
+      console.warn(`Failed to transform search result for "${doc.title}":`, error);
+    }
   }
 
-  return await response.json();
+  return works;
+}
+
+/**
+ * ENHANCED: Multi-strategy title search with intelligent fallbacks
+ */
+async function executeAdvancedTitleSearch(title, pageSize, env) {
+  const strategies = [
+    {
+      name: 'exact_title',
+      execute: () => executeExactTitleSearch(title, pageSize, env)
+    },
+    {
+      name: 'boosted_title',
+      execute: () => executeBoostedTitleSearch(title, pageSize, env)
+    },
+    {
+      name: 'fuzzy_title',
+      execute: () => executeFuzzyTitleSearch(title, pageSize, env)
+    },
+    {
+      name: 'general_search',
+      execute: () => executeGeneralSearch(title, pageSize, env)
+    }
+  ];
+
+  let totalFound = 0;
+  const strategiesUsed = [];
+
+  for (const strategy of strategies) {
+    try {
+      console.log(`Trying strategy: ${strategy.name} for "${title}"`);
+      const result = await strategy.execute();
+
+      if (result.works && result.works.length > 0) {
+        strategiesUsed.push(strategy.name);
+
+        // Apply enhanced quality filtering
+        const qualityFiltered = result.works.filter(work =>
+          calculateAdvancedWorkQuality(work, { query: title }) > 0.6
+        );
+
+        if (qualityFiltered.length > 0) {
+          console.log(`✅ Strategy "${strategy.name}" succeeded with ${qualityFiltered.length} quality works`);
+          return {
+            works: qualityFiltered,
+            totalFound: result.totalFound || qualityFiltered.length,
+            strategiesUsed
+          };
+        }
+      }
+    } catch (error) {
+      console.warn(`Strategy "${strategy.name}" failed:`, error.message);
+    }
+  }
+
+  return {
+    works: [],
+    totalFound: 0,
+    strategiesUsed
+  };
+}
+
+/**
+ * Exact title search with field optimization
+ */
+async function executeExactTitleSearch(title, pageSize, env) {
+  await enforceRateLimit(env);
+
+  const optimizedFields = 'key,title,subtitle,first_publish_year,author_name,isbn,subject,description,cover_i,language,edition_count';
+  const searchUrl = `https://openlibrary.org/search.json?title=${encodeURIComponent(title)}&fields=${optimizedFields}&limit=${pageSize}`;
+
+  const response = await fetch(searchUrl, {
+    headers: { 'User-Agent': USER_AGENT }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Exact title search failed: ${response.status}`);
+  }
+
+  const data = await response.json();
+  const works = await transformSearchResultsToWorks(data.docs || [], env);
+
+  return {
+    works,
+    totalFound: data.numFound
+  };
+}
+
+/**
+ * Boosted title search using Solr query syntax
+ */
+async function executeBoostedTitleSearch(title, pageSize, env) {
+  await enforceRateLimit(env);
+
+  // Use Solr boosting: title field gets 2x weight
+  const query = `title:(${encodeURIComponent(title)})^2 OR ${encodeURIComponent(title)}`;
+  const searchUrl = `https://openlibrary.org/search.json?q=${query}&limit=${pageSize}`;
+
+  const response = await fetch(searchUrl, {
+    headers: { 'User-Agent': USER_AGENT }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Boosted title search failed: ${response.status}`);
+  }
+
+  const data = await response.json();
+  const works = await transformSearchResultsToWorks(data.docs || [], env);
+
+  return {
+    works,
+    totalFound: data.numFound
+  };
+}
+
+/**
+ * Fuzzy title search for partial matches
+ */
+async function executeFuzzyTitleSearch(title, pageSize, env) {
+  await enforceRateLimit(env);
+
+  // Break title into words and search for combinations
+  const words = title.toLowerCase().split(/\s+/).filter(word => word.length > 2);
+  const fuzzyQuery = words.join(' AND ');
+  const searchUrl = `https://openlibrary.org/search.json?q=${encodeURIComponent(fuzzyQuery)}&limit=${pageSize}`;
+
+  const response = await fetch(searchUrl, {
+    headers: { 'User-Agent': USER_AGENT }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Fuzzy title search failed: ${response.status}`);
+  }
+
+  const data = await response.json();
+  const works = await transformSearchResultsToWorks(data.docs || [], env);
+
+  return {
+    works: works.filter(work => calculateTitleRelevance(work.title, title) > 0.5),
+    totalFound: data.numFound
+  };
+}
+
+/**
+ * General search fallback
+ */
+async function executeGeneralSearch(title, pageSize, env) {
+  await enforceRateLimit(env);
+
+  const searchUrl = `https://openlibrary.org/search.json?q=${encodeURIComponent(title)}&limit=${pageSize}`;
+
+  const response = await fetch(searchUrl, {
+    headers: { 'User-Agent': USER_AGENT }
+  });
+
+  if (!response.ok) {
+    throw new Error(`General search failed: ${response.status}`);
+  }
+
+  const data = await response.json();
+  const works = await transformSearchResultsToWorks(data.docs || [], env);
+
+  return {
+    works,
+    totalFound: data.numFound
+  };
+}
+
+/**
+ * Calculate title relevance score
+ */
+function calculateTitleRelevance(workTitle, searchTitle) {
+  if (!workTitle || !searchTitle) return 0;
+
+  const workLower = workTitle.toLowerCase();
+  const searchLower = searchTitle.toLowerCase();
+
+  // Exact match
+  if (workLower === searchLower) return 1.0;
+
+  // Contains match
+  if (workLower.includes(searchLower) || searchLower.includes(workLower)) return 0.8;
+
+  // Word overlap
+  const workWords = new Set(workLower.split(/\s+/));
+  const searchWords = new Set(searchLower.split(/\s+/));
+  const intersection = new Set([...workWords].filter(word => searchWords.has(word)));
+
+  return intersection.size / Math.max(workWords.size, searchWords.size);
+}
+
+/**
+ * Enhanced work quality assessment
+ */
+function calculateAdvancedWorkQuality(work, context) {
+  const metrics = {
+    // Content completeness (40%)
+    metadata: assessMetadataCompleteness(work) * 0.4,
+
+    // Title relevance (30%)
+    relevance: calculateTitleRelevance(work.title, context.query) * 0.3,
+
+    // Authority signals (20%)
+    authority: assessAuthoritySignals(work) * 0.2,
+
+    // Core work classification (10%)
+    coreWork: isEnhancedCoreWork(work, context) ? 0.1 : 0
+  };
+
+  return Object.values(metrics).reduce((sum, score) => sum + score, 0);
+}
+
+/**
+ * Assess metadata completeness
+ */
+function assessMetadataCompleteness(work) {
+  let score = 0;
+  const maxScore = 10;
+
+  if (work.title) score += 2;
+  if (work.description) score += 2;
+  if (work.subjectTags?.length > 0) score += 1;
+  if (work.firstPublicationYear) score += 1;
+  if (work.covers?.length > 0) score += 1;
+  if (work.openLibraryID) score += 1;
+  if (work.editions?.length > 0) score += 2;
+
+  return Math.min(score / maxScore, 1);
+}
+
+/**
+ * Assess authority signals
+ */
+function assessAuthoritySignals(work) {
+  let score = 0;
+  const maxScore = 10;
+
+  // Publication recency
+  if (work.firstPublicationYear > 1950) score += 2;
+  if (work.firstPublicationYear > 1990) score += 1;
+
+  // Subject classification
+  if (work.subjectTags?.length > 3) score += 2;
+
+  // External validation
+  if (work.covers?.length > 1) score += 1; // Multiple covers suggest popularity
+
+  // Description quality
+  if (work.description?.length > 100) score += 2;
+
+  // Language authority (English publications often have more metadata)
+  if (work.originalLanguage === 'en') score += 1;
+
+  // Multiple editions suggest importance
+  if (work.editions?.length > 1) score += 1;
+
+  return Math.min(score / maxScore, 1);
+}
+
+/**
+ * Enhanced core work classification
+ */
+function isEnhancedCoreWork(work, context) {
+  if (!work.title) return false;
+
+  const signals = {
+    // Title signals
+    hasReasonableLength: work.title.length > 3 && work.title.length < 100,
+    noCollectionWords: !/(collection|set|anthology|series)/i.test(work.title),
+    noTranslationMarkers: !work.title.includes('(') || !work.title.includes('['),
+
+    // Content signals
+    hasDescription: !!work.description,
+    hasSubjects: work.subjectTags?.length > 0,
+    recentPublication: work.firstPublicationYear > 1900,
+
+    // Relevance to search
+    titleRelevance: calculateTitleRelevance(work.title, context.query) > 0.3
+  };
+
+  const positiveSignals = Object.values(signals).filter(Boolean).length;
+  return positiveSignals >= 5; // Require at least 5 positive signals
+}
+
+/**
+ * Calculate average quality score for a set of works
+ */
+function calculateAverageQuality(works) {
+  if (!works || works.length === 0) return 0;
+
+  const totalQuality = works.reduce((sum, work) =>
+    sum + (work.openLibraryQuality || 0), 0
+  );
+
+  return Math.round((totalQuality / works.length) * 100) / 100;
+}
+
+/**
+ * Extract unique authors from works array
+ */
+function extractAuthorsFromWorks(works) {
+  const authorMap = new Map();
+
+  works.forEach(work => {
+    if (work.authors) {
+      work.authors.forEach(author => {
+        if (!authorMap.has(author.name)) {
+          authorMap.set(author.name, author);
+        }
+      });
+    }
+  });
+
+  return Array.from(authorMap.values());
 }
 
 // ==============================================================================
@@ -1033,7 +1460,7 @@ function normalizeFormat(physicalFormat) {
 }
 
 /**
- * Rate limiting for OpenLibrary API
+ * Rate limiting for OpenLibrary API (matching ISBNdb worker pattern)
  */
 async function enforceRateLimit(env) {
   try {

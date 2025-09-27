@@ -12,6 +12,14 @@ kv_namespaces = [
   { binding = "KV_CACHE", id = "b9cade63b6db48fd80c109a013f38fdb" }
 ]
 
+# Enhanced observability for production
+observability.enabled = true
+
+# Analytics for OpenLibrary performance tracking
+analytics_engine_datasets = [
+  { binding = "OPENLIBRARY_ANALYTICS", dataset = "openlibrary_performance" }
+]
+
 # Service binding for RPC calls from books-api-proxy
 # This worker will be called by books-api-proxy
 
@@ -32,3 +40,6 @@ VERSION = "1.0.0"
 [env.production.vars]
 WORKER_NAME = "openlibrary-search-worker"
 VERSION = "1.0.0"
+ENABLE_PERFORMANCE_LOGGING = "true"
+LOG_LEVEL = "INFO"
+STRUCTURED_LOGGING = "true"

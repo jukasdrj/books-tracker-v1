@@ -8,6 +8,18 @@ limits = { cpu_ms = 30000 }
 [observability]
 enabled = true
 
+# Analytics Engine for ISBNdb performance tracking
+[[analytics_engine_datasets]]
+binding = "ISBNDB_ANALYTICS"
+dataset = "isbndb_worker_performance"
+
+# Enhanced logging configuration
+[vars]
+ENABLE_PERFORMANCE_LOGGING = "true"
+LOG_LEVEL = "INFO"
+STRUCTURED_LOGGING = "true"
+ENABLE_RATE_LIMIT_TRACKING = "true"
+
 [[secrets_store_secrets]]
 binding = "ISBNDB_API_KEY"
 store_id = "b0562ac16fde468c8af12717a6c88400"
