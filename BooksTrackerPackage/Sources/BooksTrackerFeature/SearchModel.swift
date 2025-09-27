@@ -132,6 +132,21 @@ public final class SearchModel: @unchecked Sendable {
         search(query: searchText)
     }
 
+    /// Search for a specific ISBN from barcode scanning
+    @MainActor
+    func searchByISBN(_ isbn: String) {
+        // Set search text and immediately perform search without debouncing
+        searchText = isbn
+        
+        // Cancel any previous search
+        searchTask?.cancel()
+        
+        // Start immediate search for ISBN
+        searchTask = Task {
+            await performSearch(query: isbn)
+        }
+    }
+
     // MARK: - Search Suggestions & History
 
     @MainActor
@@ -452,11 +467,25 @@ public actor BookSearchAPIService {
         } else {
             // Handle legacy Google Books format for backward compatibility
             results = apiResponse.items.map { bookItem in
-                let work = convertToWork(from: bookItem)
-                let edition = convertToEdition(from: bookItem, work: work)
+                // Create authors first
                 let authors = (bookItem.volumeInfo.authors ?? []).map { authorName in
                     Author(name: authorName, gender: .unknown, culturalRegion: .international)
                 }
+                
+                // Create work with authors properly set
+                let work = Work(
+                    title: bookItem.volumeInfo.title,
+                    authors: authors, // Pass authors in constructor
+                    originalLanguage: bookItem.volumeInfo.language,
+                    firstPublicationYear: extractYear(from: bookItem.volumeInfo.publishedDate),
+                    subjectTags: bookItem.volumeInfo.categories ?? []
+                )
+                
+                // Set external identifiers
+                work.googleBooksVolumeID = bookItem.id
+                work.isbndbQuality = 75 // Default quality for Google Books data
+                
+                let edition = convertToEdition(from: bookItem, work: work)
 
                 return SearchResult(
                     work: work,
@@ -534,9 +563,15 @@ public actor BookSearchAPIService {
     private func convertEnhancedItemToSearchResult(_ bookItem: APIBookItem, provider: String) -> SearchResult? {
         let volumeInfo = bookItem.volumeInfo
 
-        // Create Work object with enhanced identifiers
+        // Create Author objects first
+        let authors = (volumeInfo.authors ?? []).map { authorName in
+            Author(name: authorName, gender: .unknown, culturalRegion: .international)
+        }
+
+        // Create Work object with authors properly set
         let work = Work(
             title: volumeInfo.title,
+            authors: authors, // Pass authors in constructor
             originalLanguage: volumeInfo.language,
             firstPublicationYear: extractYear(from: volumeInfo.publishedDate),
             subjectTags: volumeInfo.categories ?? []
@@ -568,13 +603,6 @@ public actor BookSearchAPIService {
 
         // Add edition to work
         work.editions.append(edition)
-
-        // Create Author objects with enhanced cultural data
-        let authors = (volumeInfo.authors ?? []).map { authorName in
-            let author = Author(name: authorName, gender: .unknown, culturalRegion: .international)
-            work.authors.append(author)
-            return author
-        }
 
         return SearchResult(
             work: work,

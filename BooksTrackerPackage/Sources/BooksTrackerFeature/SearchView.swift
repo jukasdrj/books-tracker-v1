@@ -13,48 +13,98 @@ public struct SearchView: View {
     @State private var showingBookDetail = false
     @Namespace private var searchTransition
 
+    // iOS 26 Scrolling Enhancements
+    @State private var scrollPosition = ScrollPosition()
+    @State private var scrollPhase: ScrollPhase = .idle
+    @State private var showBackToTop = false
+
     // Performance tracking for development
     @State private var performanceText = ""
+    // Scanner state
+    @State private var showingScanner = false
 
     public init() {}
 
     public var body: some View {
-        GeometryReader { geometry in
-            ZStack {
-                // Themed background
-                backgroundView
+        NavigationStack {
+            VStack(spacing: 0) {
+                // Search bar at the top
+                searchBarSection
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+                    .zIndex(1) // Ensure search bar stays on top
 
-                // Main content based on search state
-                VStack(spacing: 0) {
-                    // Search bar with ergonomic placement
-                    searchBarSection
-                        .zIndex(1) // Ensure search bar stays on top
+                // Content area - remove frame constraints to allow scrolling
+                searchContentArea
 
-                    // Content area
-                    Spacer(minLength: 0)
-
-                    searchContentArea
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                    Spacer(minLength: 0)
-
-                    // Performance info (development only)
-                    if !performanceText.isEmpty {
-                        performanceSection
-                    }
+                // Performance info (development only)
+                if !performanceText.isEmpty {
+                    performanceSection
                 }
             }
-        }
-        .themedBackground()
-        .navigationTitle("Search")
-        .navigationBarTitleDisplayMode(.large)
-        .task {
-            // Initialize search model
-            await loadInitialData()
-        }
-        .sheet(isPresented: $showingBookDetail) {
-            if let selectedBook = selectedBook {
-                BookDetailSheet(searchResult: selectedBook)
+            .background {
+                backgroundView
+            }
+            .navigationTitle("Search")
+            .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: { showingScanner = true }) {
+                        Image(systemName: "barcode.viewfinder")
+                            .font(.title2)
+                            .foregroundColor(themeStore.primaryColor)
+                    }
+                    .accessibilityLabel("Scan ISBN barcode")
+                }
+            }
+            .task {
+                // Initialize search model
+                await loadInitialData()
+            }
+            .sheet(isPresented: $showingBookDetail, onDismiss: {
+                // Clear selection when sheet is dismissed to prevent state issues
+                selectedBook = nil
+            }) {
+                if let selectedBook = selectedBook {
+                    NavigationStack {
+                        WorkDetailView(work: selectedBook.work)
+                            .navigationTitle(selectedBook.work.title)
+                            .navigationBarTitleDisplayMode(.large)
+                            .toolbar {
+                                ToolbarItem(placement: .navigationBarTrailing) {
+                                    Button("Done") {
+                                        showingBookDetail = false
+                                    }
+                                    .fontWeight(.medium)
+                                    .foregroundColor(.primary)
+                                }
+                            }
+                    }
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+                    .interactiveDismissDisabled(false)
+                } else {
+                    // Fallback content if selectedBook is nil
+                    Text("Loading...")
+                        .font(.title2)
+                        .foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(.ultraThinMaterial)
+                }
+            }
+            .sheet(isPresented: $showingScanner) {
+                ModernBarcodeScannerView { isbn in
+                    // Handle scanned ISBN
+                    searchModel.searchByISBN(isbn.normalizedValue)
+                    updatePerformanceText()
+                }
+            }
+            .onDisappear {
+                // Reset sheet state when navigating away from search tab
+                if showingBookDetail {
+                    showingBookDetail = false
+                    selectedBook = nil
+                }
             }
         }
     }
@@ -128,7 +178,7 @@ public struct SearchView: View {
 
     private var initialStateView: some View {
         ScrollView {
-            VStack(spacing: 24) {
+            LazyVStack(spacing: 24) {
                 // Welcome section
                 VStack(spacing: 16) {
                     Image(systemName: "books.vertical")
@@ -162,6 +212,19 @@ public struct SearchView: View {
                 Spacer(minLength: 120) // Account for search bar at bottom
             }
             .padding(.horizontal, 20)
+            .scrollTargetLayout()
+        }
+        .scrollPosition($scrollPosition)
+        .scrollEdgeEffectStyle(.soft, for: .top)
+        .onScrollPhaseChange { _, newPhase in
+            withAnimation(.easeInOut(duration: 0.2)) {
+                scrollPhase = newPhase
+            }
+        }
+        .onScrollGeometryChange(for: CGFloat.self) { geometry in
+            geometry.contentOffset.y
+        } action: { oldValue, newValue in
+            showBackToTop = newValue > 300
         }
         .transition(.asymmetric(
             insertion: .opacity.combined(with: .scale(scale: 0.95)),
@@ -287,8 +350,9 @@ public struct SearchView: View {
     }
 
     private var resultsStateView: some View {
-        ScrollView {
-            LazyVStack(spacing: 12) {
+        ZStack(alignment: .bottomTrailing) {
+            ScrollView {
+                LazyVStack(spacing: 12) {
                 // Results header
                 HStack {
                     Text("\(searchModel.searchResults.count) results")
@@ -315,8 +379,13 @@ public struct SearchView: View {
                 // Results list
                 ForEach(searchModel.searchResults) { result in
                     Button {
+                        // Ensure proper state management for navigation
                         selectedBook = result
-                        showingBookDetail = true
+                        
+                        // Use a tiny delay to ensure state is properly set before presentation
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
+                            showingBookDetail = true
+                        }
                     } label: {
                         iOS26LiquidListRow(
                             work: result.work,
@@ -329,7 +398,43 @@ public struct SearchView: View {
                     .accessibilityHint("Tap to view book details")
                 }
 
-                Spacer(minLength: 120) // Account for search bar
+                    Spacer(minLength: 120) // Account for search bar
+                }
+                .scrollTargetLayout()
+            }
+            .scrollPosition($scrollPosition)
+            .scrollEdgeEffectStyle(.soft, for: [.top, .bottom])
+            .onScrollPhaseChange { _, newPhase in
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    scrollPhase = newPhase
+                }
+            }
+            .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                geometry.contentOffset.y
+            } action: { oldValue, newValue in
+                showBackToTop = newValue > 300
+            }
+
+            // Back to Top Button
+            if showBackToTop {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.5)) {
+                        scrollPosition.scrollTo(edge: .top)
+                    }
+                } label: {
+                    Image(systemName: "arrow.up")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(width: 44, height: 44)
+                        .background(.ultraThinMaterial, in: Circle())
+                        .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+                }
+                .padding(.trailing, 20)
+                .padding(.bottom, 100)
+                .transition(.asymmetric(
+                    insertion: .scale.combined(with: .opacity),
+                    removal: .scale.combined(with: .opacity)
+                ))
             }
         }
         .transition(.asymmetric(

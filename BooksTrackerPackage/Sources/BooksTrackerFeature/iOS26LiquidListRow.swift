@@ -126,16 +126,26 @@ struct iOS26LiquidListRow: View {
         HStack(spacing: 12) {
             // Publication year
             if let year = work.firstPublicationYear {
-                Label("\(year)", systemImage: "calendar")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
+                HStack(spacing: 4) {
+                    Image(systemName: "calendar")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                    Text("\(year)")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
             }
 
             // Edition format
             if let edition = primaryEdition {
-                Label(edition.format.shortName, systemImage: edition.format.icon)
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
+                HStack(spacing: 4) {
+                    Image(systemName: edition.format.icon)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                    Text(edition.format.shortName)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
             }
 
             // Cultural diversity indicator

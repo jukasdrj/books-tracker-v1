@@ -295,6 +295,64 @@ func trackingProgress() async throws {
     // Test implementation
 }
 ```
+## 📷 **BARCODE SCANNING MODULE ARCHITECTURE**
+
+Fresh off the press! Our brand new scanning module that'll make you feel like a tech wizard! 🧙‍♀️
+
+### **Scanning Module File Structure**
+```
+BooksTrackerPackage/Sources/BooksTrackerFeature/
+├── ISBNValidator.swift           # 🔒 Bulletproof ISBN-10/13 validation
+├── CameraManager.swift           # 📱 Swift 6 actor-isolated camera management
+├── BarcodeDetectionService.swift # 🔍 AsyncStream detection with dual methods
+├── ModernCameraPreview.swift     # 🎨 SwiftUI camera preview with glass effects
+└── ModernBarcodeScannerView.swift # ✨ Complete scanner UI with theme integration
+```
+
+### **How The Magic Works** 🪄
+```
+    📱 USER TAPS SCANNER → 🎭 PERMISSION CHECK → 📷 CAMERA OPENS
+                ↓
+    🔍 VISION FRAMEWORK → ⚡ ISBN VALIDATION → 🚀 API SEARCH → 📚 RESULTS
+                ↓
+    🔄 AVFOUNDATION FALLBACK (if Vision fails)
+```
+
+### **Integration Points**
+- **SearchView.swift**: Added barcode button in navigation toolbar with sheet presentation
+- **SearchModel.swift**: New `searchByISBN()` method for immediate lookup without debouncing
+- **Backend**: Connects to existing `books-api-proxy.jukasdrj.workers.dev` endpoint
+- **Theme System**: Full iOS 26 Liquid Glass integration with `themeStore`
+
+### **Key Features That'll Blow Your Mind** 🤯
+- **Dual Detection**: Vision framework for accuracy + AVFoundation for reliability
+- **Smart Throttling**: Prevents duplicate scans with configurable intervals
+- **Actor Isolation**: Perfect Swift 6 concurrency compliance
+- **Zero Dependencies**: Pure iOS frameworks, no external bloat
+- **Runtime Permissions**: Smooth camera permission flow with settings fallback
+- **Haptic Feedback**: Satisfying tactile responses on successful scans
+- **Error Recovery**: Graceful handling of permission denials and camera failures
+
+### **User Experience Flow** 🚀
+1. **Discovery**: User sees barcode icon in Search tab navigation
+2. **Permission**: First-time users get smooth permission request
+3. **Scanning**: Beautiful liquid glass overlay guides ISBN positioning
+4. **Detection**: Real-time barcode detection with visual feedback
+5. **Validation**: ISBN checksum verification before API calls
+6. **Results**: Instant search with cached data for lightning speed
+7. **Integration**: Same familiar search results UI
+
+### **Technical Wizardry** ⚡
+- **ISBNValidator**: Supports both ISBN-10 and ISBN-13 with mathematical checksum validation
+- **CameraManager**: @CameraSessionActor isolation prevents concurrency nightmares
+- **BarcodeDetectionService**: AsyncStream pattern with intelligent error handling
+- **ModernCameraPreview**: Configurable scanning overlays with focus indicators
+- **Theme Integration**: Seamless liquid glass effects matching app design system
+
+**Pro Tip**: The scanner automatically connects to our optimized backend with 800+ cached entries, so common books load instantly! 🚀
+
+---
+
 ## Adding New Features
 
 ### Development Workflow
@@ -431,8 +489,49 @@ var googleBooksVolumeID: String? // ✅ Extracted from Google Books
 
 ## 🎉 Recent Achievements & Victory Lap!
 
-### Latest Wins (December 2024)
-Based on our recent commits, here's what we've been absolutely crushing lately:
+### Latest Wins (September 2025)
+Hold onto your keyboards, friends, because we just deployed something AMAZING! 🎯📱
+
+#### **📱 BARCODE SCANNING MODULE - PURE MAGIC! ✨**
+```
+    📷 SCAN → 🔍 VALIDATE → 🚀 SEARCH → 📚 DISCOVER
+    ┌─────────────────────────────────────────────┐
+    │ 🎯 ONE TAP TO BOOK DISCOVERY ENLIGHTENMENT │
+    │ ✅ Swift 6 Actor Isolation Perfection      │
+    │ ✅ Vision + AVFoundation Dual Detection    │
+    │ ✅ iOS 26 Liquid Glass Design Integration  │
+    │ ✅ Zero Dependencies, Pure iOS Excellence  │
+    └─────────────────────────────────────────────┘
+```
+
+**What Just Happened**: We built a barcode scanning module that's basically witchcraft! 🧙‍♀️
+
+**The Magic**:
+- **ISBNValidator.swift**: Checksum validation so bulletproof it makes Swiss banks jealous 🔒
+- **CameraManager.swift**: Actor-isolated camera management that makes concurrency bugs cry 😭
+- **BarcodeDetectionService.swift**: AsyncStream wizardry with Vision framework sorcery ⚡
+- **ModernCameraPreview.swift**: SwiftUI camera preview with more glass effects than a cathedral 🏰
+- **ModernBarcodeScannerView.swift**: The crown jewel with theme integration so smooth it hurts 💎
+
+**User Experience Revolution**:
+- Tap the barcode icon in Search tab → Camera opens with liquid glass overlay
+- Hold phone over any ISBN barcode → BOOM! Instant book discovery
+- Haptic feedback, visual indicators, and animations smoother than jazz 🎷
+- Connects directly to our optimized 800+ book cache for lightning responses ⚡
+
+**Technical Flex**:
+- Zero external dependencies (we're that good!)
+- Swift 6 concurrency compliance with proper actor isolation
+- Vision framework + AVFoundation fallback for bulletproof detection
+- Real-time ISBN validation with checksum verification
+- Seamless integration with existing Cloudflare Workers backend
+
+**The Result**: Users can now scan any book and instantly add it to their library. It's like having a personal librarian with superpowers! 🦸‍♀️
+
+---
+
+### Previous Epic Wins (December 2024)
+Based on our earlier commits, here's what we were crushing before this scanning triumph:
 
 #### **🧠 Super Smart Documentation Updates**
 - **The Great Emoji-fication**: Spruced up all our docs with friendly banter and helpful emojis because life's too short for boring documentation! 📚✨

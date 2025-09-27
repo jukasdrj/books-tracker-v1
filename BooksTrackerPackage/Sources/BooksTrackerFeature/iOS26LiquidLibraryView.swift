@@ -35,6 +35,11 @@ public struct iOS26LiquidLibraryView: View {
     @State private var searchText = ""
     @Namespace private var layoutTransition
 
+    // iOS 26 Scrolling Enhancements
+    @State private var scrollPosition = ScrollPosition()
+    @State private var scrollPhase: ScrollPhase = .idle
+    @State private var showBackToTop = false
+
     // Cultural diversity insights
     @State private var showingDiversityInsights = false
 
@@ -42,73 +47,116 @@ public struct iOS26LiquidLibraryView: View {
 
     public var body: some View {
         NavigationStack {
-            ZStack {
-                // Background with glass extension
-                Color.clear
-                    .background {
-                        LinearGradient(
-                            colors: [.blue.opacity(0.1), .purple.opacity(0.05)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                        .ignoresSafeArea()
+            mainContentView
+        }
+        .searchable(text: $searchText, prompt: "Search your library")
+        .navigationTitle("My Library")
+        .navigationBarTitleDisplayMode(.large)
+        .toolbar {
+            ToolbarItemGroup(placement: .navigationBarTrailing) {
+                Button("Insights") {
+                    showingDiversityInsights.toggle()
+                }
+                .buttonStyle(GlassButtonStyle())
+
+                Menu {
+                    Picker("Layout", selection: $selectedLayout.animation(.smooth)) {
+                        ForEach(LibraryLayout.allCases, id: \.self) { layout in
+                            Label(layout.displayName, systemImage: layout.icon)
+                                .tag(layout)
+                        }
                     }
+                } label: {
+                    Image(systemName: selectedLayout.icon)
+                }
+                .buttonStyle(GlassButtonStyle())
+            }
+        }
+        .navigationDestination(for: Work.self) { work in
+            WorkDetailView(work: work)
+        }
+        .sheet(isPresented: $showingDiversityInsights) {
+            CulturalDiversityInsightsView(works: filteredWorks)
+                .presentationDetents([.medium, .large])
+                .iOS26SheetGlass()
+        }
+    }
 
-                // Main content
-                ScrollView([.vertical], showsIndicators: true) {
-                    LazyVStack(spacing: 0) {
-                        // Cultural insights header
-                        if !works.isEmpty {
-                            culturalInsightsHeader
-                                .padding(.horizontal)
-                                .padding(.bottom, 20)
-                        }
+    // MARK: - Main Content View
 
-                        // Library content based on selected layout
-                        Group {
-                            switch selectedLayout {
-                            case .floatingGrid:
-                                floatingGridLayout
-                            case .adaptiveCards:
-                                adaptiveCardsLayout
-                            case .liquidList:
-                                liquidListLayout
+    private var mainContentView: some View {
+        ZStack {
+            // Background with glass extension
+            Color.clear
+                .background {
+                    LinearGradient(
+                        colors: [.blue.opacity(0.1), .purple.opacity(0.05)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    .ignoresSafeArea()
+                }
+
+            // Main content
+            ZStack(alignment: .bottomTrailing) {
+                    ScrollView {
+                        LazyVStack(spacing: 0) {
+                            // Cultural insights header
+                            if !works.isEmpty {
+                                culturalInsightsHeader
+                                    .padding(.horizontal)
+                                    .padding(.bottom, 20)
                             }
-                        }
+
+                            // Library content based on selected layout
+                            Group {
+                                switch selectedLayout {
+                                case .floatingGrid:
+                                    floatingGridLayout
+                                case .adaptiveCards:
+                                    adaptiveCardsLayout
+                                case .liquidList:
+                                    liquidListLayout
+                                }
+                            }
                         .padding(.horizontal)
+                        .scrollTargetLayout()
                     }
-                }
-                .searchable(text: $searchText, prompt: "Search your library")
-            }
-            .navigationTitle("My Library")
-            .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItemGroup(placement: .navigationBarTrailing) {
-                    Button("Insights") {
-                        showingDiversityInsights.toggle()
-                    }
-                    .buttonStyle(GlassButtonStyle())
-
-                    Menu {
-                        Picker("Layout", selection: $selectedLayout.animation(.smooth)) {
-                            ForEach(LibraryLayout.allCases, id: \.self) { layout in
-                                Label(layout.displayName, systemImage: layout.icon)
-                                    .tag(layout)
-                            }
+                    .scrollPosition($scrollPosition)
+                    .scrollEdgeEffectStyle(.soft, for: [.top, .bottom])
+                    .onScrollPhaseChange { _, newPhase in
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            scrollPhase = newPhase
                         }
-                    } label: {
-                        Image(systemName: selectedLayout.icon)
                     }
-                    .buttonStyle(GlassButtonStyle())
+                    .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                        geometry.contentOffset.y
+                    } action: { oldValue, newValue in
+                        showBackToTop = newValue > 300
+                    }
+
+                    // Back to Top Button
+                    if showBackToTop {
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.5)) {
+                                scrollPosition.scrollTo(edge: .top)
+                            }
+                        } label: {
+                            Image(systemName: "arrow.up")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(.white)
+                                .frame(width: 44, height: 44)
+                                .background(.ultraThinMaterial, in: Circle())
+                                .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+                        }
+                        .padding(.trailing, 20)
+                        .padding(.bottom, 100)
+                        .transition(.asymmetric(
+                            insertion: .scale.combined(with: .opacity),
+                            removal: .scale.combined(with: .opacity)
+                        ))
+                    }
                 }
-            }
-            .navigationDestination(for: Work.self) { work in
-                WorkDetailView(work: work)
-            }
-            .sheet(isPresented: $showingDiversityInsights) {
-                CulturalDiversityInsightsView(works: filteredWorks)
-                    .presentationDetents([.medium, .large])
-                    .iOS26SheetGlass()
             }
         }
     }
@@ -196,35 +244,31 @@ public struct iOS26LiquidLibraryView: View {
 
     @ViewBuilder
     private var floatingGridLayout: some View {
-        GeometryReader { geometry in
-            iOS26FluidGridSystem(
-                items: filteredWorks,
-                columns: adaptiveColumns(for: geometry.size),
-                spacing: 20
-            ) { work in
-                NavigationLink(value: work) {
-                    iOS26FloatingBookCard(
-                        work: work,
-                        namespace: layoutTransition
-                    )
-                }
-                .buttonStyle(BookCardButtonStyle())
-                .glassEffectID("book-\(work.id)", in: layoutTransition)
+        iOS26FluidGridSystem(
+            items: filteredWorks,
+            columns: adaptiveColumns(for: UIScreen.main.bounds.size),
+            spacing: 20
+        ) { work in
+            NavigationLink(value: work) {
+                iOS26FloatingBookCard(
+                    work: work,
+                    namespace: layoutTransition
+                )
             }
+            .buttonStyle(BookCardButtonStyle())
+            .glassEffectID("book-\(work.id)", in: layoutTransition)
         }
     }
 
     @ViewBuilder
     private var adaptiveCardsLayout: some View {
-        GeometryReader { geometry in
-            LazyVGrid(columns: adaptiveColumns(for: geometry.size), spacing: 16) {
-                ForEach(filteredWorks, id: \.id) { work in
-                    NavigationLink(value: work) {
-                        iOS26AdaptiveBookCard(work: work)
-                    }
-                    .buttonStyle(BookCardButtonStyle())
-                    .glassEffectID("adaptive-\(work.id)", in: layoutTransition)
+        LazyVGrid(columns: adaptiveColumns(for: UIScreen.main.bounds.size), spacing: 16) {
+            ForEach(filteredWorks, id: \.id) { work in
+                NavigationLink(value: work) {
+                    iOS26AdaptiveBookCard(work: work)
                 }
+                .buttonStyle(BookCardButtonStyle())
+                .glassEffectID("adaptive-\(work.id)", in: layoutTransition)
             }
         }
     }
@@ -293,7 +337,7 @@ struct CulturalDiversityInsightsView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView([.vertical], showsIndicators: true) {
+            ScrollView {
                 LazyVStack(spacing: 20) {
                     // Diversity metrics
                     diversityMetricsSection
@@ -308,7 +352,9 @@ struct CulturalDiversityInsightsView: View {
                     readingGoalsSection
                 }
                 .padding()
+                .scrollTargetLayout()
             }
+            .scrollEdgeEffectStyle(.soft, for: .top)
             .navigationTitle("Cultural Insights")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
