@@ -8,7 +8,6 @@ compatibility_flags = ["nodejs_compat"]
 [limits]
 cpu_ms = 30000         # Maximum CPU allocation
 memory_mb = 256        # Doubled memory for caching operations
-
 keep_vars = true
 
 # Smart placement for optimal global performance
@@ -18,7 +17,6 @@ mode = "smart"
 # Advanced observability and logging
 [observability]
 enabled = true
-
 # Logpush configuration for structured logging to R2
 logpush = true
 
@@ -56,14 +54,16 @@ binding = "ISBN_SEARCH_KEY"
 store_id = "b0562ac16fde468c8af12717a6c88400"
 secret_name = "ISBN_search_key"
 
-# Service bindings for worker-to-worker communication
+# Service bindings for worker-to-worker RPC communication
 [[services]]
 binding = "ISBNDB_WORKER"
 service = "isbndb-biography-worker-production"
+entrypoint = "ISBNdbWorker" # Correctly point to the RPC class
 
 [[services]]
 binding = "OPENLIBRARY_WORKER"
 service = "openlibrary-search-worker-production"
+entrypoint = "OpenLibraryWorker" # Correctly point to the RPC class
 
 # KV Cache for API responses - primary cache layer
 [[kv_namespaces]]
