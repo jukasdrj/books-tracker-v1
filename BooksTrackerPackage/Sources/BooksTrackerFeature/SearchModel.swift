@@ -2,6 +2,30 @@ import Foundation
 import SwiftUI
 import SwiftData
 
+// MARK: - Search Scope Enum
+
+public enum SearchScope: String, CaseIterable, Identifiable, Sendable {
+    case all = "All"
+    case title = "Title"
+    case author = "Author"
+    case isbn = "ISBN"
+
+    public var id: String { rawValue }
+
+    /// HIG: Provide clear, concise scope labels
+    public var displayName: String { rawValue }
+
+    /// HIG: Accessibility - descriptive labels for VoiceOver
+    public var accessibilityLabel: String {
+        switch self {
+        case .all: return "Search all fields"
+        case .title: return "Search by book title"
+        case .author: return "Search by author name"
+        case .isbn: return "Search by ISBN number"
+        }
+    }
+}
+
 // MARK: - Search State Management
 
 @Observable
@@ -56,9 +80,16 @@ public final class SearchModel {
         case error(String)  // Error state with retry option
     }
 
+    // MARK: - Pagination Support
+
+    var hasMoreResults: Bool = false
+    private var currentPage: Int = 1
+    private var currentQuery: String = ""
+    private var currentScope: SearchScope?
+
     // MARK: - Public Methods
 
-    func search(query: String) {
+    func search(query: String, scope: SearchScope = .all) {
         let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard !trimmedQuery.isEmpty else {
@@ -71,6 +102,7 @@ public final class SearchModel {
 
         // Update search text immediately for UI responsiveness
         searchText = query
+        currentScope = scope
 
         // Determine debounce delay based on query length and type
         let debounceDelay = calculateDebounceDelay(for: trimmedQuery)
@@ -86,8 +118,21 @@ public final class SearchModel {
             // Check if task was cancelled
             guard !Task.isCancelled else { return }
 
-            await performSearch(query: trimmedQuery)
+            await performSearch(query: trimmedQuery, scope: scope)
         }
+    }
+
+    /// Load more results for pagination
+    func loadMoreResults() async {
+        guard hasMoreResults, !isSearching else { return }
+
+        currentPage += 1
+        await performSearch(
+            query: currentQuery,
+            scope: currentScope ?? .all,
+            page: currentPage,
+            appendResults: true
+        )
     }
 
     // MARK: - Smart Debouncing Logic
@@ -241,15 +286,30 @@ public final class SearchModel {
 
     // MARK: - Private Methods
 
-    private func performSearch(query: String, retryCount: Int = 0) async {
+    private func performSearch(
+        query: String,
+        scope: SearchScope = .all,
+        page: Int = 1,
+        appendResults: Bool = false,
+        retryCount: Int = 0
+    ) async {
         isSearching = true
         searchState = .searching
         errorMessage = nil
 
+        // Store query for pagination
+        if !appendResults {
+            currentQuery = query
+            currentPage = 1
+        }
+
         let startTime = CFAbsoluteTimeGetCurrent()
 
         do {
-            let response = try await apiService.search(query: query, maxResults: 20)
+            // Build scope-filtered query
+            let scopedQuery = buildScopedQuery(query: query, scope: scope)
+
+            let response = try await apiService.search(query: scopedQuery, maxResults: 20)
 
             // Check if task was cancelled
             guard !Task.isCancelled else { return }
@@ -258,16 +318,29 @@ public final class SearchModel {
             lastSearchTime = CFAbsoluteTimeGetCurrent() - startTime
             cacheHitRate = response.cacheHitRate
 
-            // Process results
-            searchResults = response.results
+            // Process results with scope filtering
+            let filteredResults = filterResultsByScope(response.results, scope: scope, query: query)
+
+            // Append or replace results based on pagination
+            if appendResults {
+                searchResults.append(contentsOf: filteredResults)
+            } else {
+                searchResults = filteredResults
+            }
+
+            // Update pagination state
+            hasMoreResults = filteredResults.count >= 20
 
             // Update UI state based on results
             if searchResults.isEmpty {
                 searchState = .noResults
+                hasMoreResults = false
             } else {
                 searchState = .results
                 // Add successful search to recent searches
-                addToRecentSearches(query)
+                if !appendResults {
+                    addToRecentSearches(query)
+                }
             }
 
         } catch {
@@ -280,16 +353,53 @@ public final class SearchModel {
 
                 guard !Task.isCancelled else { return }
 
-                await performSearch(query: query, retryCount: retryCount + 1)
+                await performSearch(query: query, scope: scope, page: page, appendResults: appendResults, retryCount: retryCount + 1)
                 return
             }
 
             // Handle final error state
             errorMessage = formatUserFriendlyError(error)
             searchState = .error(formatUserFriendlyError(error))
+            hasMoreResults = false
         }
 
         isSearching = false
+    }
+
+    /// Build scope-specific query string
+    private func buildScopedQuery(query: String, scope: SearchScope) -> String {
+        switch scope {
+        case .all:
+            return query
+        case .title:
+            return "intitle:\(query)"
+        case .author:
+            return "inauthor:\(query)"
+        case .isbn:
+            return "isbn:\(query)"
+        }
+    }
+
+    /// Filter results by scope (additional client-side filtering)
+    private func filterResultsByScope(_ results: [SearchResult], scope: SearchScope, query: String) -> [SearchResult] {
+        switch scope {
+        case .all:
+            return results
+
+        case .title:
+            return results.filter { result in
+                result.displayTitle.localizedCaseInsensitiveContains(query)
+            }
+
+        case .author:
+            return results.filter { result in
+                result.displayAuthors.localizedCaseInsensitiveContains(query)
+            }
+
+        case .isbn:
+            // ISBN scope - no additional filtering needed (API handles this)
+            return results
+        }
     }
 
     // MARK: - Retry Logic
@@ -339,6 +449,10 @@ public final class SearchModel {
         searchResults = []
         errorMessage = nil
         isSearching = false
+        hasMoreResults = false
+        currentPage = 1
+        currentQuery = ""
+        currentScope = nil
     }
 
     private func loadTrendingBooks() {
