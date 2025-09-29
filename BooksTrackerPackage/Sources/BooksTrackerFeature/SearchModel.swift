@@ -375,7 +375,15 @@ public struct SearchResult: Identifiable, Hashable, @unchecked Sendable {
     }
 
     public var displayAuthors: String {
-        work.authorNames
+        // Use the authors array from SearchResult instead of work.authorNames
+        // because SwiftData relationships don't work for non-persisted objects
+        let names = authors.map { $0.name }
+        switch names.count {
+        case 0: return "Unknown Author"
+        case 1: return names[0]
+        case 2: return names.joined(separator: " and ")
+        default: return "\(names[0]) and \(names.count - 1) others"
+        }
     }
 
     public var coverImageURL: URL? {

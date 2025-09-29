@@ -27,26 +27,33 @@ public struct SearchView: View {
 
     public var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                // Search bar at the top
-                searchBarSection
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
-                    .zIndex(1) // Ensure search bar stays on top
+            GeometryReader { geometry in
+                VStack(spacing: 0) {
+                    // Search bar at the top
+                    searchBarSection
+                        .padding(.horizontal, 16)
+                        .padding(.top, 8)
+                        .zIndex(1) // Ensure search bar stays on top
 
-                // Content area - remove frame constraints to allow scrolling
-                searchContentArea
+                    // Content area - use all available space
+                    searchContentArea
+                        .frame(
+                            width: geometry.size.width,
+                            height: geometry.size.height - 80 // Account for search bar height
+                        )
 
-                // Performance info (development only)
-                if !performanceText.isEmpty {
-                    performanceSection
+                    // Performance info (development only)
+                    if !performanceText.isEmpty {
+                        performanceSection
+                    }
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background {
                 backgroundView
             }
             .navigationTitle("Search")
-            .navigationBarTitleDisplayMode(.large)
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: { showingScanner = true }) {
@@ -186,7 +193,7 @@ public struct SearchView: View {
                             .multilineTextAlignment(.center)
                     }
                 }
-                .padding(.top, 40)
+                .padding(.top, 16)
 
                 // Recent searches section
                 if !searchModel.recentSearches.isEmpty {
