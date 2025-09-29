@@ -65,6 +65,11 @@ binding = "OPENLIBRARY_WORKER"
 service = "openlibrary-search-worker-production"
 entrypoint = "OpenLibraryWorker" # Correctly point to the RPC class
 
+[[services]]
+binding = "GOOGLE_BOOKS_WORKER"
+service = "google-books-worker-production"
+entrypoint = "GoogleBooksWorker" # Correctly point to the RPC class
+
 # KV Cache for API responses - primary cache layer
 [[kv_namespaces]]
 binding = "CACHE"

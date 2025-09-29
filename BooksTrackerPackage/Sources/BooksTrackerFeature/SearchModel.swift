@@ -5,7 +5,8 @@ import SwiftData
 // MARK: - Search State Management
 
 @Observable
-public final class SearchModel: @unchecked Sendable {
+@MainActor
+public final class SearchModel {
     // Search state
     var searchText: String = ""
     var searchResults: [SearchResult] = []
@@ -39,7 +40,7 @@ public final class SearchModel: @unchecked Sendable {
             self.recentSearches = savedSearches
         }
 
-        Task { @MainActor in
+        Task {
             loadTrendingBooks()
             generateSearchSuggestions(for: "")
         }
@@ -57,7 +58,6 @@ public final class SearchModel: @unchecked Sendable {
 
     // MARK: - Public Methods
 
-    @MainActor
     func search(query: String) {
         let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -117,7 +117,6 @@ public final class SearchModel: @unchecked Sendable {
         return cleanQuery.count == 10 || cleanQuery.count == 13
     }
 
-    @MainActor
     func clearSearch() {
         searchTask?.cancel()
         searchText = ""
@@ -126,14 +125,12 @@ public final class SearchModel: @unchecked Sendable {
         resetToInitialState()
     }
 
-    @MainActor
     func retryLastSearch() {
         guard !searchText.isEmpty else { return }
         search(query: searchText)
     }
 
     /// Search for a specific ISBN from barcode scanning
-    @MainActor
     func searchByISBN(_ isbn: String) {
         // Set search text and immediately perform search without debouncing
         searchText = isbn
@@ -149,7 +146,6 @@ public final class SearchModel: @unchecked Sendable {
 
     // MARK: - Search Suggestions & History
 
-    @MainActor
     func generateSearchSuggestions(for query: String) {
         let lowercaseQuery = query.lowercased()
 
@@ -180,7 +176,6 @@ public final class SearchModel: @unchecked Sendable {
         searchSuggestions = Array(suggestions.prefix(6)) // Limit to 6 suggestions
     }
 
-    @MainActor
     func addToRecentSearches(_ query: String) {
         let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedQuery.isEmpty else { return }
@@ -200,7 +195,6 @@ public final class SearchModel: @unchecked Sendable {
         UserDefaults.standard.set(recentSearches, forKey: "RecentBookSearches")
     }
 
-    @MainActor
     func clearRecentSearches() {
         recentSearches.removeAll()
         UserDefaults.standard.removeObject(forKey: "RecentBookSearches")
@@ -247,7 +241,6 @@ public final class SearchModel: @unchecked Sendable {
 
     // MARK: - Private Methods
 
-    @MainActor
     private func performSearch(query: String, retryCount: Int = 0) async {
         isSearching = true
         searchState = .searching
@@ -341,7 +334,6 @@ public final class SearchModel: @unchecked Sendable {
         return "Search failed. Please try again."
     }
 
-    @MainActor
     private func resetToInitialState() {
         searchState = .initial
         searchResults = []
@@ -349,7 +341,6 @@ public final class SearchModel: @unchecked Sendable {
         isSearching = false
     }
 
-    @MainActor
     private func loadTrendingBooks() {
         // Load trending books for initial state
         Task {

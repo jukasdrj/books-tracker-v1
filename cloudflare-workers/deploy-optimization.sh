@@ -18,12 +18,14 @@ TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 # Worker configurations
 declare -A WORKERS=(
     ["openlibrary-search-worker"]="openlibrary-search-worker-production"
+    ["google-books-worker"]="google-books-worker-production"
     ["books-api-proxy"]="books-api-proxy"
 )
 
 # Health check endpoints
 declare -A HEALTH_ENDPOINTS=(
     ["openlibrary-search-worker"]="https://openlibrary-search-worker-production.jukasdrj.workers.dev/health"
+    ["google-books-worker"]="https://google-books-worker-production.jukasdrj.workers.dev/health"
     ["books-api-proxy"]="https://books-api-proxy.jukasdrj.workers.dev/health"
 )
 
@@ -222,7 +224,14 @@ main() {
         error "OpenLibrary worker deployment failed - aborting"
     fi
 
-    # 2. Deploy books-api-proxy (depends on OpenLibrary worker)
+    # 2. Deploy Google Books worker (independent dependency)
+    if deploy_worker "google-books-worker" "google-books-worker"; then
+        log "Google Books worker deployment successful"
+    else
+        error "Google Books worker deployment failed - aborting"
+    fi
+
+    # 3. Deploy books-api-proxy (depends on OpenLibrary and Google Books workers)
     if deploy_worker "books-api-proxy" "books-api-proxy"; then
         log "Books API proxy deployment successful"
     else

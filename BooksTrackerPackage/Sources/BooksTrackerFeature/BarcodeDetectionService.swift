@@ -4,7 +4,8 @@ import Combine
 
 /// Modern AsyncStream-based barcode detection service
 /// Provides real-time barcode scanning with intelligent filtering and validation
-final class BarcodeDetectionService: @unchecked Sendable {
+@CameraSessionActor
+final class BarcodeDetectionService {
 
     // MARK: - Detection Result Types
 
@@ -102,7 +103,6 @@ final class BarcodeDetectionService: @unchecked Sendable {
 
     // MARK: - Private Implementation
 
-    @CameraSessionActor
     private func setupDetection(
         cameraManager: CameraManager,
         continuation: AsyncStream<BarcodeDetection>.Continuation
@@ -121,17 +121,15 @@ final class BarcodeDetectionService: @unchecked Sendable {
             }
 
         } catch {
-            let detectionError = DetectionError.processingFailed(error)
+            let _ = DetectionError.processingFailed(error)
             continuation.finish()
         }
     }
 
-    @CameraSessionActor
     private func stopDetection(cameraManager: CameraManager) async {
         await cameraManager.stopSession()
     }
 
-    @CameraSessionActor
     private func setupVisionDetection(session: AVCaptureSession) async {
         // Find video output
         guard let videoOutput = session.outputs.compactMap({ $0 as? AVCaptureVideoDataOutput }).first else {
@@ -147,7 +145,6 @@ final class BarcodeDetectionService: @unchecked Sendable {
         videoOutput.setSampleBufferDelegate(delegate, queue: visionQueue)
     }
 
-    @CameraSessionActor
     private func setupAVFoundationDetection(session: AVCaptureSession) async {
         // Find metadata output
         guard let metadataOutput = session.outputs.compactMap({ $0 as? AVCaptureMetadataOutput }).first else {
@@ -246,11 +243,14 @@ private final class VisionProcessingDelegate: NSObject, AVCaptureVideoDataOutput
                     }
                 }
 
-                service.processDetectedBarcode(
-                    value: payloadString,
-                    confidence: observation.confidence,
-                    method: .vision
-                )
+                let confidence = observation.confidence
+                Task { @CameraSessionActor in
+                    service.processDetectedBarcode(
+                        value: payloadString,
+                        confidence: confidence,
+                        method: .vision
+                    )
+                }
             }
         }
 
@@ -307,11 +307,13 @@ private final class MetadataProcessingDelegate: NSObject, AVCaptureMetadataOutpu
                 }
             }
 
-            service.processDetectedBarcode(
-                value: stringValue,
-                confidence: 1.0, // AVFoundation doesn't provide confidence
-                method: .avFoundation
-            )
+            Task { @CameraSessionActor in
+                service.processDetectedBarcode(
+                    value: stringValue,
+                    confidence: 1.0, // AVFoundation doesn't provide confidence
+                    method: .avFoundation
+                )
+            }
         }
     }
 }

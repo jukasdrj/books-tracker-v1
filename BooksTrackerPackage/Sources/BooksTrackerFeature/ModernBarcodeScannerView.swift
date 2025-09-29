@@ -301,10 +301,12 @@ struct ModernBarcodeScannerView: View {
             cameraManager = manager
         }
 
-        let detectionService = BarcodeDetectionService(configuration: detectionConfiguration)
+        let detectionService = await Task { @CameraSessionActor in
+            return BarcodeDetectionService(configuration: detectionConfiguration)
+        }.value
 
         // Start the detection stream
-        for await isbn in detectionService.isbnDetectionStream(cameraManager: manager) {
+        for await isbn in await detectionService.isbnDetectionStream(cameraManager: manager) {
             await handleISBNDetected(isbn)
             break // Exit after first successful detection
         }

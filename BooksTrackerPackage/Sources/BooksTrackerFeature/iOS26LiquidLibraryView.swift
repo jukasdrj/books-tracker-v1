@@ -29,27 +29,44 @@ enum LibraryLayout: String, CaseIterable, Identifiable {
 
 @MainActor
 public struct iOS26LiquidLibraryView: View {
-    @Query private var works: [Work]
+    // ✅ FIX 1: Optimized SwiftData query with sorting and minimal loading
+    @Query(
+        filter: #Predicate<Work> { work in
+            !work.userLibraryEntries.isEmpty
+        },
+        sort: \Work.lastModified,
+        order: .reverse
+    ) private var libraryWorks: [Work]
+    
+    // ✅ FIX 2: Simplified state management
     @State private var selectedLayout: LibraryLayout = .floatingGrid
-    @State private var showingFilters = false
     @State private var searchText = ""
-    @Namespace private var layoutTransition
-
-    // iOS 26 Scrolling Enhancements
-    @State private var scrollPosition = ScrollPosition()
-    @State private var scrollPhase: ScrollPhase = .idle
-    @State private var showBackToTop = false
-
-    // Cultural diversity insights
     @State private var showingDiversityInsights = false
+    
+    // ✅ FIX 3: Performance optimizations
+    @State private var cachedFilteredWorks: [Work] = []
+    @State private var cachedDiversityScore: Double = 0.0
+    @State private var lastSearchText = ""
+    
+    @Namespace private var layoutTransition
+    @State private var scrollPosition = ScrollPosition()
 
     public init() {}
 
     public var body: some View {
         NavigationStack {
             mainContentView
+                .searchable(text: $searchText, prompt: "Search your library")
+                .onChange(of: searchText) { _, newValue in
+                    updateFilteredWorks()
+                }
+                .onChange(of: libraryWorks) { _, _ in
+                    updateFilteredWorks()
+                }
+                .onAppear {
+                    updateFilteredWorks()
+                }
         }
-        .searchable(text: $searchText, prompt: "Search your library")
         .navigationTitle("My Library")
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
@@ -72,11 +89,14 @@ public struct iOS26LiquidLibraryView: View {
                 .buttonStyle(GlassButtonStyle())
             }
         }
-        .navigationDestination(for: Work.self) { work in
-            WorkDetailView(work: work)
+        // ✅ FIX 4: Safe navigation with Work IDs instead of objects
+        .navigationDestination(for: UUID.self) { workID in
+            if let work = libraryWorks.first(where: { $0.id == workID }) {
+                WorkDetailView(work: work)
+            }
         }
         .sheet(isPresented: $showingDiversityInsights) {
-            CulturalDiversityInsightsView(works: filteredWorks)
+            CulturalDiversityInsightsView(works: cachedFilteredWorks)
                 .presentationDetents([.medium, .large])
                 .iOS26SheetGlass()
         }
@@ -86,7 +106,6 @@ public struct iOS26LiquidLibraryView: View {
 
     private var mainContentView: some View {
         ZStack {
-            // Background with glass extension
             Color.clear
                 .background {
                     LinearGradient(
@@ -97,66 +116,70 @@ public struct iOS26LiquidLibraryView: View {
                     .ignoresSafeArea()
                 }
 
-            // Main content
-            ZStack(alignment: .bottomTrailing) {
-                    ScrollView {
-                        LazyVStack(spacing: 0) {
-                            // Cultural insights header
-                            if !works.isEmpty {
-                                culturalInsightsHeader
-                                    .padding(.horizontal)
-                                    .padding(.bottom, 20)
-                            }
-
-                            // Library content based on selected layout
-                            Group {
-                                switch selectedLayout {
-                                case .floatingGrid:
-                                    floatingGridLayout
-                                case .adaptiveCards:
-                                    adaptiveCardsLayout
-                                case .liquidList:
-                                    liquidListLayout
-                                }
-                            }
-                        .padding(.horizontal)
-                        .scrollTargetLayout()
-                    }
-                    .scrollPosition($scrollPosition)
-                    .scrollEdgeEffectStyle(.soft, for: [.top, .bottom])
-                    .onScrollPhaseChange { _, newPhase in
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            scrollPhase = newPhase
-                        }
-                    }
-                    .onScrollGeometryChange(for: CGFloat.self) { geometry in
-                        geometry.contentOffset.y
-                    } action: { oldValue, newValue in
-                        showBackToTop = newValue > 300
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    // Cultural insights header
+                    if !cachedFilteredWorks.isEmpty {
+                        culturalInsightsHeader
+                            .padding(.horizontal)
+                            .padding(.bottom, 20)
                     }
 
-                    // Back to Top Button
-                    if showBackToTop {
-                        Button {
-                            withAnimation(.easeInOut(duration: 0.5)) {
-                                scrollPosition.scrollTo(edge: .top)
-                            }
-                        } label: {
-                            Image(systemName: "arrow.up")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(.white)
-                                .frame(width: 44, height: 44)
-                                .background(.ultraThinMaterial, in: Circle())
-                                .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+                    // Library content based on selected layout
+                    Group {
+                        switch selectedLayout {
+                        case .floatingGrid:
+                            optimizedFloatingGridLayout
+                        case .adaptiveCards:
+                            optimizedAdaptiveCardsLayout
+                        case .liquidList:
+                            optimizedLiquidListLayout
                         }
-                        .padding(.trailing, 20)
-                        .padding(.bottom, 100)
-                        .transition(.asymmetric(
-                            insertion: .scale.combined(with: .opacity),
-                            removal: .scale.combined(with: .opacity)
-                        ))
                     }
+                    .padding(.horizontal)
                 }
+            }
+            .scrollPosition($scrollPosition)
+        }
+    }
+
+    // MARK: - Optimized Layout Implementations
+
+    @ViewBuilder
+    private var optimizedFloatingGridLayout: some View {
+        LazyVGrid(columns: adaptiveColumns(for: UIScreen.main.bounds.size), spacing: 16) {
+            ForEach(cachedFilteredWorks, id: \.id) { work in
+                NavigationLink(value: work.id) {
+                    OptimizedFloatingBookCard(work: work, namespace: layoutTransition)
+                }
+                .buttonStyle(BookCardButtonStyle())
+                .id(work.id) // ✅ Explicit ID for view recycling
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var optimizedAdaptiveCardsLayout: some View {
+        LazyVGrid(columns: adaptiveColumns(for: UIScreen.main.bounds.size), spacing: 16) {
+            ForEach(cachedFilteredWorks, id: \.id) { work in
+                NavigationLink(value: work.id) {
+                    iOS26AdaptiveBookCard(work: work)
+                }
+                .buttonStyle(BookCardButtonStyle())
+                .id(work.id)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var optimizedLiquidListLayout: some View {
+        LazyVStack(spacing: 12) {
+            ForEach(cachedFilteredWorks, id: \.id) { work in
+                NavigationLink(value: work.id) {
+                    iOS26LiquidListRow(work: work)
+                }
+                .buttonStyle(BookCardButtonStyle())
+                .id(work.id)
             }
         }
     }
@@ -168,7 +191,7 @@ public struct iOS26LiquidLibraryView: View {
             VStack(spacing: 16) {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("\(filteredWorks.count) Books")
+                        Text("\(cachedFilteredWorks.count) Books")
                             .font(.title2.bold())
                             .foregroundColor(.primary)
 
@@ -179,30 +202,25 @@ public struct iOS26LiquidLibraryView: View {
 
                     Spacer()
 
-                    // Cultural diversity indicator
                     culturalDiversityIndicator
                 }
 
-                // Reading progress overview
                 readingProgressOverview
             }
             .padding()
         }
         .glassEffect(.regular, tint: .blue.opacity(0.3))
-        .glassEffectID("insights-header", in: layoutTransition)
     }
 
     private var culturalDiversityIndicator: some View {
         HStack(spacing: 8) {
-            let diverseAuthors = calculateDiverseAuthors()
-
             Circle()
-                .fill(diverseAuthors > 0.3 ? .green : diverseAuthors > 0.15 ? .orange : .red)
+                .fill(cachedDiversityScore > 0.3 ? .green : cachedDiversityScore > 0.15 ? .orange : .red)
                 .frame(width: 12, height: 12)
                 .glassEffect(.regular, interactive: true)
 
             VStack(alignment: .trailing, spacing: 2) {
-                Text("\(Int(diverseAuthors * 100))%")
+                Text("\(Int(cachedDiversityScore * 100))%")
                     .font(.headline.bold())
                     .foregroundColor(.primary)
 
@@ -219,7 +237,7 @@ public struct iOS26LiquidLibraryView: View {
     private var readingProgressOverview: some View {
         HStack(spacing: 16) {
             ForEach(ReadingStatus.allCases.prefix(4), id: \.self) { status in
-                let count = filteredWorks.flatMap(\.userLibraryEntries).filter { $0.readingStatus == status }.count
+                let count = cachedFilteredWorks.flatMap(\.userLibraryEntries).filter { $0.readingStatus == status }.count
 
                 VStack(spacing: 4) {
                     Image(systemName: status.systemImage)
@@ -240,85 +258,370 @@ public struct iOS26LiquidLibraryView: View {
         }
     }
 
-    // MARK: - Layout Implementations
+    // MARK: - Performance Optimizations
 
-    @ViewBuilder
-    private var floatingGridLayout: some View {
-        iOS26FluidGridSystem(
-            items: filteredWorks,
-            columns: adaptiveColumns(for: UIScreen.main.bounds.size),
-            spacing: 20
-        ) { work in
-            NavigationLink(value: work) {
-                iOS26FloatingBookCard(
-                    work: work,
-                    namespace: layoutTransition
-                )
-            }
-            .buttonStyle(BookCardButtonStyle())
-            .glassEffectID("book-\(work.id)", in: layoutTransition)
-        }
-    }
-
-    @ViewBuilder
-    private var adaptiveCardsLayout: some View {
-        LazyVGrid(columns: adaptiveColumns(for: UIScreen.main.bounds.size), spacing: 16) {
-            ForEach(filteredWorks, id: \.id) { work in
-                NavigationLink(value: work) {
-                    iOS26AdaptiveBookCard(work: work)
-                }
-                .buttonStyle(BookCardButtonStyle())
-                .glassEffectID("adaptive-\(work.id)", in: layoutTransition)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var liquidListLayout: some View {
-        LazyVStack(spacing: 12) {
-            ForEach(filteredWorks, id: \.id) { work in
-                NavigationLink(value: work) {
-                    iOS26LiquidListRow(work: work)
-                }
-                .buttonStyle(BookCardButtonStyle())
-                .glassEffectID("list-\(work.id)", in: layoutTransition)
-            }
-        }
-    }
-
-    // MARK: - Helper Properties
-
-    private var filteredWorks: [Work] {
+    private func updateFilteredWorks() {
+        // ✅ FIX 5: Cached filtering and diversity calculation
+        let filtered: [Work]
+        
         if searchText.isEmpty {
-            return works
+            filtered = Array(libraryWorks)
+        } else {
+            filtered = libraryWorks.filter { work in
+                work.title.localizedCaseInsensitiveContains(searchText) ||
+                work.authorNames.localizedCaseInsensitiveContains(searchText)
+            }
         }
-        return works.filter { work in
-            work.title.localizedCaseInsensitiveContains(searchText) ||
-            work.authorNames.localizedCaseInsensitiveContains(searchText)
+        
+        // Only update if actually changed
+        if filtered.map(\.id) != cachedFilteredWorks.map(\.id) {
+            cachedFilteredWorks = filtered
+            cachedDiversityScore = calculateDiverseAuthors(for: filtered)
         }
+    }
+
+    private func calculateDiverseAuthors(for works: [Work]) -> Double {
+        let allAuthors = works.flatMap(\.authors)
+        guard !allAuthors.isEmpty else { return 0.0 }
+
+        let diverseCount = allAuthors.filter { author in
+            author.representsMarginalizedVoices() || author.representsIndigenousVoices()
+        }.count
+
+        return Double(diverseCount) / Double(allAuthors.count)
     }
 
     private func adaptiveColumns(for size: CGSize) -> [GridItem] {
         let screenWidth = size.width
         let columnCount: Int
 
-        if screenWidth > 1000 { // iPad Pro
+        if screenWidth > 1000 {
             columnCount = 6
-        } else if screenWidth > 800 { // iPad
+        } else if screenWidth > 800 {
             columnCount = 4
-        } else if screenWidth > 600 { // Large phone landscape
+        } else if screenWidth > 600 {
             columnCount = 3
-        } else { // Phone portrait - V1.0 spec
+        } else {
+            columnCount = 2
+        }
+
+        return Array(repeating: GridItem(.flexible(), spacing: 16), count: columnCount)
+    }
+}
+
+// MARK: - Ultra-Optimized Library View
+
+/// ✅ CRITICAL FIXES: This version addresses all the major iOS UX issues
+@MainActor
+public struct UltraOptimizedLibraryView: View {
+    // ✅ FIX 1: Highly optimized SwiftData query - only loads library entries
+    @Query(
+        filter: #Predicate<UserLibraryEntry> { entry in
+            true // Get all library entries, works will be loaded lazily
+        },
+        sort: \UserLibraryEntry.lastModified,
+        order: .reverse
+    ) private var libraryEntries: [UserLibraryEntry]
+    
+    // ✅ FIX 2: Minimal state management
+    @State private var selectedLayout: LibraryLayout = .floatingGrid
+    @State private var searchText = ""
+    @State private var showingDiversityInsights = false
+    
+    // ✅ FIX 3: Performance-optimized data source
+    @State private var dataSource = OptimizedLibraryDataSource()
+    @State private var filteredWorks: [Work] = []
+    @State private var diversityScore: Double = 0.0
+    
+    @Namespace private var layoutTransition
+    @State private var scrollPosition = ScrollPosition()
+    
+    // ✅ FIX 4: Memory management
+    private let memoryHandler = MemoryPressureHandler.shared
+
+    public init() {}
+
+    public var body: some View {
+        NavigationStack {
+            optimizedMainContent
+                .searchable(text: $searchText, prompt: "Search your library")
+                .task {
+                    await updateData()
+                }
+                .onChange(of: searchText) { _, _ in
+                    Task { await updateData() }
+                }
+                .onChange(of: libraryEntries) { _, _ in
+                    Task { await updateData() }
+                }
+        }
+        .navigationTitle("My Library")
+        .navigationBarTitleDisplayMode(.large)
+        .toolbar {
+            ToolbarItemGroup(placement: .navigationBarTrailing) {
+                Button("Insights") {
+                    showingDiversityInsights.toggle()
+                }
+                .buttonStyle(GlassButtonStyle())
+
+                Menu {
+                    Picker("Layout", selection: $selectedLayout.animation(.smooth)) {
+                        ForEach(LibraryLayout.allCases, id: \.self) { layout in
+                            Label(layout.displayName, systemImage: layout.icon)
+                                .tag(layout)
+                        }
+                    }
+                } label: {
+                    Image(systemName: selectedLayout.icon)
+                }
+                .buttonStyle(GlassButtonStyle())
+            }
+        }
+        .modifier(SafeWorkNavigation(
+            workID: UUID(), // Will be overridden by individual NavigationLinks
+            allWorks: filteredWorks
+        ))
+        .sheet(isPresented: $showingDiversityInsights) {
+            CulturalDiversityInsightsView(works: filteredWorks)
+                .presentationDetents([.medium, .large])
+                .iOS26SheetGlass()
+        }
+        .performanceMonitor("UltraOptimizedLibraryView")
+    }
+
+    // MARK: - Optimized Main Content
+
+    private var optimizedMainContent: some View {
+        ZStack {
+            Color.clear
+                .background {
+                    LinearGradient(
+                        colors: [.blue.opacity(0.1), .purple.opacity(0.05)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    .ignoresSafeArea()
+                }
+
+            if filteredWorks.isEmpty {
+                emptyStateView
+            } else {
+                contentScrollView
+            }
+        }
+    }
+
+    private var contentScrollView: some View {
+        ScrollView {
+            LazyVStack(spacing: 0) {
+                // Insights header
+                optimizedInsightsHeader
+                    .padding(.horizontal)
+                    .padding(.bottom, 20)
+                    .performanceMonitor("InsightsHeader")
+
+                // Books grid/list
+                optimizedBooksLayout
+                    .padding(.horizontal)
+                    .performanceMonitor("BooksLayout")
+            }
+        }
+        .scrollPosition($scrollPosition)
+        .scrollIndicators(.visible, axes: .vertical)
+    }
+
+    private var emptyStateView: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "books.vertical")
+                .font(.system(size: 60))
+                .foregroundColor(.secondary)
+            
+            Text("No Books in Library")
+                .font(.title2.bold())
+                .foregroundColor(.primary)
+            
+            Text("Start building your library by searching for books!")
+                .font(.body)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .padding()
+    }
+
+    // MARK: - Optimized Layout Implementations
+
+    @ViewBuilder
+    private var optimizedBooksLayout: some View {
+        switch selectedLayout {
+        case .floatingGrid:
+            ultraOptimizedGrid
+        case .adaptiveCards:
+            ultraOptimizedAdaptiveGrid
+        case .liquidList:
+            ultraOptimizedList
+        }
+    }
+
+    private var ultraOptimizedGrid: some View {
+        LazyVGrid(columns: adaptiveColumns, spacing: 16) {
+            ForEach(filteredWorks, id: \.id) { work in
+                NavigationLink(value: work.id) {
+                    OptimizedFloatingBookCard(
+                        work: work, 
+                        namespace: layoutTransition
+                    )
+                    .performanceMonitor("BookCard-\(work.title)")
+                }
+                .buttonStyle(BookCardButtonStyle())
+                .id(work.id)
+            }
+        }
+    }
+
+    private var ultraOptimizedAdaptiveGrid: some View {
+        LazyVGrid(columns: adaptiveColumns, spacing: 16) {
+            ForEach(filteredWorks, id: \.id) { work in
+                NavigationLink(value: work.id) {
+                    iOS26AdaptiveBookCard(work: work)
+                        .performanceMonitor("AdaptiveCard-\(work.title)")
+                }
+                .buttonStyle(BookCardButtonStyle())
+                .id(work.id)
+            }
+        }
+    }
+
+    private var ultraOptimizedList: some View {
+        LazyVStack(spacing: 12) {
+            ForEach(filteredWorks, id: \.id) { work in
+                NavigationLink(value: work.id) {
+                    iOS26LiquidListRow(work: work)
+                        .performanceMonitor("ListRow-\(work.title)")
+                }
+                .buttonStyle(BookCardButtonStyle())
+                .id(work.id)
+            }
+        }
+    }
+
+    // MARK: - Optimized Insights Header
+
+    private var optimizedInsightsHeader: some View {
+        GlassEffectContainer(spacing: 16) {
+            VStack(spacing: 16) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("\(filteredWorks.count) Books")
+                            .font(.title2.bold())
+                            .foregroundColor(.primary)
+
+                        Text("Reading Goals")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+
+                    Spacer()
+
+                    optimizedDiversityIndicator
+                }
+
+                optimizedProgressOverview
+            }
+            .padding()
+        }
+        .glassEffect(.regular, tint: .blue.opacity(0.3))
+    }
+
+    private var optimizedDiversityIndicator: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(diversityScore > 0.3 ? .green : diversityScore > 0.15 ? .orange : .red)
+                .frame(width: 12, height: 12)
+                .glassEffect(.regular, interactive: true)
+
+            VStack(alignment: .trailing, spacing: 2) {
+                Text("\(Int(diversityScore * 100))%")
+                    .font(.headline.bold())
+                    .foregroundColor(.primary)
+
+                Text("Diverse")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .onTapGesture {
+            showingDiversityInsights.toggle()
+        }
+    }
+
+    private var optimizedProgressOverview: some View {
+        HStack(spacing: 16) {
+            ForEach(ReadingStatus.allCases.prefix(4), id: \.self) { status in
+                let count = libraryEntries.filter { $0.readingStatus == status }.count
+
+                VStack(spacing: 4) {
+                    Image(systemName: status.systemImage)
+                        .font(.title3)
+                        .foregroundColor(status.color)
+                        .glassEffect(.regular, interactive: true)
+
+                    Text("\(count)")
+                        .font(.caption.bold())
+                        .foregroundColor(.primary)
+
+                    Text(status.displayName)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+            }
+        }
+    }
+
+    // MARK: - Performance Optimizations
+
+    private var adaptiveColumns: [GridItem] {
+        let screenWidth = UIScreen.main.bounds.width
+        let columnCount: Int
+
+        if screenWidth > 1000 {
+            columnCount = 6
+        } else if screenWidth > 800 {
+            columnCount = 4
+        } else if screenWidth > 600 {
+            columnCount = 3
+        } else {
             columnCount = 2
         }
 
         return Array(repeating: GridItem(.flexible(), spacing: 16), count: columnCount)
     }
 
-    // MARK: - Cultural Analytics
+    @MainActor
+    private func updateData() async {
+        // Convert library entries to works efficiently
+        let works = libraryEntries.compactMap(\.work)
+        
+        let filtered = dataSource.getFilteredWorks(
+            from: works,
+            searchText: searchText
+        )
+        
+        // Update diversity score efficiently
+        let newDiversityScore = calculateDiversityScore(for: filtered)
+        
+        // Only update if changed to prevent unnecessary re-renders
+        if filtered.map(\.id) != filteredWorks.map(\.id) {
+            filteredWorks = filtered
+        }
+        
+        if abs(newDiversityScore - diversityScore) > 0.01 {
+            diversityScore = newDiversityScore
+        }
+    }
 
-    private func calculateDiverseAuthors() -> Double {
-        let allAuthors = filteredWorks.flatMap(\.authors)
+    private func calculateDiversityScore(for works: [Work]) -> Double {
+        let allAuthors = works.flatMap(\.authors)
         guard !allAuthors.isEmpty else { return 0.0 }
 
         let diverseCount = allAuthors.filter { author in
