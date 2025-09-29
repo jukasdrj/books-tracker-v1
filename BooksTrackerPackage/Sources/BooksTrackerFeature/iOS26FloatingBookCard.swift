@@ -44,7 +44,7 @@ struct iOS26FloatingBookCard: View {
     // MARK: - Floating Cover Image
 
     private var floatingCoverImage: some View {
-        AsyncImage(url: primaryEdition?.coverURL) { image in
+        CachedAsyncImage(url: primaryEdition?.coverURL) { image in
             image
                 .resizable()
                 .aspectRatio(2/3, contentMode: .fill)
@@ -589,103 +589,6 @@ struct OptimizedFloatingBookCard: View {
     }
 }
 
-// MARK: - Cached AsyncImage Implementation
-
-/// ✅ FIXES "BOOK COVER NOT AVAILABLE" issues with proper caching
-struct CachedAsyncImage<Content: View, Placeholder: View>: View {
-    let url: URL?
-    @ViewBuilder let content: (Image) -> Content
-    @ViewBuilder let placeholder: () -> Placeholder
-    
-    @State private var imageData: Data?
-    @State private var isLoading = false
-    @State private var hasError = false
-    
-    // Use shared cache instance
-    
-    var body: some View {
-        Group {
-            if let imageData = imageData,
-               let uiImage = UIImage(data: imageData) {
-                content(Image(uiImage: uiImage))
-            } else if isLoading {
-                placeholder()
-                    .overlay {
-                        ProgressView()
-                            .scaleEffect(0.8)
-                    }
-            } else if hasError {
-                placeholder()
-                    .overlay {
-                        VStack(spacing: 4) {
-                            Image(systemName: "exclamationmark.triangle")
-                                .font(.caption)
-                                .foregroundColor(.orange)
-                            Text("Load Error")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-            } else {
-                placeholder()
-            }
-        }
-        .onAppear {
-            loadImage()
-        }
-        .onChange(of: url) { _, _ in
-            loadImage()
-        }
-    }
-    
-    private func loadImage() {
-        guard let url = url else {
-            hasError = true
-            return
-        }
-        
-        let cacheKey = url.absoluteString as NSString
-        
-        // Check cache first
-        if let cachedData = CachedAsyncImageCache.shared.cache.object(forKey: cacheKey) {
-            imageData = cachedData as Data
-            return
-        }
-        
-        isLoading = true
-        hasError = false
-        
-        Task {
-            do {
-                let (data, response) = try await URLSession.shared.data(from: url)
-                
-                guard let httpResponse = response as? HTTPURLResponse,
-                      httpResponse.statusCode == 200,
-                      !data.isEmpty else {
-                    await MainActor.run {
-                        hasError = true
-                        isLoading = false
-                    }
-                    return
-                }
-                
-                // Cache the data
-                CachedAsyncImageCache.shared.cache.setObject(data as NSData, forKey: cacheKey)
-                
-                await MainActor.run {
-                    imageData = data
-                    isLoading = false
-                    hasError = false
-                }
-            } catch {
-                await MainActor.run {
-                    hasError = true
-                    isLoading = false
-                }
-            }
-        }
-    }
-}
 
 // MARK: - Performance Monitoring Tools
 
@@ -847,7 +750,7 @@ struct QuickActionsSheet: View {
             VStack(spacing: 20) {
                 // Work info header
                 HStack(spacing: 16) {
-                    AsyncImage(url: work.primaryEdition?.coverImageURL.flatMap(URL.init)) { image in
+                    CachedAsyncImage(url: work.primaryEdition?.coverImageURL.flatMap(URL.init)) { image in
                         image
                             .resizable()
                             .aspectRatio(2/3, contentMode: .fill)

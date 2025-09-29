@@ -266,7 +266,7 @@ struct iOS26AdaptiveBookCard: View {
     // MARK: - Shared Components
 
     private var coverImage: some View {
-        AsyncImage(url: primaryEdition?.coverImageURL.flatMap(URL.init)) { image in
+        CachedAsyncImage(url: primaryEdition?.coverImageURL.flatMap(URL.init)) { image in
             image
                 .resizable()
                 .aspectRatio(2/3, contentMode: .fill)

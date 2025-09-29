@@ -66,23 +66,12 @@ public struct SearchView: View {
                 selectedBook = nil
             }) {
                 if let selectedBook = selectedBook {
-                    NavigationStack {
-                        WorkDetailView(work: selectedBook.work)
-                            .navigationTitle(selectedBook.work.title)
-                            .navigationBarTitleDisplayMode(.large)
-                            .toolbar {
-                                ToolbarItem(placement: .navigationBarTrailing) {
-                                    Button("Done") {
-                                        showingBookDetail = false
-                                    }
-                                    .fontWeight(.medium)
-                                    .foregroundColor(.primary)
-                                }
-                            }
-                    }
-                    .presentationDetents([.medium, .large])
-                    .presentationDragIndicator(.visible)
-                    .interactiveDismissDisabled(false)
+                    // ✅ PHASE 2 FIX: Use WorkDiscoveryView instead of WorkDetailView
+                    // This properly handles the Add to Library workflow
+                    WorkDiscoveryView(searchResult: selectedBook)
+                        .presentationDetents([.medium, .large])
+                        .presentationDragIndicator(.visible)
+                        .interactiveDismissDisabled(false)
                 } else {
                     // Fallback content if selectedBook is nil
                     Text("Loading...")

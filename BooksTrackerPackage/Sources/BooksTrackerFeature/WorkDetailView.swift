@@ -80,7 +80,7 @@ struct WorkDetailView: View {
         GeometryReader { geometry in
             ZStack {
                 // Blurred cover art background
-                AsyncImage(url: primaryEdition.coverImageURL.flatMap(URL.init)) { image in
+                CachedAsyncImage(url: primaryEdition.coverImageURL.flatMap(URL.init)) { image in
                     image
                         .resizable()
                         .aspectRatio(contentMode: .fill)
@@ -140,7 +140,7 @@ struct WorkDetailView: View {
     private var bookCoverHero: some View {
         VStack(spacing: 16) {
             // Large cover image
-            AsyncImage(url: primaryEdition.coverImageURL.flatMap(URL.init)) { image in
+            CachedAsyncImage(url: primaryEdition.coverImageURL.flatMap(URL.init)) { image in
                 image
                     .resizable()
                     .aspectRatio(2/3, contentMode: .fill)

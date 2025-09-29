@@ -58,17 +58,17 @@ secret_name = "ISBN_search_key"
 [[services]]
 binding = "ISBNDB_WORKER"
 service = "isbndb-biography-worker-production"
-entrypoint = "ISBNdbWorker" # Correctly point to the RPC class
+entrypoint = "ISBNdbWorker"
 
 [[services]]
 binding = "OPENLIBRARY_WORKER"
-service = "openlibrary-search-worker-production"
-entrypoint = "OpenLibraryWorker" # Correctly point to the RPC class
+service = "openlibrary-search-worker"
+entrypoint = "OpenLibraryWorker"
 
 [[services]]
 binding = "GOOGLE_BOOKS_WORKER"
-service = "google-books-worker-production"
-entrypoint = "GoogleBooksWorker" # Correctly point to the RPC class
+service = "google-books-worker"
+entrypoint = "GoogleBooksWorker"
 
 # KV Cache for API responses - primary cache layer
 [[kv_namespaces]]
