@@ -1,118 +1,118 @@
 /**
- * Books API Proxy - RPC Enhanced
+ * Books API Proxy - Orchestrator
  *
- * Orchestrates calls to specialty workers (ISBNdb, OpenLibrary) using direct RPC
- * for maximum performance and reliability. Caches the aggregated results.
+ * Implements the "best-of-both-worlds" strategy:
+ * 1. Fetches canonical works from OpenLibrary.
+ * 2. Enhances each work with rich edition data from ISBNdb.
+ * 3. Handles direct ISBN lookups.
+ * 4. Caches the final, aggregated results.
  */
-
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const path = url.pathname;
 
-    // Handle CORS preflight requests first
+    // Handle CORS preflight requests
     if (request.method === 'OPTIONS') {
       return new Response(null, {
         headers: {
           'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+          'Access-Control-Allow-Methods': 'GET, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type',
         },
       });
     }
-
-    // Add CORS headers to all responses
-    const corsHeaders = {
-      'Access-Control-Allow-Origin': '*',
-      'Content-Type': 'application/json'
+    
+    const headers = { 
+        'Access-Control-Allow-Origin': '*',
+        'Content-Type': 'application/json'
     };
 
     try {
-        if (path.startsWith('/author/enhanced/')) {
-            const response = await handleEnhancedAuthorBibliography(request, env, ctx);
-            // Clone the response to add CORS headers
-            const newResponse = new Response(response.body, response);
-            Object.entries(corsHeaders).forEach(([key, value]) => {
-                newResponse.headers.set(key, value);
-            });
-            return newResponse;
-        }
-
-        // Health check endpoint
-        if (path === '/health') {
-            return new Response(JSON.stringify({ status: 'healthy', timestamp: new Date().toISOString() }), {
-                headers: corsHeaders,
-            });
-        }
-
-        // Fallback for other routes
-        return new Response(JSON.stringify({ error: 'Endpoint not found' }), {
-            status: 404,
-            headers: corsHeaders,
-        });
-
+      if (path.startsWith('/author/enhanced/')) {
+        return await handleEnhancedAuthor(request, env, ctx, headers);
+      }
+      if (path.startsWith('/book/isbn/')) {
+        return await handleDirectISBN(request, env, ctx, headers);
+      }
+      if (path === '/health') {
+        return new Response(JSON.stringify({ status: 'healthy', worker: 'books-api-proxy' }), { headers });
+      }
+      return new Response(JSON.stringify({ error: 'Endpoint not found' }), { status: 404, headers });
     } catch (error) {
-        console.error('Error in main fetch handler:', error);
-        return new Response(JSON.stringify({ error: 'Internal Server Error', details: error.message }), {
-            status: 500,
-            headers: corsHeaders,
-        });
+      return new Response(JSON.stringify({ error: 'Internal Server Error', details: error.message }), { status: 500, headers });
     }
   }
 };
 
 /**
- * Enhanced Author Bibliography Handler
- * 1. Calls OpenLibrary worker via RPC to get the list of works.
- * 2. Calls ISBNdb worker via RPC to enhance those works with edition data.
- * 3. Caches the final, merged result.
+ * Handles the primary author lookup and enhancement workflow.
  */
-async function handleEnhancedAuthorBibliography(request, env, ctx) {
+async function handleEnhancedAuthor(request, env, ctx, headers) {
     const url = new URL(request.url);
     const authorName = decodeURIComponent(url.pathname.replace('/author/enhanced/', ''));
+    if (!authorName) return new Response(JSON.stringify({ error: "Author name required" }), { status: 400, headers });
 
-    if (!authorName) {
-        return new Response(JSON.stringify({ success: false, error: "Author name is required." }), { status: 400 });
+    const cacheKey = `author_v2:${authorName.toLowerCase()}`;
+    const cached = await env.CACHE.get(cacheKey, 'json');
+    if (cached) {
+        console.log(`Cache HIT for author v2: ${authorName}`);
+        return new Response(JSON.stringify({ ...cached, cached: true }), { headers });
     }
 
-    const cacheKey = `author_enhanced:${authorName.toLowerCase()}`;
-    
-    try {
-        const cached = await env.CACHE.get(cacheKey, 'json');
-        if (cached) {
-            console.log(`Cache HIT for enhanced author: ${authorName}`);
-            return new Response(JSON.stringify({ ...cached, cached: true }));
+    console.log(`Cache MISS for author v2. Orchestrating lookup for: ${authorName}`);
+
+    // Step 1: Get canonical works list from OpenLibrary worker
+    const olResult = await env.OPENLIBRARY_WORKER.getAuthorWorks(authorName);
+    if (!olResult.success) throw new Error(`OpenLibrary failed: ${olResult.error}`);
+
+    let { works, author } = olResult;
+    console.log(`Received ${works.length} works from OpenLibrary for ${authorName}`);
+
+    // Step 2: Concurrently enhance each work with editions from ISBNdb worker
+    const enhancementPromises = works.map(async (work) => {
+        const isbndbResult = await env.ISBNDB_WORKER.getEditionsForWork(work.title, author.name);
+        if (isbndbResult.success) {
+            work.editions = isbndbResult.editions;
         }
-    } catch (e) {
-        console.error("Cache read error:", e);
-    }
+        return work;
+    });
 
-    console.log(`Cache MISS. Starting enhanced lookup for: ${authorName}`);
-
-    // Step 1: Get authoritative works list from OpenLibrary worker via RPC
-    const olData = await env.OPENLIBRARY_WORKER.getAuthorBibliography(authorName);
-    if (!olData || !olData.success) {
-        throw new Error(`OpenLibrary worker failed: ${olData.error || 'No works found'}`);
-    }
-    console.log(`OpenLibrary returned ${olData.works?.length || 0} works for ${authorName}`);
-
-    // Step 2: Enhance works with ISBNdb edition data via RPC
-    const enhancementResult = await env.ISBNDB_WORKER.enhanceWorksWithEditions(olData.works, authorName);
-    if (!enhancementResult || !enhancementResult.success) {
-        console.warn(`ISBNdb enhancement failed, returning OpenLibrary data only.`);
-    }
-
-    const finalWorks = enhancementResult.success ? enhancementResult.works : olData.works;
-
+    const enhancedWorks = await Promise.all(enhancementPromises);
+    
     const responseData = {
         success: true,
-        provider: 'openlibrary+isbndb',
-        author: olData.authors ? olData.authors[0] : { name: authorName },
-        works: finalWorks,
+        provider: 'orchestrated:openlibrary+isbndb',
+        author: author,
+        works: enhancedWorks,
     };
 
-    // Step 3: Cache the final result asynchronously
     ctx.waitUntil(env.CACHE.put(cacheKey, JSON.stringify(responseData), { expirationTtl: 86400 })); // 24 hours
 
-    return new Response(JSON.stringify({ ...responseData, cached: false }));
+    return new Response(JSON.stringify({ ...responseData, cached: false }), { headers });
+}
+
+/**
+ * Handles a direct ISBN lookup via the ISBNdb worker.
+ */
+async function handleDirectISBN(request, env, ctx, headers) {
+    const url = new URL(request.url);
+    const isbn = decodeURIComponent(url.pathname.replace('/book/isbn/', ''));
+    if (!isbn) return new Response(JSON.stringify({ error: "ISBN required" }), { status: 400, headers });
+    
+    const cacheKey = `isbn:${isbn}`;
+    const cached = await env.CACHE.get(cacheKey, 'json');
+    if (cached) {
+        console.log(`Cache HIT for ISBN: ${isbn}`);
+        return new Response(JSON.stringify({ ...cached, cached: true }), { headers });
+    }
+
+    console.log(`Cache MISS for ISBN: ${isbn}. Calling ISBNdb worker.`);
+    
+    const result = await env.ISBNDB_WORKER.getBookByISBN(isbn);
+    if (!result.success) throw new Error(`ISBNdb failed for ${isbn}: ${result.error}`);
+
+    ctx.waitUntil(env.CACHE.put(cacheKey, JSON.stringify(result), { expirationTtl: 86400 * 7 })); // 7 days
+
+    return new Response(JSON.stringify({ ...result, cached: false }), { headers });
 }

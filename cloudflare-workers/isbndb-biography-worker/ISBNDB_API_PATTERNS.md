@@ -2,44 +2,6 @@
 
 ## ✅ **WORKING PATTERNS** (Validated with curl & CloudFlare)
 
-### **Pattern 1: Author Works in English**
-```bash
-# ✅ WORKS - Author bibliography with language filtering
-curl -X 'GET' \
-  'https://api2.isbndb.com/author/andy%20weir?page=10&pageSize=50&language=en' \
-  -H 'accept: application/json' \
-  -H 'Authorization: 63343_c241564de4221870d18f012e28ab7bd2'
-```
-
-**Implementation:**
-- **URL Pattern**: `/author/{name}?page={n}&pageSize={n}&language=en`
-- **Key Points**: 
-  - URL encode author names (`andy%20weir`)
-  - Always include `language=en` for English-only results
-  - Page/pageSize for pagination (max pageSize appears to be 1000)
-  - Returns comprehensive author bibliography
-
-**Response Structure:**
-```json
-{
-  "author": "Andy Weir",
-  "books": [
-    {
-      "title": "The Martian",
-      "isbn": "0553418025",
-      "isbn13": "9780553418026",
-      "authors": ["Andy Weir"],
-      "publisher": "Broadway Books",
-      "date_published": "2014",
-      "subjects": ["Fiction", "Science Fiction"]
-    }
-  ],
-  "total": 15
-}
-```
-
----
-
 ### **Pattern 2: Book by Known ISBN**
 ```bash
 # ✅ WORKS - Direct ISBN lookup (10 or 13 digit)
@@ -105,20 +67,20 @@ curl -X 'GET' \
 
 ---
 
-### **Pattern 4: Combined Author + Title + Publisher**
+### **Pattern 4: Combined Author + Title**
 ```bash
 # ✅ WORKS - Multi-criteria search with fallback
 curl -X 'GET' \
-  'https://api2.isbndb.com/search/books?page=1&pageSize=50&author=andy%20weir&text=the%20martian&publisher=crown' \
+  'https://api2.isbndb.com/search/books?page=1&pageSize=50&author=andy%20weir&text=the%20martian' \
   -H 'accept: application/json' \
   -H 'Authorization: 63343_c241564de4221870d18f012e28ab7bd2'
 ```
 
 **Implementation:**
-- **URL Pattern**: `/search/books?author={name}&text={title}&publisher={pub}`
+- **URL Pattern**: `/search/books?author={name}&text={title}`
 - **Key Points**: 
   - Supports partial matching across all fields
-  - Can omit any parameter (author OR text OR publisher)
+  - Can omit any parameter (author OR text)
   - Most flexible but potentially noisiest results
   - Good for fuzzy matching scenarios
 
@@ -183,7 +145,7 @@ curl -X 'GET' \
 
 ### **Rate Limits**
 - **Limit**: 1 request per second (confirmed)
-- **Monthly Quota**: 1000 requests/month (free tier)
+- **Monthly Quota**: 5000 requests/day (pro tier)
 - **Enforcement**: HTTP 429 if exceeded
 - **Best Practice**: Implement client-side rate limiting with 1100ms delays
 
