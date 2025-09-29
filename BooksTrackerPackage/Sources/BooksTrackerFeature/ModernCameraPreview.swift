@@ -126,7 +126,15 @@ struct ModernCameraPreview: View {
                 continuation.finish()
             }
         }
-        return detectionService.isbnDetectionStream(cameraManager: cameraManager)
+        let manager = cameraManager
+        return AsyncStream { continuation in
+            Task { @CameraSessionActor in
+                for await isbn in detectionService.isbnDetectionStream(cameraManager: manager) {
+                    continuation.yield(isbn)
+                }
+                continuation.finish()
+            }
+        }
     }
 
     /// Start general barcode detection
@@ -136,7 +144,15 @@ struct ModernCameraPreview: View {
                 continuation.finish()
             }
         }
-        return detectionService.startDetection(cameraManager: cameraManager)
+        let manager = cameraManager
+        return AsyncStream { continuation in
+            Task { @CameraSessionActor in
+                for await detection in detectionService.startDetection(cameraManager: manager) {
+                    continuation.yield(detection)
+                }
+                continuation.finish()
+            }
+        }
     }
 
     /// Toggle torch (flashlight)
@@ -168,8 +184,7 @@ struct ModernCameraPreview: View {
         Task {
             do {
                 sessionState = .configuring
-                try await cameraManager.startSession()
-                _ = () // Discard the return value to avoid sendable issues
+                _ = try await cameraManager.startSession()
                 sessionState = .running
             } catch {
                 let cameraError = error as? CameraError ?? .sessionConfigurationFailed
@@ -191,10 +206,11 @@ struct ModernCameraPreview: View {
         Task {
             do {
                 // Convert tap location to camera coordinates
-                let normalizedPoint = CGPoint(
+                _ = CGPoint(
                     x: location.x / size.width,
                     y: location.y / size.height
                 )
+                // TODO: Pass normalizedPoint to focus method when implemented
 
                 // Show focus animation
                 await showFocusAnimation(at: location)

@@ -147,26 +147,30 @@ public struct iOS26LiquidLibraryView: View {
 
     @ViewBuilder
     private var optimizedFloatingGridLayout: some View {
-        LazyVGrid(columns: adaptiveColumns(for: UIScreen.main.bounds.size), spacing: 16) {
-            ForEach(cachedFilteredWorks, id: \.id) { work in
-                NavigationLink(value: work.id) {
-                    OptimizedFloatingBookCard(work: work, namespace: layoutTransition)
+        GeometryReader { geometry in
+            LazyVGrid(columns: adaptiveColumns(for: geometry.size), spacing: 16) {
+                ForEach(cachedFilteredWorks, id: \.id) { work in
+                    NavigationLink(value: work.id) {
+                        OptimizedFloatingBookCard(work: work, namespace: layoutTransition)
+                    }
+                    .buttonStyle(BookCardButtonStyle())
+                    .id(work.id) // ✅ Explicit ID for view recycling
                 }
-                .buttonStyle(BookCardButtonStyle())
-                .id(work.id) // ✅ Explicit ID for view recycling
             }
         }
     }
 
     @ViewBuilder
     private var optimizedAdaptiveCardsLayout: some View {
-        LazyVGrid(columns: adaptiveColumns(for: UIScreen.main.bounds.size), spacing: 16) {
-            ForEach(cachedFilteredWorks, id: \.id) { work in
-                NavigationLink(value: work.id) {
-                    iOS26AdaptiveBookCard(work: work)
+        GeometryReader { geometry in
+            LazyVGrid(columns: adaptiveColumns(for: geometry.size), spacing: 16) {
+                ForEach(cachedFilteredWorks, id: \.id) { work in
+                    NavigationLink(value: work.id) {
+                        iOS26AdaptiveBookCard(work: work)
+                    }
+                    .buttonStyle(BookCardButtonStyle())
+                    .id(work.id)
                 }
-                .buttonStyle(BookCardButtonStyle())
-                .id(work.id)
             }
         }
     }
@@ -580,8 +584,8 @@ public struct UltraOptimizedLibraryView: View {
 
     // MARK: - Performance Optimizations
 
-    private var adaptiveColumns: [GridItem] {
-        let screenWidth = UIScreen.main.bounds.width
+    private func adaptiveColumns(for size: CGSize) -> [GridItem] {
+        let screenWidth = size.width
         let columnCount: Int
 
         if screenWidth > 1000 {
@@ -595,6 +599,11 @@ public struct UltraOptimizedLibraryView: View {
         }
 
         return Array(repeating: GridItem(.flexible(), spacing: 16), count: columnCount)
+    }
+
+    private var adaptiveColumns: [GridItem] {
+        // Use a reasonable default when no geometry is available
+        adaptiveColumns(for: CGSize(width: 400, height: 800))
     }
 
     @MainActor

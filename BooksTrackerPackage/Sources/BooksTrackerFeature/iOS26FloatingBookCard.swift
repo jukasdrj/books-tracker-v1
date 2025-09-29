@@ -703,10 +703,9 @@ extension View {
 // MARK: - Memory Management Helpers
 
 /// ✅ MEMORY: Cleans up image cache when memory pressure occurs
-@MainActor
 struct MemoryPressureHandler {
     static let shared = MemoryPressureHandler()
-    
+
     private init() {
         // Listen for memory warnings
         NotificationCenter.default.addObserver(
@@ -717,9 +716,9 @@ struct MemoryPressureHandler {
             Self.cleanupImageCache()
         }
     }
-    
+
     private static func cleanupImageCache() {
-        // Clear NSCache when memory pressure occurs
+        // Clear NSCache when memory pressure occurs (NSCache is thread-safe)
         CachedAsyncImageCache.shared.cache.removeAllObjects()
         print("🧹 MEMORY: Cleared image cache due to memory pressure")
     }

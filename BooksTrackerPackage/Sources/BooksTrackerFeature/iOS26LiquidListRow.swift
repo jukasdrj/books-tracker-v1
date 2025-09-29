@@ -328,7 +328,7 @@ struct iOS26LiquidListRow: View {
 
     private var quickActionsMenu: some View {
         Group {
-            if let userEntry = userEntry {
+            if userEntry != nil {
                 Button("Mark as Reading", systemImage: "book.pages") {
                     updateReadingStatus(.reading)
                 }
@@ -479,7 +479,7 @@ struct iOS26LiquidListRow: View {
 
     private func addToLibrary() {
         let primaryEdition = work.availableEditions.first
-        let entry = UserLibraryEntry.createOwnedEntry(
+        _ = UserLibraryEntry.createOwnedEntry(
             for: work,
             edition: primaryEdition ?? Edition(work: work),
             status: .toRead
@@ -488,12 +488,12 @@ struct iOS26LiquidListRow: View {
     }
 
     private func addToWishlist() {
-        let entry = UserLibraryEntry.createWishlistEntry(for: work)
+        _ = UserLibraryEntry.createWishlistEntry(for: work)
         // Add to SwiftData context
     }
 
     private func removeFromLibrary() {
-        guard let userEntry = userEntry else { return }
+        guard userEntry != nil else { return }
         // Remove from SwiftData context
     }
 }

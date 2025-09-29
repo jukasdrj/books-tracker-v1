@@ -71,7 +71,7 @@ final class BarcodeDetectionService {
 
     // MARK: - Initialization
 
-    init(configuration: Configuration = .default) {
+    nonisolated init(configuration: Configuration = .default) {
         self.configuration = configuration
     }
 

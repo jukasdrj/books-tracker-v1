@@ -307,7 +307,7 @@ struct ModernBarcodeScannerView: View {
 
         // Start the detection stream
         for await isbn in await detectionService.isbnDetectionStream(cameraManager: manager) {
-            await handleISBNDetected(isbn)
+            handleISBNDetected(isbn)
             break // Exit after first successful detection
         }
     }
@@ -359,7 +359,7 @@ struct ModernBarcodeScannerView: View {
 
             do {
                 try await manager.toggleTorch()
-                let torchState = await manager.isTorchOn
+                let torchState = manager.isTorchOn
                 await MainActor.run {
                     isTorchOn = torchState
                 }

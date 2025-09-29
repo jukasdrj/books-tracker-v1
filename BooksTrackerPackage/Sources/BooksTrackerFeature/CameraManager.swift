@@ -372,7 +372,7 @@ final class CameraManager: ObservableObject {
     // MARK: - Lifecycle Management
 
     /// Initialize lifecycle observers
-    init() {
+    nonisolated init() {
         setupAppLifecycleObservers()
     }
 
@@ -383,7 +383,7 @@ final class CameraManager: ObservableObject {
         // Cleanup will be handled by app lifecycle observers and explicit stopSession() calls
     }
 
-    private func setupAppLifecycleObservers() {
+    nonisolated private func setupAppLifecycleObservers() {
         NotificationCenter.default.addObserver(
             forName: UIApplication.willEnterForegroundNotification,
             object: nil,
