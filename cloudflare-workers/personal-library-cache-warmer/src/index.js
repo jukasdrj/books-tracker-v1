@@ -14,8 +14,84 @@ export default {
   },
   
   async fetch(request, env, ctx) {
-    // ... your existing fetch handler for CSV uploads, status checks, etc. ...
-    // This part of your code does not need to change.
+    const url = new URL(request.url);
+
+    if (request.method === 'GET' && url.pathname === '/status') {
+      // Status endpoint
+      const libraryData = await env.CACHE.get('current_library', 'json');
+      const state = await env.CACHE.get('processing_state', 'json') || { currentIndex: 0 };
+
+      return new Response(JSON.stringify({
+        status: 'running',
+        authors_count: libraryData?.authors?.length || 0,
+        current_index: state.currentIndex,
+        next_batch_in: '5 minutes (every 5 min cron)',
+        popular_authors: libraryData?.authors?.slice(0, 10) || []
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/upload-authors') {
+      // CSV upload endpoint
+      const text = await request.text();
+      const authors = text.split(',').map(a => a.trim()).filter(a => a.length > 0);
+
+      if (authors.length === 0) {
+        return new Response('No valid authors found', { status: 400 });
+      }
+
+      const libraryData = {
+        authors: authors,
+        uploaded_at: new Date().toISOString(),
+        count: authors.length
+      };
+
+      await env.CACHE.put('current_library', JSON.stringify(libraryData));
+
+      // Reset processing state
+      await env.CACHE.put('processing_state', JSON.stringify({ currentIndex: 0 }));
+
+      return new Response(JSON.stringify({
+        success: true,
+        message: `Uploaded ${authors.length} authors for cache warming`,
+        authors: authors
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/bootstrap-popular') {
+      // Bootstrap with popular authors
+      const popularAuthors = [
+        'Stephen King', 'J.K. Rowling', 'Andy Weir', 'Neil Gaiman', 'Margaret Atwood',
+        'George R.R. Martin', 'Brandon Sanderson', 'Agatha Christie', 'Isaac Asimov',
+        'Ursula K. Le Guin', 'Ray Bradbury', 'Douglas Adams', 'Terry Pratchett',
+        'Gillian Flynn', 'John Grisham', 'Dan Brown', 'Suzanne Collins', 'Toni Morrison',
+        'Harper Lee', 'F. Scott Fitzgerald', 'Ernest Hemingway', 'Jane Austen',
+        'George Orwell', 'Aldous Huxley', 'Kurt Vonnegut', 'Philip K. Dick',
+        'Octavia Butler', 'Liu Cixin', 'Kim Stanley Robinson'
+      ];
+
+      const libraryData = {
+        authors: popularAuthors,
+        uploaded_at: new Date().toISOString(),
+        count: popularAuthors.length,
+        type: 'bootstrap_popular'
+      };
+
+      await env.CACHE.put('current_library', JSON.stringify(libraryData));
+      await env.CACHE.put('processing_state', JSON.stringify({ currentIndex: 0 }));
+
+      return new Response(JSON.stringify({
+        success: true,
+        message: `Bootstrapped with ${popularAuthors.length} popular authors`,
+        authors: popularAuthors
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
     return new Response("Cache warmer is running on a schedule.", { status: 200 });
   }
 };
@@ -49,18 +125,19 @@ async function processMicroBatch(env, maxAuthors = 25) {
 
   for (const author of authorsToProcess) {
     try {
-      // ✅ CORRECT & EFFICIENT: Use direct RPC call
-      const result = await env.ISBNDB_WORKER.getAuthorBibliography(author);
+      // ✅ CORRECT: Use OpenLibrary worker for author bibliography
+      const result = await env.OPENLIBRARY_WORKER.getAuthorWorks(author);
 
       if (result.success && result.works) {
-        // Cache the result in the main proxy's format
-        await storeNormalizedCache(env, author, result);
-        console.log(`✅ Cached ${result.works.length} works for ${author} via RPC`);
+        // Transform OpenLibrary works to proxy cache format
+        const transformedResult = transformOpenLibraryToProxyFormat(result, author);
+        await storeNormalizedCache(env, author, transformedResult);
+        console.log(`✅ Cached ${result.works.length} works for ${author} via OpenLibrary RPC`);
       } else {
-        console.error(`Failed to get bibliography for ${author}: ${result.error}`);
+        console.error(`Failed to get bibliography for ${author}: ${result.error || 'No works found'}`);
       }
     } catch (error) {
-      console.error(`Error processing author ${author} via RPC:`, error);
+      console.error(`Error processing author ${author} via OpenLibrary RPC:`, error);
     }
   }
 
@@ -68,6 +145,55 @@ async function processMicroBatch(env, maxAuthors = 25) {
   state.currentIndex = endIndex;
   await env.CACHE.put('processing_state', JSON.stringify(state));
   console.log(`Micro-batch finished. Next run will start from index ${endIndex}.`);
+}
+
+/**
+ * Transform OpenLibrary author works response to books-api-proxy cache format
+ */
+function transformOpenLibraryToProxyFormat(openLibraryResult, authorName) {
+  const works = openLibraryResult.works || [];
+
+  // Transform each OpenLibrary work to Google Books API compatible format
+  const transformedItems = works.map(work => ({
+    kind: "books#volume",
+    id: work.openLibraryWorkKey || `ol-${work.title?.replace(/\s+/g, '-').toLowerCase()}`,
+    volumeInfo: {
+      title: work.title || 'Unknown Title',
+      subtitle: work.subtitle || "",
+      authors: [authorName], // Use the searched author name for consistency
+      publishedDate: work.firstPublicationYear?.toString() || "",
+      description: work.description || "",
+      industryIdentifiers: [],
+      pageCount: 0,
+      categories: work.subjects || [],
+      imageLinks: work.coverImageURL ? {
+        thumbnail: work.coverImageURL,
+        smallThumbnail: work.coverImageURL
+      } : undefined,
+
+      // Enhanced cross-reference identifiers from our OpenLibrary worker
+      crossReferenceIds: {
+        openLibraryWorkId: work.openLibraryWorkKey,
+        openLibraryEditionId: null,
+        goodreadsWorkIds: [],
+        amazonASINs: [],
+        googleBooksVolumeIds: [],
+        librarythingIds: [],
+        isbndbIds: []
+      }
+    }
+  }));
+
+  // Return in books-api-proxy response format
+  return {
+    kind: "books#volumes",
+    totalItems: transformedItems.length,
+    items: transformedItems,
+    format: "enhanced_work_edition_v1",
+    provider: "openlibrary-cache-warmer",
+    cached: true,
+    responseTime: 0
+  };
 }
 
 /**

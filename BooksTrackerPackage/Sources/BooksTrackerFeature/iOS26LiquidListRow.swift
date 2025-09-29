@@ -136,6 +136,31 @@ struct iOS26LiquidListRow: View {
                 }
             }
 
+            // Page count
+            if let edition = primaryEdition, let pageCount = edition.pageCount, pageCount > 0 {
+                HStack(spacing: 4) {
+                    Image(systemName: "book.pages")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                    Text("\(pageCount)p")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            // Publisher (if available)
+            if let edition = primaryEdition, let publisher = edition.publisher, !publisher.isEmpty {
+                HStack(spacing: 4) {
+                    Image(systemName: "building.2")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                    Text(publisher)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
+            }
+
             // Edition format
             if let edition = primaryEdition {
                 HStack(spacing: 4) {

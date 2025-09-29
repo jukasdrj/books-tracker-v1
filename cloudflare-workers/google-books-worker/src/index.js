@@ -190,7 +190,8 @@ function normalizeGoogleBooksResponse(apiResponse) {
         subtitle: volumeInfo.subtitle,
         authors: authors.map(name => ({ name })),
         editions: [],
-        firstPublishYear: extractYear(volumeInfo.publishedDate),
+        firstPublishYear: extractYear(volumeInfo.publishedDate),        // Keep for compatibility
+        firstPublicationYear: extractYear(volumeInfo.publishedDate),    // Add for transform compatibility
       });
     }
 
@@ -208,9 +209,11 @@ function normalizeGoogleBooksResponse(apiResponse) {
       title: volumeInfo.title,
       subtitle: volumeInfo.subtitle,
       publisher: volumeInfo.publisher,
-      publishDate: volumeInfo.publishedDate,
+      publishDate: volumeInfo.publishedDate,         // Keep for compatibility
+      publicationDate: volumeInfo.publishedDate,     // Add for transform compatibility
       publishYear: extractYear(volumeInfo.publishedDate),
-      pages: volumeInfo.pageCount,
+      pages: volumeInfo.pageCount,                   // Keep for compatibility
+      pageCount: volumeInfo.pageCount,               // Add for transform compatibility
       language: volumeInfo.language,
       genres: volumeInfo.categories || [],
       description: volumeInfo.description,

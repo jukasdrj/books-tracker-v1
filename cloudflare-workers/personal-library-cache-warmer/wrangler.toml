@@ -34,6 +34,11 @@ binding = "ISBNDB_WORKER"
 service = "isbndb-biography-worker-production"
 entrypoint = "ISBNdbWorker"
 
+[[services]]
+binding = "OPENLIBRARY_WORKER"
+service = "openlibrary-search-worker"
+entrypoint = "OpenLibraryWorker"
+
 [[kv_namespaces]]
 binding = "CACHE"
 id = "b9cade63b6db48fd80c109a013f38fdb"

@@ -249,7 +249,7 @@ async function handleGeneralSearch(request, env, ctx, headers) {
             const googleData = results[0].value;
             if (googleData.items) {
                 // This is Google Books API format - filter and transform directly
-                const filteredItems = filterGoogleBooksItems(googleData.items);
+                const filteredItems = filterGoogleBooksItems(googleData.items, query);
                 finalItems = [...finalItems, ...filteredItems];
             } else if (googleData.works) {
                 // This is normalized Work format - transform to Google Books format
@@ -269,11 +269,14 @@ async function handleGeneralSearch(request, env, ctx, headers) {
         // Deduplicate at the Google Books format level
         const dedupedItems = deduplicateGoogleBooksItems(finalItems);
 
+        // Apply final filtering to remove collections and unwanted items
+        const finalFilteredItems = filterGoogleBooksItems(dedupedItems, query);
+
         // Transform to Google Books API compatible format for iOS app
         const responseData = {
             kind: "books#volumes",
-            totalItems: dedupedItems.length,
-            items: dedupedItems,
+            totalItems: finalFilteredItems.length,
+            items: finalFilteredItems,
             format: "enhanced_work_edition_v1",
             provider: `orchestrated:${successfulProviders.join('+')}`,
             cached: false,
@@ -323,26 +326,70 @@ function transformWorkToGoogleFormat(work) {
             : [String(primaryEdition.authors)];
     }
 
+    // Collect external IDs from both work and edition level
+    const workExternalIds = work.externalIds || {};
+    const editionExternalIds = primaryEdition?.externalIds || {};
+
+    // Prepare industry identifiers including ISBNs and enhanced external IDs
+    const industryIdentifiers = [];
+
+    // Add ISBNs
+    if (primaryEdition?.isbn13) {
+        industryIdentifiers.push({ type: "ISBN_13", identifier: primaryEdition.isbn13 });
+    }
+    if (primaryEdition?.isbn10) {
+        industryIdentifiers.push({ type: "ISBN_10", identifier: primaryEdition.isbn10 });
+    }
+    // Fallback for legacy isbn field
+    if (primaryEdition?.isbn && !primaryEdition?.isbn13 && !primaryEdition?.isbn10) {
+        industryIdentifiers.push({ type: "ISBN_13", identifier: primaryEdition.isbn });
+    }
+
+    // Enhanced Google Books format with cross-reference IDs
+    const volumeInfo = {
+        title: work.title,
+        subtitle: work.subtitle || "",
+        authors: authors,
+        publisher: primaryEdition?.publisher || "",
+        publishedDate: work.firstPublicationYear ? work.firstPublicationYear.toString() : (primaryEdition?.publicationDate || primaryEdition?.publishedDate || ""),
+        description: work.description || primaryEdition?.description || "",
+        industryIdentifiers: industryIdentifiers,
+        pageCount: primaryEdition?.pageCount || 0,
+        categories: work.subjects || work.categories || [],
+        imageLinks: primaryEdition?.coverImageURL ? {
+            thumbnail: primaryEdition.coverImageURL,
+            smallThumbnail: primaryEdition.coverImageURL
+        } : undefined,
+
+        // Enhanced cross-reference identifiers for future provider integration
+        crossReferenceIds: {
+            // OpenLibrary IDs
+            openLibraryWorkId: workExternalIds.openLibraryWorkId || work.openLibraryWorkKey,
+            openLibraryEditionId: editionExternalIds.openLibraryEditionId || workExternalIds.openLibraryEditionId,
+
+            // Commercial platform IDs
+            goodreadsWorkIds: [...(workExternalIds.goodreadsWorkIds || []), ...(editionExternalIds.goodreadsWorkIds || [])],
+            amazonASINs: [...(workExternalIds.amazonASINs || []), ...(editionExternalIds.amazonASINs || [])],
+            googleBooksVolumeIds: [...(workExternalIds.googleBooksVolumeIds || []), ...(editionExternalIds.googleBooksVolumeIds || [])],
+
+            // Future provider IDs
+            librarythingIds: [...(workExternalIds.librarythingIds || []), ...(editionExternalIds.librarythingIds || [])],
+            isbndbIds: [...(workExternalIds.isbndbIds || []), ...(editionExternalIds.isbndbIds || [])]
+        }
+    };
+
+    // Determine best ID for the volume
+    const volumeId = work.id ||
+                    workExternalIds.googleBooksVolumeIds?.[0] ||
+                    workExternalIds.openLibraryWorkId ||
+                    work.openLibraryWorkKey ||
+                    work.googleBooksVolumeID ||
+                    `synthetic-${work.title.replace(/\s+/g, '-').toLowerCase()}`;
+
     return {
         kind: "books#volume",
-        id: work.id || work.openLibraryID || work.googleBooksVolumeID || `synthetic-${work.title.replace(/\s+/g, '-').toLowerCase()}`,
-        volumeInfo: {
-            title: work.title,
-            subtitle: work.subtitle || "",
-            authors: authors,
-            publisher: primaryEdition?.publisher || "",
-            publishedDate: work.firstPublicationYear ? work.firstPublicationYear.toString() : (primaryEdition?.publicationDate || primaryEdition?.publishedDate || ""),
-            description: work.description || primaryEdition?.description || "",
-            industryIdentifiers: primaryEdition?.isbn ? [
-                { type: "ISBN_13", identifier: primaryEdition.isbn }
-            ] : [],
-            pageCount: primaryEdition?.pageCount || 0,
-            categories: work.subjects || work.categories || [],
-            imageLinks: primaryEdition?.coverImageURL ? {
-                thumbnail: primaryEdition.coverImageURL,
-                smallThumbnail: primaryEdition.coverImageURL
-            } : undefined
-        }
+        id: volumeId,
+        volumeInfo: volumeInfo
     };
 }
 
@@ -354,7 +401,7 @@ function filterPrimaryWorks(works) {
     if (!works || !Array.isArray(works)) return [];
 
     const excludePatterns = [
-        // Collections and box sets
+        // Collections and box sets - more aggressive
         /collection/i,
         /set\b/i,
         /series\b/i,
@@ -362,31 +409,45 @@ function filterPrimaryWorks(works) {
         /box set/i,
         /\d+-book/i,
         /bundle/i,
+        /\bbinge\b/i,                    // "Binge Reads"
+        /compilation/i,
+        /omnibus/i,
 
-        // Study materials
+        // Study materials - enhanced
         /study guide/i,
         /conversation starter/i,
+        /conversation starters/i,        // Plural form
         /summary/i,
         /analysis/i,
         /cliff.*notes/i,
         /sparknotes/i,
         /discussion/i,
         /questions/i,
+        /study.*notes/i,
 
-        // Special editions and formats
+        // Special editions and formats (but not primary graphic novels)
         /annotated/i,
         /illustrated/i,
-        /graphic novel/i,
         /companion/i,
         /workbook/i,
         /journal/i,
         /diary/i,
+
+        // Exclude graphic novels only if they're supplementary (not primary works)
+        /graphic novel.*guide/i,
+        /graphic novel.*companion/i,
 
         // Meta books about the author/work
         /about\s+\w+/i,
         /guide to/i,
         /understanding/i,
         /introduction to/i,
+
+        // Publisher-specific exclusions for study materials
+        /by.*daily.*books/i,
+        /\|.*conversation/i,            // "Title | Conversation Starters"
+        /\|.*summary/i,                 // "Title | Summary"
+        /\|.*study/i,                   // "Title | Study Guide"
     ];
 
     const includeIfContains = [
@@ -475,21 +536,30 @@ function calculateSimilarity(str1, str2) {
 /**
  * Filter Google Books API items to remove collections and non-primary works
  */
-function filterGoogleBooksItems(items) {
+function filterGoogleBooksItems(items, searchQuery = '') {
     if (!items || !Array.isArray(items)) return [];
 
+    // Extract potential author name from search query for validation
+    const queryLower = searchQuery.toLowerCase();
+    const isAuthorSearch = queryLower.includes(' ') && !queryLower.includes('the ') && !queryLower.includes('a ');
+    const potentialAuthor = isAuthorSearch ? queryLower : null;
+
     const excludePatterns = [
-        // Collections and box sets
+        // Collections and box sets - more aggressive
         /collection/i,
         /set\b/i,
         /boxed/i,
         /box set/i,
         /\d+-book/i,
         /bundle/i,
+        /\bbinge\b/i,                    // "Binge Reads"
+        /compilation/i,
+        /omnibus/i,
 
-        // Study materials and guides
+        // Study materials and guides - enhanced
         /study guide/i,
         /conversation starter/i,
+        /conversation starters/i,        // Plural form
         /summary/i,
         /analysis/i,
         /cliff.*notes/i,
@@ -497,6 +567,7 @@ function filterGoogleBooksItems(items) {
         /discussion/i,
         /questions/i,
         /workbook/i,
+        /study.*notes/i,
 
         // Meta books about the author/work
         /about\s+\w+/i,
@@ -504,6 +575,12 @@ function filterGoogleBooksItems(items) {
         /understanding/i,
         /introduction to/i,
         /companion/i,
+
+        // Publisher-specific exclusions for study materials
+        /by.*daily.*books/i,
+        /\|.*conversation/i,            // "Title | Conversation Starters"
+        /\|.*summary/i,                 // "Title | Summary"
+        /\|.*study/i,                   // "Title | Study Guide"
     ];
 
     return items.filter(item => {
@@ -523,6 +600,22 @@ function filterGoogleBooksItems(items) {
         const pageCount = volumeInfo.pageCount || 0;
         if (pageCount > 0 && pageCount < 10) {
             return false;
+        }
+
+        // Author validation for author searches
+        if (potentialAuthor && volumeInfo.authors) {
+            const authors = volumeInfo.authors || [];
+            const authorsText = authors.join(' ').toLowerCase();
+
+            // Check if any of the search terms appear in the author names
+            const searchTerms = potentialAuthor.split(' ').filter(term => term.length > 2);
+            const hasMatchingAuthor = searchTerms.some(term => authorsText.includes(term));
+
+            // If this appears to be an author search but no author matches, filter out
+            // Exception: keep obvious study materials that might be legitimately about the author
+            if (!hasMatchingAuthor && !fullTitle.includes('about') && !fullTitle.includes('guide')) {
+                return false;
+            }
         }
 
         return true;

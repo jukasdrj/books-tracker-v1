@@ -11,10 +11,17 @@ public final class Work: Identifiable {
     var subjectTags: [String] = []
 
     // External API identifiers for syncing and deduplication
-    var openLibraryID: String?      // e.g., "OL123456W"
+    var openLibraryID: String?      // e.g., "OL123456W" (legacy, prefer openLibraryWorkID)
+    var openLibraryWorkID: String?  // OpenLibrary Work ID
     var isbndbID: String?          // ISBNDB work/book identifier
     var googleBooksVolumeID: String? // e.g., "beSP5CCpiGUC"
-    var goodreadsID: String?       // Goodreads work ID (future)
+    var goodreadsID: String?       // Goodreads work ID (legacy, prefer goodreadsWorkIDs)
+
+    // Enhanced cross-reference identifiers (arrays for multiple IDs)
+    var goodreadsWorkIDs: [String] = []      // Multiple Goodreads work IDs
+    var amazonASINs: [String] = []           // Amazon ASINs from various providers
+    var librarythingIDs: [String] = []       // LibraryThing identifiers
+    var googleBooksVolumeIDs: [String] = []  // Google Books volume IDs
 
     // Cache optimization for ISBNDB integration
     var lastISBNDBSync: Date?       // When this work was last synced with ISBNDB
@@ -135,6 +142,73 @@ public final class Work: Identifiable {
     /// Update last modified timestamp
     func touch() {
         lastModified = Date()
+    }
+
+    // MARK: - External ID Management
+
+    /// Add a Goodreads Work ID if not already present
+    func addGoodreadsWorkID(_ id: String) {
+        guard !id.isEmpty && !goodreadsWorkIDs.contains(id) else { return }
+        goodreadsWorkIDs.append(id)
+        touch()
+    }
+
+    /// Add an Amazon ASIN if not already present
+    func addAmazonASIN(_ asin: String) {
+        guard !asin.isEmpty && !amazonASINs.contains(asin) else { return }
+        amazonASINs.append(asin)
+        touch()
+    }
+
+    /// Add a LibraryThing ID if not already present
+    func addLibraryThingID(_ id: String) {
+        guard !id.isEmpty && !librarythingIDs.contains(id) else { return }
+        librarythingIDs.append(id)
+        touch()
+    }
+
+    /// Add a Google Books Volume ID if not already present
+    func addGoogleBooksVolumeID(_ id: String) {
+        guard !id.isEmpty && !googleBooksVolumeIDs.contains(id) else { return }
+        googleBooksVolumeIDs.append(id)
+        touch()
+    }
+
+    /// Merge external IDs from API response
+    func mergeExternalIDs(from crossReferenceIds: [String: Any]) {
+        if let goodreadsIDs = crossReferenceIds["goodreadsWorkIds"] as? [String] {
+            goodreadsIDs.forEach { addGoodreadsWorkID($0) }
+        }
+
+        if let asins = crossReferenceIds["amazonASINs"] as? [String] {
+            asins.forEach { addAmazonASIN($0) }
+        }
+
+        if let ltIDs = crossReferenceIds["librarythingIds"] as? [String] {
+            ltIDs.forEach { addLibraryThingID($0) }
+        }
+
+        if let gbIDs = crossReferenceIds["googleBooksVolumeIds"] as? [String] {
+            gbIDs.forEach { addGoogleBooksVolumeID($0) }
+        }
+
+        // Handle OpenLibrary Work ID
+        if let olWorkId = crossReferenceIds["openLibraryWorkId"] as? String, !olWorkId.isEmpty {
+            self.openLibraryWorkID = olWorkId
+            touch()
+        }
+    }
+
+    /// Get all external IDs as a dictionary for API integration
+    var externalIDsDictionary: [String: Any] {
+        return [
+            "openLibraryWorkId": openLibraryWorkID ?? "",
+            "goodreadsWorkIds": goodreadsWorkIDs,
+            "amazonASINs": amazonASINs,
+            "librarythingIds": librarythingIDs,
+            "googleBooksVolumeIds": googleBooksVolumeIDs,
+            "isbndbId": isbndbID ?? ""
+        ]
     }
 }
 

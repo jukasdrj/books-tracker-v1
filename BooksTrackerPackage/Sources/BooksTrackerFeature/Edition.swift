@@ -18,10 +18,16 @@ public final class Edition: Identifiable {
     var editionTitle: String? // "Deluxe Edition", "Abridged", etc.
 
     // External API identifiers for syncing and deduplication
-    var openLibraryID: String?      // e.g., "OL123456M" (M for edition/manifest)
+    var openLibraryID: String?      // e.g., "OL123456M" (legacy, prefer openLibraryEditionID)
+    var openLibraryEditionID: String?  // OpenLibrary Edition ID
     var isbndbID: String?          // ISBNDB edition identifier
     var googleBooksVolumeID: String? // e.g., "beSP5CCpiGUC" (same as Work for Google Books)
-    var goodreadsID: String?       // Goodreads edition ID (future)
+    var goodreadsID: String?       // Goodreads edition ID (legacy, prefer arrays)
+
+    // Enhanced cross-reference identifiers (arrays for multiple IDs)
+    var amazonASINs: [String] = []           // Amazon ASINs for this specific edition
+    var googleBooksVolumeIDs: [String] = []  // Google Books volume IDs for this edition
+    var librarythingIDs: [String] = []       // LibraryThing edition identifiers
 
     // Cache optimization for ISBNDB integration
     var lastISBNDBSync: Date?       // When this edition was last synced with ISBNDB
@@ -150,6 +156,61 @@ public final class Edition: Identifiable {
     func hasISBN(_ searchISBN: String) -> Bool {
         let cleanSearch = searchISBN.trimmingCharacters(in: .whitespacesAndNewlines)
         return isbn == cleanSearch || isbns.contains(cleanSearch)
+    }
+
+    // MARK: - External ID Management
+
+    /// Add an Amazon ASIN if not already present
+    func addAmazonASIN(_ asin: String) {
+        guard !asin.isEmpty && !amazonASINs.contains(asin) else { return }
+        amazonASINs.append(asin)
+        touch()
+    }
+
+    /// Add a Google Books Volume ID if not already present
+    func addGoogleBooksVolumeID(_ id: String) {
+        guard !id.isEmpty && !googleBooksVolumeIDs.contains(id) else { return }
+        googleBooksVolumeIDs.append(id)
+        touch()
+    }
+
+    /// Add a LibraryThing ID if not already present
+    func addLibraryThingID(_ id: String) {
+        guard !id.isEmpty && !librarythingIDs.contains(id) else { return }
+        librarythingIDs.append(id)
+        touch()
+    }
+
+    /// Merge external IDs from API response
+    func mergeExternalIDs(from crossReferenceIds: [String: Any]) {
+        if let asins = crossReferenceIds["amazonASINs"] as? [String] {
+            asins.forEach { addAmazonASIN($0) }
+        }
+
+        if let gbIDs = crossReferenceIds["googleBooksVolumeIds"] as? [String] {
+            gbIDs.forEach { addGoogleBooksVolumeID($0) }
+        }
+
+        if let ltIDs = crossReferenceIds["librarythingIds"] as? [String] {
+            ltIDs.forEach { addLibraryThingID($0) }
+        }
+
+        // Handle OpenLibrary Edition ID
+        if let olEditionId = crossReferenceIds["openLibraryEditionId"] as? String, !olEditionId.isEmpty {
+            self.openLibraryEditionID = olEditionId
+            touch()
+        }
+    }
+
+    /// Get all external IDs as a dictionary for API integration
+    var externalIDsDictionary: [String: Any] {
+        return [
+            "openLibraryEditionId": openLibraryEditionID ?? "",
+            "amazonASINs": amazonASINs,
+            "googleBooksVolumeIds": googleBooksVolumeIDs,
+            "librarythingIds": librarythingIDs,
+            "isbndbId": isbndbID ?? ""
+        ]
     }
 
     /// Update last modified timestamp
