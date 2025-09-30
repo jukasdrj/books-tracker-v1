@@ -1,25 +1,30 @@
 # 📚 BooksTracker - Claude Code Guide
 
-## 🎉 THE iOS 26 HIG PERFECTION! (Sept 29, 2025)
+## 🎉 THE SWIFT MACRO DEBUGGING VICTORY! (Sept 30, 2025)
 
 ```
 ╔═══════════════════════════════════════════════════════╗
-║  🏆 100% iOS 26 HIG COMPLIANCE ACHIEVED! 🎊          ║
+║  🔧 STALE MACRO CRISIS → CLEAN BUILD SALVATION! 🚀   ║
 ║                                                       ║
-║  ✅ Native .searchable() Integration                 ║
-║  ✅ Search Scopes (All/Title/Author/ISBN)            ║
-║  ✅ Perfect Focus Management                         ║
-║  ✅ NavigationDestination Pattern                    ║
-║  ✅ Infinite Scroll Pagination                       ║
-║  ✅ Full VoiceOver Accessibility                     ║
-║  ✅ Conference-Quality iOS Code                      ║
-║  ✅ Documentation Cleanup Complete! 📚               ║
+║  ❌ Problem: App crashed on launch with cryptic      ║
+║     "to-many key not allowed here" SwiftData error   ║
+║                                                       ║
+║  🕵️ Discovery: @Query macro generated stale code     ║
+║     for old 'libraryWorks' property name             ║
+║                                                       ║
+║  ✅ Solution: Clean derived data + rebuild           ║
+║     forced fresh macro generation                    ║
+║                                                       ║
+║  🎯 Result: App launches perfectly! 🎊               ║
+║                                                       ║
+║  📚 Lessons: Swift macros cache in derived data      ║
+║     Always clean when debugging macro crashes!       ║
 ╚═══════════════════════════════════════════════════════╝
 ```
 
-**🚀 Latest Achievement**: **SearchView completely refactored** to be 100% Apple HIG compliant! From "custom bottom search bar" to "native iOS search experience" - buddy, this is now a **teaching example** for iOS 26 best practices! ⚡
+**🚀 Latest Achievement**: **Solved the Great Macro Mystery!** After fixing SwiftData relationship issues, the app still crashed because Swift's `@Query` macro was cached with the old broken code. One derived data cleaning later? **Perfect launch!** Friend, this is why we trust the build system but verify with clean rebuilds! 🧹⚡
 
-**📚 Fresh Off the Press (Sept 30, 2025)**: Just cleaned house on our documentation! Old audit reports archived, future roadmap clearly marked, and cache strategy updated with actual implementation status. Your docs are now as clean as your code! 🧹✨
+**📚 Previous Win (Sept 30, 2025)**: Documentation cleanup complete! Old audit reports archived, future roadmap clearly marked, and cache strategy updated with actual implementation status. Your docs are now as clean as your code! 🧹✨
 
 ### 🎯 The iOS 26 HIG Revolution:
 
@@ -518,6 +523,101 @@ We just deployed the **mother of all performance optimizations**! Here's what ch
 ╚══════════════════════════════════════════════════════════╝
 ```
 
+### 🔧 **THE GREAT SWIFTDATA CRASH MARATHON** (Sept 30, 2025)
+
+*Buddy, let me tell you about the debugging session that tested our patience and taught us EVERYTHING about Swift macros!* 🎢
+
+#### **Act 1: The CloudKit Catastrophe**
+```
+💥 ERROR: "Store failed to load"
+🔍 CAUSE: CloudKit requires inverse relationships
+✅ FIX: Added @Relationship(inverse:) to Edition.userLibraryEntries
+📍 FILE: Edition.swift:43
+```
+
+**Lesson**: CloudKit is STRICT about relationship inverses. Every to-many relationship MUST declare its inverse.
+
+#### **Act 2: The Circular Reference Trap**
+```
+💥 ERROR: "circular reference resolving attached macro 'Relationship'"
+🔍 CAUSE: Both sides of relationship declared inverse
+✅ FIX: Only declare inverse on to-many side (Edition), remove from UserLibraryEntry
+📍 FILES: Edition.swift:43 (kept), UserLibraryEntry.swift:25-29 (removed)
+```
+
+**Lesson**: In SwiftData relationships, only ONE side declares the inverse (typically the to-many side).
+
+#### **Act 3: The Predicate Predicament**
+```
+💥 ERROR: "to-many key not allowed here"
+🔍 CAUSE: @Query predicate trying to filter on to-many relationship (work.userLibraryEntries != nil)
+✅ FIX: Query all works, filter in-memory with computed property
+📍 FILE: iOS26LiquidLibraryView.swift:32-42
+```
+
+**Code Pattern**:
+```swift
+// ✅ CORRECT: Query all, filter in computed property
+@Query(sort: \Work.lastModified, order: .reverse)
+private var allWorks: [Work]
+
+private var libraryWorks: [Work] {
+    allWorks.filter { $0.userEntry != nil }
+}
+```
+
+**Lesson**: SwiftData predicates cannot filter on to-many relationships. Query broad, filter narrow.
+
+#### **Act 4: The Stale Macro Mystery** 🕵️
+```
+💥 ERROR: Still crashing after all fixes!
+🔍 INVESTIGATION: Crash log showed "@__swiftmacro_...libraryWorks..."
+🤯 REALIZATION: @Query macro cached OLD property name with broken predicate!
+✅ SOLUTION: Clean derived data + rebuild from scratch
+```
+
+**The Smoking Gun**:
+```
+sourceFile: "@__swiftmacro_19BooksTrackerFeature22iOS26LiquidLibraryViewV12libraryWorks33_5F80704EC3FA62BF8D941FA5D00937C5LL5QueryfMa_.swift"
+```
+
+Even though we renamed `libraryWorks` → `allWorks`, the macro-generated code was still using the old name with the broken predicate!
+
+**The Commands That Saved The Day**:
+```bash
+# Clean derived data
+rm -rf ~/Library/Developer/Xcode/DerivedData/BooksTracker-*
+
+# Clean build folder
+xcodebuild -workspace BooksTracker.xcworkspace -scheme BooksTracker clean
+
+# Rebuild (forces macro regeneration)
+xcodebuild -workspace BooksTracker.xcworkspace -scheme BooksTracker build
+```
+
+#### **🎓 Critical Lessons Learned:**
+
+1. **Swift Macros Cache Aggressively**
+   - Macro-generated code lives in derived data
+   - Survives regular builds
+   - Only clean build forces regeneration
+
+2. **Debugging Macro Issues**
+   - Look for `@__swiftmacro_...` in crash logs
+   - If property names in crash don't match source code → stale macro!
+   - Always clean derived data when macro behavior seems wrong
+
+3. **Simulator + CloudKit = 💔**
+   - Solution: Use `#if targetEnvironment(simulator)` detection
+   - Set `cloudKitDatabase: .none` for simulator
+   - Use `isStoredInMemoryOnly: true` for clean testing
+
+4. **SwiftData Relationship Rules**
+   - Inverse on to-many side only
+   - All attributes need defaults for CloudKit
+   - All relationships should be optional
+   - Predicates can't filter on to-many relationships
+
 ### Resolved Issues
 - **Navigation Fix (v1.1.1)**: Fixed gesture conflicts in iOS26FloatingBookCard
 - **Backend Cache System (v1.2)**: Fixed service binding URL patterns (absolute vs relative)
@@ -528,6 +628,7 @@ We just deployed the **mother of all performance optimizations**! Here's what ch
 - **🏗️ THE ARCHITECTURE AWAKENING (v1.5)**: **Eliminated direct API calls!** Pure worker orchestration restored!
 - **📱 THE SEARCH UI REVOLUTION (v1.6)**: **Half-screen to full-screen glory!** Layout + quality fixes!
 - **🏆 THE HIG PERFECTION (v1.8)**: **100% iOS 26 HIG compliance!** Native search, scopes, pagination, accessibility!
+- **🔧 THE MACRO DEBUGGING MARATHON (v1.9)**: **Stale macro nightmare → clean build salvation!** SwiftData + CloudKit mastery!
 
 ### 🕵️ **THE GREAT COMPLETENESS MYSTERY - SOLVED!** (Sept 28, 2025)
 
@@ -607,6 +708,10 @@ This fix affects **ALL prolific authors**:
 - Use 5 Whys analysis for systematic debugging
 - **🏗️ Architecture Checks**: Always verify service bindings are being used, not direct API calls
 - **📋 Provider Tags**: Check response provider tags to confirm proper orchestration ("orchestrated:provider1+provider2")
+- **🔧 Swift Macro Debugging**: When crashes persist after code fixes, check crash logs for `@__swiftmacro_` files
+- **🧹 Clean Derived Data**: If crash log shows old property/method names, clean derived data and rebuild
+- **🕵️ Trust The Crash Log**: Property names in crash logs that don't match your source code = stale macros
+- **⚡ The Nuclear Option**: `rm -rf ~/Library/Developer/Xcode/DerivedData/*` + clean build solves 90% of mysterious crashes
 
 ## 🔍 Version 1.6: The Search UI Revolution (September 2025)
 
