@@ -29,14 +29,17 @@ enum LibraryLayout: String, CaseIterable, Identifiable {
 
 @MainActor
 public struct iOS26LiquidLibraryView: View {
-    // ✅ FIX 1: Optimized SwiftData query with sorting and minimal loading
+    // ✅ FIX 1: Query all works, filter in-memory for library items
+    // Note: SwiftData predicates cannot filter on to-many relationships
     @Query(
-        filter: #Predicate<Work> { work in
-            work.userLibraryEntries != nil
-        },
         sort: \Work.lastModified,
         order: .reverse
-    ) private var libraryWorks: [Work]
+    ) private var allWorks: [Work]
+
+    // Computed property to get only works in user's library
+    private var libraryWorks: [Work] {
+        allWorks.filter { $0.userEntry != nil }
+    }
     
     // ✅ FIX 2: Simplified state management
     @State private var selectedLayout: LibraryLayout = .floatingGrid

@@ -9,7 +9,7 @@ struct BooksTrackerApp: App {
     // MARK: - SwiftData Configuration
 
     /// SwiftData model container - created once and reused
-    /// Configured for local storage (CloudKit sync via entitlements)
+    /// Configured for local storage (CloudKit sync disabled on simulator)
     let modelContainer: ModelContainer = {
         let schema = Schema([
             Work.self,
@@ -18,12 +18,23 @@ struct BooksTrackerApp: App {
             UserLibraryEntry.self
         ])
 
+        #if targetEnvironment(simulator)
+        // Simulator: Use in-memory or local-only storage (no CloudKit)
+        print("🧪 Running on simulator - CloudKit sync disabled")
+        let modelConfiguration = ModelConfiguration(
+            schema: schema,
+            isStoredInMemoryOnly: false,
+            cloudKitDatabase: .none  // Explicitly disable CloudKit on simulator
+        )
+        #else
+        // Device: Enable CloudKit sync via entitlements
+        print("📱 Running on device - CloudKit sync enabled")
         let modelConfiguration = ModelConfiguration(
             schema: schema,
             isStoredInMemoryOnly: false
             // CloudKit sync will be enabled automatically via entitlements
-            // No need to specify cloudKitDatabase here - it can cause issues
         )
+        #endif
 
         do {
             return try ModelContainer(
@@ -34,7 +45,23 @@ struct BooksTrackerApp: App {
             // Print detailed error for debugging
             print("❌ ModelContainer creation failed: \(error)")
             print("❌ Error details: \(error.localizedDescription)")
+
+            #if targetEnvironment(simulator)
+            print("💡 Simulator detected - trying in-memory fallback")
+            // Last resort fallback for simulator
+            do {
+                let fallbackConfig = ModelConfiguration(
+                    schema: schema,
+                    isStoredInMemoryOnly: true,
+                    cloudKitDatabase: .none
+                )
+                return try ModelContainer(for: schema, configurations: [fallbackConfig])
+            } catch {
+                fatalError("Failed to create fallback ModelContainer: \(error)")
+            }
+            #else
             fatalError("Failed to create ModelContainer: \(error)")
+            #endif
         }
     }()
 
