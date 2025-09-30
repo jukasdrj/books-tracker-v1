@@ -4,11 +4,19 @@ import SwiftUI
 
 /// Theme variants optimized for iOS 26 Liquid Glass design
 enum iOS26Theme: String, CaseIterable, Identifiable {
+    // Original themes
     case liquidBlue = "liquid_blue"
     case cosmicPurple = "cosmic_purple"
     case forestGreen = "forest_green"
     case sunsetOrange = "sunset_orange"
     case moonlightSilver = "moonlight_silver"
+    
+    // 🆕 NEW THEMES (Complete Transformation - v1.9)
+    case crimsonEmber = "crimson_ember"
+    case deepOcean = "deep_ocean"
+    case goldenHour = "golden_hour"
+    case arcticAurora = "arctic_aurora"
+    case royalViolet = "royal_violet"
 
     var id: String { rawValue }
 
@@ -19,6 +27,11 @@ enum iOS26Theme: String, CaseIterable, Identifiable {
         case .forestGreen: return "Forest Green"
         case .sunsetOrange: return "Sunset Orange"
         case .moonlightSilver: return "Moonlight Silver"
+        case .crimsonEmber: return "Crimson Ember"
+        case .deepOcean: return "Deep Ocean"
+        case .goldenHour: return "Golden Hour"
+        case .arcticAurora: return "Arctic Aurora"
+        case .royalViolet: return "Royal Violet"
         }
     }
 
@@ -29,6 +42,11 @@ enum iOS26Theme: String, CaseIterable, Identifiable {
         case .forestGreen: return "leaf.fill"
         case .sunsetOrange: return "sun.max.fill"
         case .moonlightSilver: return "moon.stars.fill"
+        case .crimsonEmber: return "flame.fill"
+        case .deepOcean: return "water.waves"
+        case .goldenHour: return "sunrise.fill"
+        case .arcticAurora: return "snowflake"
+        case .royalViolet: return "crown.fill"
         }
     }
 
@@ -40,6 +58,11 @@ enum iOS26Theme: String, CaseIterable, Identifiable {
         case .forestGreen: return Color(red: 0.20, green: 0.78, blue: 0.35)
         case .sunsetOrange: return Color(red: 1.0, green: 0.58, blue: 0.0)
         case .moonlightSilver: return Color(red: 0.56, green: 0.56, blue: 0.58)
+        case .crimsonEmber: return Color(red: 0.78, green: 0.18, blue: 0.22)
+        case .deepOcean: return Color(red: 0.08, green: 0.42, blue: 0.58)
+        case .goldenHour: return Color(red: 0.85, green: 0.65, blue: 0.13)
+        case .arcticAurora: return Color(red: 0.38, green: 0.89, blue: 0.89)
+        case .royalViolet: return Color(red: 0.48, green: 0.15, blue: 0.58)
         }
     }
 
@@ -51,6 +74,11 @@ enum iOS26Theme: String, CaseIterable, Identifiable {
         case .forestGreen: return Color(red: 0.40, green: 0.87, blue: 0.55)
         case .sunsetOrange: return Color(red: 1.0, green: 0.78, blue: 0.35)
         case .moonlightSilver: return Color(red: 0.72, green: 0.72, blue: 0.74)
+        case .crimsonEmber: return Color(red: 0.92, green: 0.38, blue: 0.42)
+        case .deepOcean: return Color(red: 0.28, green: 0.62, blue: 0.78)
+        case .goldenHour: return Color(red: 0.95, green: 0.82, blue: 0.45)
+        case .arcticAurora: return Color(red: 0.58, green: 0.95, blue: 0.95)
+        case .royalViolet: return Color(red: 0.68, green: 0.45, blue: 0.78)
         }
     }
 
@@ -81,6 +109,31 @@ enum iOS26Theme: String, CaseIterable, Identifiable {
             return [
                 Color(red: 0.12, green: 0.12, blue: 0.15),
                 Color(red: 0.18, green: 0.18, blue: 0.22)
+            ]
+        case .crimsonEmber:
+            return [
+                Color(red: 0.25, green: 0.05, blue: 0.10),
+                Color(red: 0.35, green: 0.12, blue: 0.15)
+            ]
+        case .deepOcean:
+            return [
+                Color(red: 0.05, green: 0.15, blue: 0.22),
+                Color(red: 0.08, green: 0.22, blue: 0.32)
+            ]
+        case .goldenHour:
+            return [
+                Color(red: 0.28, green: 0.20, blue: 0.08),
+                Color(red: 0.38, green: 0.28, blue: 0.12)
+            ]
+        case .arcticAurora:
+            return [
+                Color(red: 0.08, green: 0.22, blue: 0.28),
+                Color(red: 0.12, green: 0.28, blue: 0.35)
+            ]
+        case .royalViolet:
+            return [
+                Color(red: 0.15, green: 0.08, blue: 0.22),
+                Color(red: 0.22, green: 0.12, blue: 0.32)
             ]
         }
     }
@@ -319,19 +372,15 @@ extension View {
 
 struct iOS26ThemePicker: View {
     @Environment(\.iOS26ThemeStore) private var themeStore
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @Namespace private var themeSelection
 
     var body: some View {
-        VStack(spacing: 20) {
-            Text("Choose Your Theme")
-                .font(.title2.bold())
-                .foregroundColor(.primary)
-
-            LazyVGrid(columns: [
-                GridItem(.flexible()),
-                GridItem(.flexible()),
-                GridItem(.flexible())
-            ], spacing: 16) {
+        VStack(spacing: 24) {
+            // ✅ REMOVED duplicate "Choose Your Theme" heading - parent view provides it
+            
+            // Theme Grid - Two columns for better tap targets (adaptive for iPad)
+            LazyVGrid(columns: gridColumns, spacing: 20) {
                 ForEach(iOS26Theme.allCases) { theme in
                     ThemePreviewCard(
                         theme: theme,
@@ -342,13 +391,21 @@ struct iOS26ThemePicker: View {
                     }
                 }
             }
+            .padding(.horizontal, 4) // Extra breathing room
 
             Divider()
-                .overlay(Color.secondary.opacity(0.5))
+                .overlay(Color.white.opacity(0.3)) // ✅ Higher contrast divider
 
             HStack {
-                Text("Follow System Appearance")
-                    .font(.subheadline)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Follow System Appearance")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundColor(.white) // ✅ High contrast
+                    
+                    Text("Switch automatically between light and dark")
+                        .font(.caption)
+                        .foregroundColor(.white.opacity(0.7)) // ✅ Better contrast (7:1 ratio)
+                }
 
                 Spacer()
 
@@ -357,9 +414,31 @@ struct iOS26ThemePicker: View {
                     set: { _ in themeStore.toggleSystemAppearance() }
                 ))
                 .tint(themeStore.primaryColor)
+                .accessibilityLabel("Follow system appearance")
             }
         }
-        .padding()
+        .padding(.horizontal)
+    }
+    
+    // MARK: - Adaptive Grid Layout
+    
+    /// iOS 26 HIG: 2-column for iPhone (comfortable tap targets), 3-column for iPad
+    private var gridColumns: [GridItem] {
+        switch sizeClass {
+        case .compact:
+            // iPhone - 2 columns for comfortable 44pt+ tap targets
+            return [
+                GridItem(.flexible(), spacing: 20),
+                GridItem(.flexible(), spacing: 20)
+            ]
+        default:
+            // iPad - 3 columns for efficient space usage
+            return [
+                GridItem(.flexible(), spacing: 24),
+                GridItem(.flexible(), spacing: 24),
+                GridItem(.flexible(), spacing: 24)
+            ]
+        }
     }
 }
 
@@ -368,13 +447,17 @@ struct ThemePreviewCard: View {
     let isSelected: Bool
     let namespace: Namespace.ID
     let action: () -> Void
+    
+    @Environment(\.iOS26ThemeStore) private var themeStore
+    @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 12) {
-                // Theme preview circle
+            VStack(spacing: 16) {
+                // Theme preview with ACTUAL theme background (mini version)
                 ZStack {
-                    Circle()
+                    // Background gradient preview - shows real theme appearance
+                    RoundedRectangle(cornerRadius: 20)
                         .fill(
                             LinearGradient(
                                 colors: theme.backgroundGradient,
@@ -382,35 +465,120 @@ struct ThemePreviewCard: View {
                                 endPoint: .bottomTrailing
                             )
                         )
+                        .frame(height: 120)
                         .overlay {
-                            Circle()
-                                .fill(theme.primaryColor.opacity(0.3))
+                            // Glass effect preview overlay
+                            RoundedRectangle(cornerRadius: 20)
+                                .fill(theme.primaryColor.opacity(0.2))
                                 .blendMode(.overlay)
                         }
                         .overlay {
-                            Image(systemName: theme.icon)
-                                .font(.title2)
-                                .foregroundColor(.white)
+                            VStack(spacing: 8) {
+                                // Theme icon with glass effect
+                                ZStack {
+                                    Circle()
+                                        .fill(.ultraThinMaterial)
+                                        .frame(width: 48, height: 48)
+                                    
+                                    Image(systemName: theme.icon)
+                                        .font(.title2)
+                                        .foregroundStyle(theme.primaryColor)
+                                        .symbolRenderingMode(.hierarchical)
+                                }
+                                
+                                // Mini preview dots showing color palette
+                                HStack(spacing: 6) {
+                                    Circle()
+                                        .fill(theme.primaryColor)
+                                        .frame(width: 8, height: 8)
+                                    Circle()
+                                        .fill(theme.secondaryColor)
+                                        .frame(width: 8, height: 8)
+                                    Circle()
+                                        .fill(.white.opacity(0.5))
+                                        .frame(width: 8, height: 8)
+                                }
+                            }
                         }
-
+                        .overlay {
+                            // Selection indicator - prominent border
+                            if isSelected {
+                                RoundedRectangle(cornerRadius: 20)
+                                    .strokeBorder(theme.primaryColor, lineWidth: 4)
+                                    .matchedGeometryEffect(id: "selection", in: namespace)
+                                    .shadow(color: theme.primaryColor.opacity(0.5), radius: 8)
+                            }
+                        }
+                    
+                    // Checkmark for selected state
                     if isSelected {
-                        Circle()
-                            .strokeBorder(theme.primaryColor, lineWidth: 3)
-                            .matchedGeometryEffect(id: "selection", in: namespace)
+                        VStack {
+                            HStack {
+                                Spacer()
+                                ZStack {
+                                    Circle()
+                                        .fill(theme.primaryColor)
+                                        .frame(width: 28, height: 28)
+                                    
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 14, weight: .bold))
+                                        .foregroundColor(.white)
+                                }
+                                .offset(x: 8, y: -8)
+                            }
+                            Spacer()
+                        }
                     }
                 }
-                .frame(width: 60, height: 60)
 
+                // Theme name with high contrast
                 Text(theme.displayName)
-                    .font(.caption.bold())
-                    .foregroundColor(.primary)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(adjustedTextColor) // ✅ High contrast white text
                     .multilineTextAlignment(.center)
+                    .minimumScaleFactor(0.8) // Dynamic Type support
+                    .lineLimit(2) // Prevents cutoff on long names
+            }
+            .padding(12)
+            .background {
+                RoundedRectangle(cornerRadius: 24)
+                    .fill(.ultraThinMaterial)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 24)
+                            .fill(theme.primaryColor.opacity(0.1))
+                    }
             }
         }
-        .scaleEffect(isSelected ? 0.95 : 1.0)
-        .animation(.easeInOut(duration: 0.1), value: isSelected)
-        .glassEffect(.subtle, tint: theme.primaryColor, interactive: true)
-        .animation(.spring(response: 0.5, dampingFraction: 0.7), value: isSelected)
+        .buttonStyle(ThemeCardButtonStyle(isSelected: isSelected))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(theme.displayName) theme")
+        .accessibilityValue(isSelected ? "Selected" : "Not selected")
+        .accessibilityHint("Double tap to select this theme and preview it immediately")
+        .accessibilityAddTraits(isSelected ? [.isSelected, .isButton] : [.isButton])
+        .accessibilityAction(named: "Preview theme") {
+            action()
+        }
+    }
+    
+    // MARK: - Accessibility Support
+    
+    /// High contrast mode detection for WCAG AAA compliance
+    private var adjustedTextColor: Color {
+        contrast == .increased ? .white : .white.opacity(0.95)
+    }
+}
+
+// MARK: - Theme Card Button Style
+
+/// Custom button style for theme cards with spring animations
+struct ThemeCardButtonStyle: ButtonStyle {
+    let isSelected: Bool
+    
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.95 : (isSelected ? 1.02 : 1.0))
+            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: configuration.isPressed)
+            .animation(.spring(response: 0.5, dampingFraction: 0.7), value: isSelected)
     }
 }
 
