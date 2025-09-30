@@ -19,11 +19,11 @@ struct BooksTrackerApp: App {
         ])
 
         #if targetEnvironment(simulator)
-        // Simulator: Use in-memory or local-only storage (no CloudKit)
-        print("🧪 Running on simulator - CloudKit sync disabled")
+        // Simulator: Use in-memory storage for clean testing (no CloudKit)
+        print("🧪 Running on simulator - using in-memory database")
         let modelConfiguration = ModelConfiguration(
             schema: schema,
-            isStoredInMemoryOnly: false,
+            isStoredInMemoryOnly: true,  // ← Clean slate every launch
             cloudKitDatabase: .none  // Explicitly disable CloudKit on simulator
         )
         #else
