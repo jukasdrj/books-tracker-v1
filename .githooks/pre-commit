@@ -11,9 +11,9 @@ NC='\033[0m'
 
 echo -e "${BLUE}🔄${NC} Pre-commit: Updating build number..."
 
-# Get project root
+# Get project root (from .git/hooks to project root)
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$HOOK_DIR")"
+PROJECT_ROOT="$(dirname "$(dirname "$HOOK_DIR")")"
 
 # Update build number only (not marketing version)
 "$PROJECT_ROOT/Scripts/update_version.sh" build

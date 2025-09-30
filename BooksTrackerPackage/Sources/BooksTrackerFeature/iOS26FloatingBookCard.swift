@@ -30,7 +30,7 @@ struct iOS26FloatingBookCard: View {
             smallInfoCard
                 .glassEffectID("info-\(work.id)", in: namespace)
         }
-        .contentShape(Rectangle())
+        // ✅ FIX: Removed .contentShape(Rectangle()) to allow NavigationLink taps through
         .contextMenu {
             quickActionsMenu
         }
@@ -38,6 +38,27 @@ struct iOS26FloatingBookCard: View {
             QuickActionsSheet(work: work)
                 .presentationDetents([.medium])
                 .iOS26SheetGlass()
+        }
+        // iOS 26 HIG: Accessibility support for context menu
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilityDescription)
+        .accessibilityHint("Long press for quick actions")
+        .accessibilityActions {
+            if userEntry != nil {
+                Button("Mark as Reading") {
+                    updateReadingStatus(.reading)
+                }
+                Button("Mark as Read") {
+                    updateReadingStatus(.read)
+                }
+            } else {
+                Button("Add to Library") {
+                    addToLibrary()
+                }
+                Button("Add to Wishlist") {
+                    addToWishlist()
+                }
+            }
         }
     }
 
@@ -235,6 +256,17 @@ struct iOS26FloatingBookCard: View {
         }
     }
 
+    private var accessibilityDescription: String {
+        var description = "Book: \(work.title) by \(work.authorNames)"
+        if let userEntry = userEntry {
+            description += ", Status: \(userEntry.readingStatus.displayName)"
+            if userEntry.readingStatus == .reading && userEntry.readingProgress > 0 {
+                description += ", Progress: \(Int(userEntry.readingProgress * 100))%"
+            }
+        }
+        return description
+    }
+
     // MARK: - Actions
 
     private func updateReadingStatus(_ status: ReadingStatus) {
@@ -317,11 +349,11 @@ struct OptimizedFloatingBookCard: View {
         VStack(spacing: 10) {
             optimizedCoverImage
                 .glassEffectID("cover-\(work.id)", in: namespace)
-            
+
             smallInfoCard
                 .glassEffectID("info-\(work.id)", in: namespace)
         }
-        .contentShape(Rectangle())
+        // ✅ FIX: Removed .contentShape(Rectangle()) to allow NavigationLink taps through
         .contextMenu {
             quickActionsMenu
         }
@@ -336,8 +368,29 @@ struct OptimizedFloatingBookCard: View {
                 .presentationDetents([.medium])
                 .iOS26SheetGlass()
         }
+        // iOS 26 HIG: Accessibility support for context menu
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(optimizedAccessibilityDescription)
+        .accessibilityHint("Long press for quick actions")
+        .accessibilityActions {
+            if cachedUserEntry != nil {
+                Button("Mark as Reading") {
+                    updateReadingStatus(.reading)
+                }
+                Button("Mark as Read") {
+                    updateReadingStatus(.read)
+                }
+            } else {
+                Button("Add to Library") {
+                    addToLibrary()
+                }
+                Button("Add to Wishlist") {
+                    addToWishlist()
+                }
+            }
+        }
     }
-    
+
     // MARK: - Optimized Cover Image
     
     private var optimizedCoverImage: some View {
@@ -432,13 +485,24 @@ struct OptimizedFloatingBookCard: View {
     }
     
     // MARK: - Performance Helper Methods
-    
+
     private func updateCachedProperties() {
         cachedUserEntry = work.userLibraryEntries.first
         cachedPrimaryEdition = cachedUserEntry?.edition ?? work.availableEditions.first
         cachedCoverURL = cachedPrimaryEdition?.coverURL
     }
-    
+
+    private var optimizedAccessibilityDescription: String {
+        var description = "Book: \(work.title) by \(work.authorNames)"
+        if let userEntry = cachedUserEntry {
+            description += ", Status: \(userEntry.readingStatus.displayName)"
+            if userEntry.readingStatus == .reading && userEntry.readingProgress > 0 {
+                description += ", Progress: \(Int(userEntry.readingProgress * 100))%"
+            }
+        }
+        return description
+    }
+
     private func statusIndicator(for status: ReadingStatus) -> some View {
         Circle()
             .fill(status.color.gradient)

@@ -220,26 +220,7 @@ struct InsightsView: View {
     }
 }
 
-struct SettingsView: View {
-    var body: some View {
-        VStack(spacing: 24) {
-            Image(systemName: "gear")
-                .font(.system(size: 48, weight: .ultraLight))
-                .foregroundStyle(.secondary)
-
-            Text("Settings")
-                .font(.title2)
-                .fontWeight(.semibold)
-
-            Text("Customize your reading experience and sync preferences")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
-        }
-        .navigationTitle("Settings")
-    }
-}
+// SettingsView now implemented in SettingsView.swift
 
 
 // MARK: - Preview

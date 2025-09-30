@@ -45,6 +45,27 @@ struct iOS26AdaptiveBookCard: View {
                 .presentationDetents([.medium])
                 .iOS26SheetGlass()
         }
+        // iOS 26 HIG: Accessibility support for context menu
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilityDescription)
+        .accessibilityHint("Long press for quick actions")
+        .accessibilityActions {
+            if userEntry != nil {
+                Button("Mark as Reading") {
+                    updateReadingStatus(.reading)
+                }
+                Button("Mark as Read") {
+                    updateReadingStatus(.read)
+                }
+            } else {
+                Button("Add to Library") {
+                    addToLibrary()
+                }
+                Button("Add to Wishlist") {
+                    addToWishlist()
+                }
+            }
+        }
     }
 
     // MARK: - Adaptive Content
@@ -436,6 +457,17 @@ struct iOS26AdaptiveBookCard: View {
     }
 
     // MARK: - Helper Properties
+
+    private var accessibilityDescription: String {
+        var description = "Book: \(work.title) by \(work.authorNames)"
+        if let userEntry = userEntry {
+            description += ", Status: \(userEntry.readingStatus.displayName)"
+            if userEntry.readingStatus == .reading && userEntry.readingProgress > 0 {
+                description += ", Progress: \(Int(userEntry.readingProgress * 100))%"
+            }
+        }
+        return description
+    }
 
     private var cardAspectRatio: CGFloat {
         let resolvedMode = resolveDisplayMode(for: cardSize)

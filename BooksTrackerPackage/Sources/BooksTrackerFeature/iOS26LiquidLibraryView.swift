@@ -42,14 +42,15 @@ public struct iOS26LiquidLibraryView: View {
     @State private var selectedLayout: LibraryLayout = .floatingGrid
     @State private var searchText = ""
     @State private var showingDiversityInsights = false
-    
+
     // ✅ FIX 3: Performance optimizations
     @State private var cachedFilteredWorks: [Work] = []
     @State private var cachedDiversityScore: Double = 0.0
     @State private var lastSearchText = ""
-    
+
     @Namespace private var layoutTransition
     @State private var scrollPosition = ScrollPosition()
+    @Environment(\.iOS26ThemeStore) private var themeStore
 
     public init() {}
 
@@ -147,30 +148,30 @@ public struct iOS26LiquidLibraryView: View {
 
     @ViewBuilder
     private var optimizedFloatingGridLayout: some View {
-        GeometryReader { geometry in
-            LazyVGrid(columns: adaptiveColumns(for: geometry.size), spacing: 16) {
-                ForEach(cachedFilteredWorks, id: \.id) { work in
-                    NavigationLink(value: work.id) {
-                        OptimizedFloatingBookCard(work: work, namespace: layoutTransition)
-                    }
-                    .buttonStyle(BookCardButtonStyle())
-                    .id(work.id) // ✅ Explicit ID for view recycling
+        LazyVGrid(columns: [
+            GridItem(.adaptive(minimum: 150, maximum: 200), spacing: 16)
+        ], spacing: 16) {
+            ForEach(cachedFilteredWorks, id: \.id) { work in
+                NavigationLink(value: work.id) {
+                    OptimizedFloatingBookCard(work: work, namespace: layoutTransition)
                 }
+                .buttonStyle(.plain) // ✅ FIX: Changed from BookCardButtonStyle() to allow NavigationLink taps
+                .id(work.id) // ✅ Explicit ID for view recycling
             }
         }
     }
 
     @ViewBuilder
     private var optimizedAdaptiveCardsLayout: some View {
-        GeometryReader { geometry in
-            LazyVGrid(columns: adaptiveColumns(for: geometry.size), spacing: 16) {
-                ForEach(cachedFilteredWorks, id: \.id) { work in
-                    NavigationLink(value: work.id) {
-                        iOS26AdaptiveBookCard(work: work)
-                    }
-                    .buttonStyle(BookCardButtonStyle())
-                    .id(work.id)
+        LazyVGrid(columns: [
+            GridItem(.adaptive(minimum: 150, maximum: 200), spacing: 16)
+        ], spacing: 16) {
+            ForEach(cachedFilteredWorks, id: \.id) { work in
+                NavigationLink(value: work.id) {
+                    iOS26AdaptiveBookCard(work: work)
                 }
+                .buttonStyle(.plain) // ✅ FIX: Changed from BookCardButtonStyle() to allow NavigationLink taps
+                .id(work.id)
             }
         }
     }
@@ -182,7 +183,7 @@ public struct iOS26LiquidLibraryView: View {
                 NavigationLink(value: work.id) {
                     iOS26LiquidListRow(work: work)
                 }
-                .buttonStyle(BookCardButtonStyle())
+                .buttonStyle(.plain) // ✅ FIX: Changed from BookCardButtonStyle() to allow NavigationLink taps
                 .id(work.id)
             }
         }
@@ -434,22 +435,103 @@ public struct UltraOptimizedLibraryView: View {
         .scrollIndicators(.visible, axes: .vertical)
     }
 
+    // HIG: Enhanced empty state with inviting design and clear calls-to-action
     private var emptyStateView: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "books.vertical")
-                .font(.system(size: 60))
-                .foregroundColor(.secondary)
-            
-            Text("No Books in Library")
-                .font(.title2.bold())
-                .foregroundColor(.primary)
-            
-            Text("Start building your library by searching for books!")
-                .font(.body)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
+        ScrollView {
+            VStack(spacing: 32) {
+                // Hero section - HIG: Clear, inviting empty state
+                VStack(spacing: 16) {
+                    Image(systemName: "books.vertical.fill")
+                        .font(.system(size: 72, weight: .ultraLight))
+                        .foregroundStyle(.tint)
+                        .symbolEffect(.pulse, options: .repeating)
+                        .accessibilityHidden(true)
+
+                    VStack(spacing: 8) {
+                        Text("Your Library Awaits")
+                            .font(.title.bold())
+                            .multilineTextAlignment(.center)
+
+                        Text("Start building your personal collection of books")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 32)
+                    }
+                }
+                .padding(.top, 60)
+
+                // HIG: Clear calls-to-action with visual hierarchy
+                VStack(spacing: 24) {
+                    actionCard(
+                        icon: "magnifyingglass",
+                        title: "Search for Books",
+                        description: "Browse millions of books by title, author, or ISBN",
+                        color: .blue
+                    )
+
+                    actionCard(
+                        icon: "barcode.viewfinder",
+                        title: "Scan a Barcode",
+                        description: "Use your camera to quickly add books from ISBN",
+                        color: .purple
+                    )
+
+                    actionCard(
+                        icon: "sparkles",
+                        title: "Discover Diverse Voices",
+                        description: "Track cultural diversity and explore underrepresented authors",
+                        color: .green
+                    )
+                }
+                .padding(.horizontal, 20)
+
+                Spacer(minLength: 40)
+            }
         }
-        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Library is empty")
+        .accessibilityHint("Search for books or scan barcodes to start building your library")
+    }
+
+    // HIG: Action card component for empty state suggestions
+    private func actionCard(icon: String, title: String, description: String, color: Color) -> some View {
+        HStack(spacing: 16) {
+            Image(systemName: icon)
+                .font(.title2)
+                .foregroundStyle(color)
+                .frame(width: 48, height: 48)
+                .background(
+                    Circle()
+                        .fill(color.opacity(0.15))
+                )
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+
+                Text(description)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(16)
+        .background {
+            RoundedRectangle(cornerRadius: 16)
+                .fill(.ultraThinMaterial)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 16)
+                        .strokeBorder(color.opacity(0.2), lineWidth: 1)
+                }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isStaticText)
     }
 
     // MARK: - Optimized Layout Implementations
@@ -471,12 +553,12 @@ public struct UltraOptimizedLibraryView: View {
             ForEach(filteredWorks, id: \.id) { work in
                 NavigationLink(value: work.id) {
                     OptimizedFloatingBookCard(
-                        work: work, 
+                        work: work,
                         namespace: layoutTransition
                     )
                     .performanceMonitor("BookCard-\(work.title)")
                 }
-                .buttonStyle(BookCardButtonStyle())
+                .buttonStyle(.plain) // ✅ FIX: Changed from BookCardButtonStyle() to allow NavigationLink taps
                 .id(work.id)
             }
         }
@@ -489,7 +571,7 @@ public struct UltraOptimizedLibraryView: View {
                     iOS26AdaptiveBookCard(work: work)
                         .performanceMonitor("AdaptiveCard-\(work.title)")
                 }
-                .buttonStyle(BookCardButtonStyle())
+                .buttonStyle(.plain) // ✅ FIX: Changed from BookCardButtonStyle() to allow NavigationLink taps
                 .id(work.id)
             }
         }
@@ -502,7 +584,7 @@ public struct UltraOptimizedLibraryView: View {
                     iOS26LiquidListRow(work: work)
                         .performanceMonitor("ListRow-\(work.title)")
                 }
-                .buttonStyle(BookCardButtonStyle())
+                .buttonStyle(.plain) // ✅ FIX: Changed from BookCardButtonStyle() to allow NavigationLink taps
                 .id(work.id)
             }
         }
