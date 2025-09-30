@@ -1,4 +1,10 @@
-# 📊 **BooksTracker Data Expansion Strategy** 🚀
+# 📊 **BooksTracker Future Roadmap** 🚀
+
+> **⚠️ FUTURE PLANNING DOCUMENT**
+> This document describes **aspirational features** not yet implemented. It represents the long-term vision for BooksTracker's evolution into a comprehensive reading intelligence platform.
+>
+> **Current Status**: Planning phase - no implementation started
+> **Last Updated**: September 30, 2025
 
 *A comprehensive plan for enhancing data models and building intelligent recommendation systems*
 
