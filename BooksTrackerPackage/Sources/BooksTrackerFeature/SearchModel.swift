@@ -584,11 +584,11 @@ public actor BookSearchAPIService {
                 let authors = (bookItem.volumeInfo.authors ?? []).map { authorName in
                     Author(name: authorName, gender: .unknown, culturalRegion: .international)
                 }
-                
+
                 // Create work with authors properly set
                 let work = Work(
                     title: bookItem.volumeInfo.title,
-                    authors: authors, // Pass authors in constructor
+                    authors: authors.isEmpty ? [] : authors, // Pass authors in constructor
                     originalLanguage: bookItem.volumeInfo.language,
                     firstPublicationYear: extractYear(from: bookItem.volumeInfo.publishedDate),
                     subjectTags: bookItem.volumeInfo.categories ?? []
@@ -684,7 +684,7 @@ public actor BookSearchAPIService {
         // Create Work object with authors properly set
         let work = Work(
             title: volumeInfo.title,
-            authors: authors, // Pass authors in constructor
+            authors: authors.isEmpty ? [] : authors, // Pass authors in constructor
             originalLanguage: volumeInfo.language,
             firstPublicationYear: extractYear(from: volumeInfo.publishedDate),
             subjectTags: volumeInfo.categories ?? []
@@ -714,8 +714,11 @@ public actor BookSearchAPIService {
         edition.googleBooksVolumeID = volumeInfo.googleBooksVolumeID
         edition.isbndbQuality = 85
 
-        // Add edition to work
-        work.editions.append(edition)
+        // Add edition to work (handle optional editions array)
+        if work.editions == nil {
+            work.editions = []
+        }
+        work.editions?.append(edition)
 
         return SearchResult(
             work: work,

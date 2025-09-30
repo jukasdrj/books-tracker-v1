@@ -14,7 +14,7 @@ struct EditionMetadataView: View {
 
     // User's library entry for this work
     private var userEntry: UserLibraryEntry? {
-        work.userLibraryEntries.first
+        work.userLibraryEntries?.first
     }
 
     // Create or get user library entry

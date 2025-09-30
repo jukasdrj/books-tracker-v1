@@ -4,7 +4,7 @@ import SwiftUI
 
 @Model
 public final class Author {
-    var name: String
+    var name: String = "" // CloudKit: default value required
     var nationality: String?
     var gender: AuthorGender = AuthorGender.unknown
     var culturalRegion: CulturalRegion?
@@ -25,8 +25,9 @@ public final class Author {
     var bookCount: Int = 0
 
     // Many-to-many relationship with Works
+    // CloudKit: relationships must be optional
     @Relationship(deleteRule: .nullify)
-    var works: [Work] = []
+    var works: [Work]?
 
     public init(
         name: String,
@@ -86,7 +87,7 @@ public final class Author {
 
     /// Update book count and last modified date
     func updateStatistics() {
-        bookCount = works.count
+        bookCount = works?.count ?? 0
         touch()
     }
 

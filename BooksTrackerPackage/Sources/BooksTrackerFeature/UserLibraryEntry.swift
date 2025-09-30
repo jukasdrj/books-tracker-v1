@@ -21,12 +21,12 @@ public final class UserLibraryEntry {
     // Metadata
     var lastModified: Date = Date()
 
-    // Relationships
-    @Relationship(inverse: \Work.userLibraryEntries)
+    // Relationships (inverses defined on the "many" side: Work and Edition)
     var work: Work?
 
-    @Relationship
-    var edition: Edition? // Nil for wishlist items (don't own yet)
+    // Nil for wishlist items (don't own yet)
+    // Inverse defined on Edition side at line 43
+    var edition: Edition?
 
     public init(
         work: Work,

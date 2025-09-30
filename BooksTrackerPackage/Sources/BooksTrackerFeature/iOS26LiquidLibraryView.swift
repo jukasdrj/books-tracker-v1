@@ -32,7 +32,7 @@ public struct iOS26LiquidLibraryView: View {
     // ✅ FIX 1: Optimized SwiftData query with sorting and minimal loading
     @Query(
         filter: #Predicate<Work> { work in
-            !work.userLibraryEntries.isEmpty
+            work.userLibraryEntries != nil
         },
         sort: \Work.lastModified,
         order: .reverse
@@ -240,7 +240,7 @@ public struct iOS26LiquidLibraryView: View {
     private var readingProgressOverview: some View {
         HStack(spacing: 16) {
             ForEach(ReadingStatus.allCases.prefix(4), id: \.self) { status in
-                let count = cachedFilteredWorks.flatMap(\.userLibraryEntries).filter { $0.readingStatus == status }.count
+                let count = cachedFilteredWorks.compactMap(\.userLibraryEntries).flatMap { $0 }.filter { $0.readingStatus == status }.count
 
                 VStack(spacing: 4) {
                     Image(systemName: status.systemImage)
@@ -284,7 +284,7 @@ public struct iOS26LiquidLibraryView: View {
     }
 
     private func calculateDiverseAuthors(for works: [Work]) -> Double {
-        let allAuthors = works.flatMap(\.authors)
+        let allAuthors = works.compactMap(\.authors).flatMap { $0 }
         guard !allAuthors.isEmpty else { return 0.0 }
 
         let diverseCount = allAuthors.filter { author in
@@ -710,7 +710,7 @@ public struct UltraOptimizedLibraryView: View {
     }
 
     private func calculateDiversityScore(for works: [Work]) -> Double {
-        let allAuthors = works.flatMap(\.authors)
+        let allAuthors = works.compactMap(\.authors).flatMap { $0 }
         guard !allAuthors.isEmpty else { return 0.0 }
 
         let diverseCount = allAuthors.filter { author in
@@ -891,7 +891,7 @@ struct CulturalDiversityInsightsView: View {
     // MARK: - Helper Methods
 
     private func calculateDiversityMetrics() -> (diversePercentage: Double, regionCount: Int, languageCount: Int) {
-        let allAuthors = works.flatMap(\.authors)
+        let allAuthors = works.compactMap(\.authors).flatMap { $0 }
         let diverseCount = allAuthors.filter { $0.representsMarginalizedVoices() }.count
         let diversePercentage = allAuthors.isEmpty ? 0.0 : Double(diverseCount) / Double(allAuthors.count)
 
@@ -902,7 +902,7 @@ struct CulturalDiversityInsightsView: View {
     }
 
     private func calculateRegionStatistics() -> [CulturalRegion: Int] {
-        let allAuthors = works.flatMap(\.authors)
+        let allAuthors = works.compactMap(\.authors).flatMap { $0 }
         var regionCounts: [CulturalRegion: Int] = [:]
 
         for author in allAuthors {
@@ -915,7 +915,7 @@ struct CulturalDiversityInsightsView: View {
     }
 
     private func calculateGenderStatistics() -> [AuthorGender: Int] {
-        let allAuthors = works.flatMap(\.authors)
+        let allAuthors = works.compactMap(\.authors).flatMap { $0 }
         var genderCounts: [AuthorGender: Int] = [:]
 
         for author in allAuthors {

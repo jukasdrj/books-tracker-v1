@@ -35,9 +35,13 @@ public final class Edition {
     var dateCreated: Date = Date()
     var lastModified: Date = Date()
 
-    // Relationship back to Work
-    @Relationship(inverse: \Work.editions)
+    // Relationship back to Work (inverse defined on Work side at line 37)
     var work: Work?
+
+    // Relationship to UserLibraryEntry (CloudKit: must have inverse)
+    // This is the "to-many" side of the one-to-many relationship
+    @Relationship(deleteRule: .nullify, inverse: \UserLibraryEntry.edition)
+    var userLibraryEntries: [UserLibraryEntry]?
 
     public init(
         isbn: String? = nil,

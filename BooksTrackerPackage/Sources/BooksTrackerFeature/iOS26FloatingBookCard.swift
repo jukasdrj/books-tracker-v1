@@ -12,7 +12,7 @@ struct iOS26FloatingBookCard: View {
 
     // Current user's library entry for this work
     private var userEntry: UserLibraryEntry? {
-        work.userLibraryEntries.first
+        work.userLibraryEntries?.first
     }
 
     // Primary edition for display
@@ -303,21 +303,27 @@ struct iOS26FloatingBookCard: View {
             status: .toRead
         )
 
-        work.userLibraryEntries.append(entry)
+        if work.userLibraryEntries == nil {
+            work.userLibraryEntries = []
+        }
+        work.userLibraryEntries?.append(entry)
         triggerHapticFeedback(.success)
     }
 
     private func addToWishlist() {
         let entry = UserLibraryEntry.createWishlistEntry(for: work)
-        work.userLibraryEntries.append(entry)
+        if work.userLibraryEntries == nil {
+            work.userLibraryEntries = []
+        }
+        work.userLibraryEntries?.append(entry)
         triggerHapticFeedback(.success)
     }
 
     private func removeFromLibrary() {
         guard let userEntry = userEntry else { return }
 
-        if let index = work.userLibraryEntries.firstIndex(of: userEntry) {
-            work.userLibraryEntries.remove(at: index)
+        if let index = work.userLibraryEntries?.firstIndex(of: userEntry) {
+            work.userLibraryEntries?.remove(at: index)
         }
 
         triggerHapticFeedback(.warning)
@@ -487,7 +493,7 @@ struct OptimizedFloatingBookCard: View {
     // MARK: - Performance Helper Methods
 
     private func updateCachedProperties() {
-        cachedUserEntry = work.userLibraryEntries.first
+        cachedUserEntry = work.userLibraryEntries?.first
         cachedPrimaryEdition = cachedUserEntry?.edition ?? work.availableEditions.first
         cachedCoverURL = cachedPrimaryEdition?.coverURL
     }
@@ -622,26 +628,32 @@ struct OptimizedFloatingBookCard: View {
             edition: primaryEdition ?? Edition(work: work),
             status: .toRead
         )
-        
-        work.userLibraryEntries.append(entry)
+
+        if work.userLibraryEntries == nil {
+            work.userLibraryEntries = []
+        }
+        work.userLibraryEntries?.append(entry)
         updateCachedProperties()
         triggerHapticFeedback(.success)
     }
-    
+
     private func addToWishlist() {
         let entry = UserLibraryEntry.createWishlistEntry(for: work)
-        work.userLibraryEntries.append(entry)
+        if work.userLibraryEntries == nil {
+            work.userLibraryEntries = []
+        }
+        work.userLibraryEntries?.append(entry)
         updateCachedProperties()
         triggerHapticFeedback(.success)
     }
-    
+
     private func removeFromLibrary() {
         guard let userEntry = cachedUserEntry else { return }
-        
-        if let index = work.userLibraryEntries.firstIndex(of: userEntry) {
-            work.userLibraryEntries.remove(at: index)
+
+        if let index = work.userLibraryEntries?.firstIndex(of: userEntry) {
+            work.userLibraryEntries?.remove(at: index)
         }
-        
+
         updateCachedProperties()
         triggerHapticFeedback(.warning)
     }

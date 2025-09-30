@@ -13,7 +13,7 @@ struct iOS26AdaptiveBookCard: View {
 
     // Current user's library entry for this work
     private var userEntry: UserLibraryEntry? {
-        work.userLibraryEntries.first
+        work.userLibraryEntries?.first
     }
 
     // Primary edition for display

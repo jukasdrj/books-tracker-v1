@@ -4,7 +4,7 @@ import SwiftUI
 
 @Model
 public final class Work {
-    var title: String
+    var title: String = "" // CloudKit: default value required
     var originalLanguage: String?
     var firstPublicationYear: Int?
     var subjectTags: [String] = []
@@ -30,15 +30,15 @@ public final class Work {
     var dateCreated: Date = Date()
     var lastModified: Date = Date()
 
-    // Relationships - PROPER NORMALIZATION
+    // Relationships - CloudKit requires optional relationships
     @Relationship(deleteRule: .nullify, inverse: \Author.works)
-    var authors: [Author] = []
+    var authors: [Author]?
 
-    @Relationship(deleteRule: .cascade)
-    var editions: [Edition] = []
+    @Relationship(deleteRule: .cascade, inverse: \Edition.work)
+    var editions: [Edition]?
 
-    @Relationship(deleteRule: .cascade)
-    var userLibraryEntries: [UserLibraryEntry] = []
+    @Relationship(deleteRule: .cascade, inverse: \UserLibraryEntry.work)
+    var userLibraryEntries: [UserLibraryEntry]?
 
     public init(
         title: String,
@@ -48,7 +48,7 @@ public final class Work {
         subjectTags: [String] = []
     ) {
         self.title = title
-        self.authors = authors
+        self.authors = authors.isEmpty ? nil : authors
         self.originalLanguage = originalLanguage
         self.firstPublicationYear = firstPublicationYear
         self.subjectTags = subjectTags
@@ -60,7 +60,7 @@ public final class Work {
 
     /// Get primary author (first in list)
     var primaryAuthor: Author? {
-        return authors.first
+        return authors?.first
     }
 
     /// Get primary author name for display
@@ -70,6 +70,7 @@ public final class Work {
 
     /// Get all author names formatted for display
     var authorNames: String {
+        guard let authors = authors else { return "Unknown Author" }
         let names = authors.map { $0.name }
         switch names.count {
         case 0: return "Unknown Author"
@@ -90,12 +91,12 @@ public final class Work {
 
     /// Get all editions of this work
     var availableEditions: [Edition] {
-        return editions.sorted { $0.publicationDate ?? "" > $1.publicationDate ?? "" }
+        return editions?.sorted { $0.publicationDate ?? "" > $1.publicationDate ?? "" } ?? []
     }
 
     /// Get the user's library entry for this work (if any)
     var userEntry: UserLibraryEntry? {
-        return userLibraryEntries.first
+        return userLibraryEntries?.first
     }
 
     /// Check if user has this work in their library (owned or wishlist)
@@ -122,8 +123,11 @@ public final class Work {
 
     /// Add an author to this work
     func addAuthor(_ author: Author) {
-        if !authors.contains(author) {
-            authors.append(author)
+        if authors == nil {
+            authors = []
+        }
+        if !(authors?.contains(author) ?? false) {
+            authors?.append(author)
             author.updateStatistics()
             touch()
         }
@@ -131,8 +135,8 @@ public final class Work {
 
     /// Remove an author from this work
     func removeAuthor(_ author: Author) {
-        if let index = authors.firstIndex(of: author) {
-            authors.remove(at: index)
+        if let index = authors?.firstIndex(of: author) {
+            authors?.remove(at: index)
             author.updateStatistics()
             touch()
         }
