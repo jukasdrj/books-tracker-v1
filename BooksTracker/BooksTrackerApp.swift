@@ -6,17 +6,11 @@ import BooksTrackerFeature
 struct BooksTrackerApp: App {
     @State private var themeStore = iOS26ThemeStore()
 
-    var body: some Scene {
-        WindowGroup {
-            ContentView()
-                .iOS26ThemeStore(themeStore)
-                .modelContainer(modelContainer)
-        }
-    }
-
     // MARK: - SwiftData Configuration
 
-    private var modelContainer: ModelContainer {
+    /// SwiftData model container - created once and reused
+    /// Configured with CloudKit automatic sync
+    let modelContainer: ModelContainer = {
         let schema = Schema([
             Work.self,
             Edition.self,
@@ -37,6 +31,14 @@ struct BooksTrackerApp: App {
             )
         } catch {
             fatalError("Failed to create ModelContainer: \(error)")
+        }
+    }()
+
+    var body: some Scene {
+        WindowGroup {
+            ContentView()
+                .iOS26ThemeStore(themeStore)
+                .modelContainer(modelContainer)
         }
     }
 }
