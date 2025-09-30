@@ -3,8 +3,7 @@ import SwiftData
 import SwiftUI
 
 @Model
-public final class UserLibraryEntry: Identifiable {
-    public var id: UUID = UUID()
+public final class UserLibraryEntry {
     var dateAdded: Date = Date()
     var readingStatus: ReadingStatus = ReadingStatus.toRead
     var currentPage: Int = 0
@@ -23,7 +22,7 @@ public final class UserLibraryEntry: Identifiable {
     var lastModified: Date = Date()
 
     // Relationships
-    @Relationship
+    @Relationship(inverse: \Work.userLibraryEntries)
     var work: Work?
 
     @Relationship

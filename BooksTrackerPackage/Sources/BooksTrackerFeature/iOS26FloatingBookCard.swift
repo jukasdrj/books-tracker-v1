@@ -736,24 +736,9 @@ struct SafeWorkNavigation: ViewModifier {
     
     func body(content: Content) -> some View {
         content
-            .navigationDestination(for: UUID.self) { targetWorkID in
-                if let work = allWorks.first(where: { $0.id == targetWorkID }) {
-                    WorkDetailView(work: work)
-                        .performanceMonitor("WorkDetailView-\(work.title)")
-                } else {
-                    // Fallback view for missing works
-                    VStack {
-                        Image(systemName: "exclamationmark.triangle")
-                            .font(.largeTitle)
-                            .foregroundColor(.orange)
-                        Text("Book Not Found")
-                            .font(.headline)
-                        Text("This book may have been removed from your library.")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    .padding()
-                }
+            .navigationDestination(for: Work.self) { work in
+                WorkDetailView(work: work)
+                    .performanceMonitor("WorkDetailView-\(work.title)")
             }
     }
 }

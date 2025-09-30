@@ -3,8 +3,7 @@ import SwiftData
 import SwiftUI
 
 @Model
-public final class Author: Identifiable {
-    public var id: UUID = UUID()
+public final class Author {
     var name: String
     var nationality: String?
     var gender: AuthorGender = AuthorGender.unknown

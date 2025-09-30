@@ -3,8 +3,7 @@ import SwiftData
 import SwiftUI
 
 @Model
-public final class Work: Identifiable {
-    public var id: UUID = UUID()
+public final class Work {
     var title: String
     var originalLanguage: String?
     var firstPublicationYear: Int?

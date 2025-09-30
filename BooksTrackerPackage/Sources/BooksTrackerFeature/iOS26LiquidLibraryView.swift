@@ -90,11 +90,9 @@ public struct iOS26LiquidLibraryView: View {
                 .buttonStyle(GlassButtonStyle())
             }
         }
-        // ✅ FIX 4: Safe navigation with Work IDs instead of objects
-        .navigationDestination(for: UUID.self) { workID in
-            if let work = libraryWorks.first(where: { $0.id == workID }) {
-                WorkDetailView(work: work)
-            }
+        // ✅ FIX 4: Navigation with Work objects (SwiftData PersistentIdentifier)
+        .navigationDestination(for: Work.self) { work in
+            WorkDetailView(work: work)
         }
         .sheet(isPresented: $showingDiversityInsights) {
             CulturalDiversityInsightsView(works: cachedFilteredWorks)
@@ -152,7 +150,7 @@ public struct iOS26LiquidLibraryView: View {
             GridItem(.adaptive(minimum: 150, maximum: 200), spacing: 16)
         ], spacing: 16) {
             ForEach(cachedFilteredWorks, id: \.id) { work in
-                NavigationLink(value: work.id) {
+                NavigationLink(value: work) {
                     OptimizedFloatingBookCard(work: work, namespace: layoutTransition)
                 }
                 .buttonStyle(.plain) // ✅ FIX: Changed from BookCardButtonStyle() to allow NavigationLink taps
@@ -167,7 +165,7 @@ public struct iOS26LiquidLibraryView: View {
             GridItem(.adaptive(minimum: 150, maximum: 200), spacing: 16)
         ], spacing: 16) {
             ForEach(cachedFilteredWorks, id: \.id) { work in
-                NavigationLink(value: work.id) {
+                NavigationLink(value: work) {
                     iOS26AdaptiveBookCard(work: work)
                 }
                 .buttonStyle(.plain) // ✅ FIX: Changed from BookCardButtonStyle() to allow NavigationLink taps
@@ -180,7 +178,7 @@ public struct iOS26LiquidLibraryView: View {
     private var optimizedLiquidListLayout: some View {
         LazyVStack(spacing: 12) {
             ForEach(cachedFilteredWorks, id: \.id) { work in
-                NavigationLink(value: work.id) {
+                NavigationLink(value: work) {
                     iOS26LiquidListRow(work: work)
                 }
                 .buttonStyle(.plain) // ✅ FIX: Changed from BookCardButtonStyle() to allow NavigationLink taps
@@ -551,7 +549,7 @@ public struct UltraOptimizedLibraryView: View {
     private var ultraOptimizedGrid: some View {
         LazyVGrid(columns: adaptiveColumns, spacing: 16) {
             ForEach(filteredWorks, id: \.id) { work in
-                NavigationLink(value: work.id) {
+                NavigationLink(value: work) {
                     OptimizedFloatingBookCard(
                         work: work,
                         namespace: layoutTransition
@@ -567,7 +565,7 @@ public struct UltraOptimizedLibraryView: View {
     private var ultraOptimizedAdaptiveGrid: some View {
         LazyVGrid(columns: adaptiveColumns, spacing: 16) {
             ForEach(filteredWorks, id: \.id) { work in
-                NavigationLink(value: work.id) {
+                NavigationLink(value: work) {
                     iOS26AdaptiveBookCard(work: work)
                         .performanceMonitor("AdaptiveCard-\(work.title)")
                 }
@@ -580,7 +578,7 @@ public struct UltraOptimizedLibraryView: View {
     private var ultraOptimizedList: some View {
         LazyVStack(spacing: 12) {
             ForEach(filteredWorks, id: \.id) { work in
-                NavigationLink(value: work.id) {
+                NavigationLink(value: work) {
                     iOS26LiquidListRow(work: work)
                         .performanceMonitor("ListRow-\(work.title)")
                 }

@@ -3,9 +3,7 @@ import SwiftData
 import SwiftUI
 
 @Model
-public final class Edition: Identifiable {
-    public var id: UUID = UUID()
-
+public final class Edition {
     // ISBN support - now supports multiple ISBNs per edition
     var isbn: String?           // Primary ISBN (for backward compatibility)
     var isbns: [String] = []    // All ISBNs (ISBN-10, ISBN-13, etc.)
@@ -38,7 +36,7 @@ public final class Edition: Identifiable {
     var lastModified: Date = Date()
 
     // Relationship back to Work
-    @Relationship
+    @Relationship(inverse: \Work.editions)
     var work: Work?
 
     public init(
