@@ -42,7 +42,7 @@ public struct AcknowledgementsView: View {
 
                         Text("A beautiful way to track your reading journey and discover diverse voices in literature.")
                             .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(themeStore.accessibleSecondaryText)
                     }
                     .padding(.vertical, 8)
                 }
@@ -125,11 +125,11 @@ public struct AcknowledgementsView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("To all the developers, designers, and creators who share their knowledge and inspire better software.")
                             .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(themeStore.accessibleSecondaryText)
 
                         Text("To readers everywhere who believe in the power of diverse voices and inclusive storytelling.")
                             .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(themeStore.accessibleSecondaryText)
                     }
                     .padding(.vertical, 8)
                 }
@@ -140,11 +140,11 @@ public struct AcknowledgementsView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("This app is built with love for the reading community.")
                             .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(themeStore.accessibleSecondaryText)
 
                         Text("While the app itself is not open source, it's built entirely with open standards and publicly available APIs.")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(themeStore.accessibleSecondaryText)
                     }
                     .padding(.vertical, 8)
                 }
@@ -162,11 +162,11 @@ public struct AcknowledgementsView: View {
 
                             Text("Made with care")
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(themeStore.accessibleSecondaryText)
 
                             Text("for book lovers everywhere")
                                 .font(.caption2)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(themeStore.accessibleSecondaryText)
                         }
 
                         Spacer()
@@ -201,12 +201,13 @@ private struct CreditRow: View {
     let icon: String
     let title: String
     let subtitle: String
+    @Environment(\.iOS26ThemeStore) private var themeStore
 
     var body: some View {
         HStack(alignment: .center, spacing: 16) {
             Image(systemName: icon)
                 .font(.title3)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(themeStore.accessibleSecondaryText)
                 .frame(width: 32)
 
             VStack(alignment: .leading, spacing: 4) {
@@ -215,7 +216,7 @@ private struct CreditRow: View {
 
                 Text(subtitle)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(themeStore.accessibleSecondaryText)
             }
         }
         .padding(.vertical, 4)

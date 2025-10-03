@@ -83,6 +83,9 @@ public struct SearchView: View {
     // Scanner state
     @State private var showingScanner = false
 
+    // Advanced search state
+    @State private var showingAdvancedSearch = false
+
     // Pagination state
     @State private var isLoadingMore = false
 
@@ -122,6 +125,10 @@ public struct SearchView: View {
                 .navigationTitle("Search")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        advancedSearchButton
+                    }
+
                     ToolbarItem(placement: .navigationBarTrailing) {
                         barcodeButton
                     }
@@ -155,6 +162,11 @@ public struct SearchView: View {
                         #if DEBUG
                         updatePerformanceText()
                         #endif
+                    }
+                }
+                .sheet(isPresented: $showingAdvancedSearch) {
+                    AdvancedSearchView { criteria in
+                        handleAdvancedSearch(criteria)
                     }
                 }
         }
@@ -203,7 +215,7 @@ public struct SearchView: View {
                 } label: {
                     HStack {
                         Image(systemName: suggestionIcon(for: suggestion))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(themeStore.accessibleSecondaryText)
                         Text(suggestion)
                         Spacer()
                     }
@@ -308,7 +320,7 @@ public struct SearchView: View {
 
                         Text("Search millions of books or scan a barcode to get started")
                             .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(themeStore.accessibleSecondaryText)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 32)
                     }
@@ -380,7 +392,7 @@ public struct SearchView: View {
                         HStack(spacing: 8) {
                             Image(systemName: "arrow.right")
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(themeStore.accessibleSecondaryText)
 
                             Text(search)
                                 .font(.subheadline)
@@ -476,7 +488,7 @@ public struct SearchView: View {
 
                 Text(description)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(themeStore.accessibleSecondaryText)
             }
         }
         .padding(12)
@@ -511,7 +523,7 @@ public struct SearchView: View {
 
                     Text(searchStatusMessage)
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(themeStore.accessibleSecondaryText)
                         .multilineTextAlignment(.center)
                 }
             }
@@ -604,7 +616,7 @@ public struct SearchView: View {
         HStack {
             Text("\(searchModel.searchResults.count) results")
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(themeStore.accessibleSecondaryText)
 
             Spacer()
 
@@ -616,7 +628,7 @@ public struct SearchView: View {
 
                     Text("Cached")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(themeStore.accessibleSecondaryText)
                 }
             }
         }
@@ -632,7 +644,7 @@ public struct SearchView: View {
 
             Text("Loading more results...")
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(themeStore.accessibleSecondaryText)
         }
         .padding()
         .frame(maxWidth: .infinity)
@@ -658,6 +670,19 @@ public struct SearchView: View {
             removal: .scale.combined(with: .opacity)
         ))
         .accessibilityLabel("Scroll to top")
+    }
+
+    // HIG: Advanced search entry point
+    private var advancedSearchButton: some View {
+        Button {
+            showingAdvancedSearch = true
+        } label: {
+            Image(systemName: "slider.horizontal.3")
+                .font(.system(size: 17, weight: .medium))
+                .foregroundStyle(themeStore.primaryColor)
+        }
+        .accessibilityLabel("Advanced Search")
+        .accessibilityHint("Open advanced search form with multiple filter fields")
     }
 
     // HIG: Helpful no results state
@@ -743,7 +768,7 @@ public struct SearchView: View {
 
             Text(performanceText)
                 .font(.caption2)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(themeStore.accessibleSecondaryText)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
         }
@@ -771,6 +796,23 @@ public struct SearchView: View {
         // HIG: Haptic feedback for user actions
         let impact = UIImpactFeedbackGenerator(style: .light)
         impact.impactOccurred()
+    }
+
+    /// HIG: Advanced search with multi-field criteria
+    /// Backend performs all filtering - returns clean results
+    private func handleAdvancedSearch(_ criteria: AdvancedSearchCriteria) {
+        guard criteria.hasAnyCriteria else { return }
+
+        // Update search text to show what was searched
+        if let query = criteria.buildSearchQuery() {
+            searchModel.searchText = query
+        }
+
+        // Call backend advanced search endpoint
+        searchModel.advancedSearch(criteria: criteria)
+
+        // Dismiss keyboard to show results
+        isSearchFocused = false
     }
 
     /// HIG: Pagination support

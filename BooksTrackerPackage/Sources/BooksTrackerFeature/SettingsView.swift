@@ -71,7 +71,7 @@ public struct SettingsView: View {
                         Spacer()
 
                         Text(themeStore.currentTheme.displayName)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(themeStore.accessibleSecondaryText)
                     }
                 }
 
@@ -139,7 +139,7 @@ public struct SettingsView: View {
                         Text("iCloud Sync")
                         Text(cloudKitStatus.description)
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(themeStore.accessibleSecondaryText)
                     }
                 }
 
@@ -174,7 +174,7 @@ public struct SettingsView: View {
                     Spacer()
 
                     Text(versionString)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(themeStore.accessibleSecondaryText)
                 }
 
                 Button {
@@ -201,7 +201,7 @@ public struct SettingsView: View {
 
                         Image(systemName: "arrow.up.right")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(themeStore.accessibleSecondaryText)
                     }
                 }
 
@@ -217,7 +217,7 @@ public struct SettingsView: View {
 
                         Image(systemName: "arrow.up.right")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(themeStore.accessibleSecondaryText)
                     }
                 }
 
@@ -280,6 +280,13 @@ public struct SettingsView: View {
             let entries = try modelContext.fetch(fetchDescriptor)
 
             for entry in entries {
+                // Force fault resolution before deletion
+                // Access all relationship properties to resolve faults
+                _ = entry.work
+                _ = entry.edition
+                _ = entry.readingStatus
+                _ = entry.readingProgress
+
                 modelContext.delete(entry)
             }
 

@@ -45,7 +45,7 @@ public struct CloudKitHelpView: View {
 
                         Text("Keep your library in sync across all your devices")
                             .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(themeStore.accessibleSecondaryText)
                             .multilineTextAlignment(.center)
                     }
                     .frame(maxWidth: .infinity)
@@ -166,7 +166,7 @@ public struct CloudKitHelpView: View {
 
                         Text("Your library data is encrypted and stored in your personal iCloud account. Only you can access it.")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(themeStore.accessibleSecondaryText)
                     }
                     .padding()
                     .background(
@@ -205,6 +205,7 @@ private struct HelpSection: View {
     let iconColor: Color
     let title: String
     let items: [String]
+    @Environment(\.iOS26ThemeStore) private var themeStore
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -222,11 +223,11 @@ private struct HelpSection: View {
                     HStack(alignment: .top, spacing: 12) {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(themeStore.accessibleSecondaryText)
 
                         Text(item)
                             .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(themeStore.accessibleSecondaryText)
                     }
                 }
             }
@@ -242,6 +243,7 @@ private struct HelpSection: View {
 private struct HowItWorksStep: View {
     let number: Int
     let description: String
+    @Environment(\.iOS26ThemeStore) private var themeStore
 
     var body: some View {
         HStack(alignment: .top, spacing: 16) {
@@ -256,7 +258,7 @@ private struct HowItWorksStep: View {
 
             Text(description)
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(themeStore.accessibleSecondaryText)
         }
     }
 }
@@ -264,6 +266,7 @@ private struct HowItWorksStep: View {
 private struct TroubleshootingItem: View {
     let problem: String
     let solutions: [String]
+    @Environment(\.iOS26ThemeStore) private var themeStore
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -274,11 +277,11 @@ private struct TroubleshootingItem: View {
                 ForEach(solutions, id: \.self) { solution in
                     HStack(alignment: .top, spacing: 8) {
                         Text("•")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(themeStore.accessibleSecondaryText)
 
                         Text(solution)
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(themeStore.accessibleSecondaryText)
                     }
                 }
             }

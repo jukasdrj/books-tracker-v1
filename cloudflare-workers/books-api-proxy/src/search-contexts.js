@@ -482,6 +482,11 @@ export async function handleSubjectSearch(query, params, env, ctx) {
  */
 async function enhanceWorksWithEditions(works, authorName, env) {
     const enhancementPromises = works.map(async (work) => {
+        // Ensure author name is set on the work
+        if (!work.authors || work.authors.length === 0) {
+            work.authors = [authorName];
+        }
+
         try {
             const isbndbResult = await env.ISBNDB_WORKER.getEditionsForWork(work.title, authorName);
             if (isbndbResult.success && isbndbResult.editions) {
@@ -542,6 +547,80 @@ async function trackCacheMetric(env, context, outcome, query) {
     } catch (error) {
         // Silent failure - analytics shouldn't break search
         console.warn('Cache analytics failed:', error.message);
+    }
+}
+
+/**
+ * Advanced Search: Multi-field filtering
+ * Handles author + title + ISBN combined searches with proper filtering
+ */
+export async function handleAdvancedSearch(criteria, options, env, ctx) {
+    const { authorName, bookTitle, isbn } = criteria;
+    const { maxResults = 20, page = 0 } = options;
+
+    console.log('📋 Advanced Search:', { authorName, bookTitle, isbn, maxResults, page });
+
+    try {
+        let results = [];
+
+        // ISBN has highest priority - direct lookup
+        if (isbn) {
+            console.log('🔍 ISBN search takes priority');
+            // Use existing ISBN search logic (would need to add this endpoint)
+            // For now, treat as title search with strict filtering
+            const response = await env.GOOGLE_BOOKS_WORKER.search(isbn, { maxResults });
+            if (response.success && response.items) {
+                results = response.items;
+            }
+        }
+        // Author + Title combination - strictest filtering
+        else if (authorName && bookTitle) {
+            console.log('🔍 Author + Title combined search');
+
+            // Search by author first (more specific)
+            const authorResults = await handleAuthorSearch(authorName, { maxResults: maxResults * 2, page }, env, ctx);
+
+            // Filter results to match title
+            const titleLower = bookTitle.toLowerCase();
+            results = (authorResults.items || []).filter(item => {
+                const itemTitle = (item.volumeInfo?.title || '').toLowerCase();
+                return itemTitle.includes(titleLower);
+            });
+
+            console.log(`📊 Filtered ${authorResults.items?.length || 0} → ${results.length} results matching both criteria`);
+        }
+        // Single field searches - use existing specialized endpoints
+        else if (authorName) {
+            console.log('🔍 Author-only search');
+            const authorResults = await handleAuthorSearch(authorName, { maxResults, page }, env, ctx);
+            results = authorResults.items || [];
+        }
+        else if (bookTitle) {
+            console.log('🔍 Title-only search');
+            const titleResults = await handleTitleSearch(bookTitle, { maxResults, page }, env, ctx);
+            results = titleResults.items || [];
+        }
+
+        // Apply pagination if needed
+        const startIndex = page * maxResults;
+        const paginatedResults = results.slice(startIndex, startIndex + maxResults);
+
+        return {
+            kind: 'books#volumes',
+            totalItems: results.length,
+            items: paginatedResults,
+            provider: 'advanced-search',
+            cached: false
+        };
+
+    } catch (error) {
+        console.error('❌ Advanced search failed:', error);
+        return {
+            kind: 'books#volumes',
+            totalItems: 0,
+            items: [],
+            error: error.message
+        };
     }
 }
 

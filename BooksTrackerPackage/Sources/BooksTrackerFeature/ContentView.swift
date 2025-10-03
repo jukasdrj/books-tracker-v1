@@ -200,11 +200,13 @@ enum MainTab: String, CaseIterable {
 // MARK: - Placeholder Views
 
 struct InsightsView: View {
+    @Environment(\.iOS26ThemeStore) private var themeStore
+
     var body: some View {
         VStack(spacing: 24) {
             Image(systemName: "chart.bar")
                 .font(.system(size: 48, weight: .ultraLight))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(themeStore.accessibleSecondaryText)
 
             Text("Reading Insights")
                 .font(.title2)
@@ -212,7 +214,7 @@ struct InsightsView: View {
 
             Text("Track your reading progress and discover patterns in your literary journey")
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(themeStore.accessibleSecondaryText)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
         }

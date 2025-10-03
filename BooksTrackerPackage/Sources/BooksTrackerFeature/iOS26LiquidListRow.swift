@@ -138,7 +138,7 @@ struct iOS26LiquidListRow: View {
             // Author names
             Text(work.authorNames)
                 .font(authorFont)
-                .foregroundColor(.secondary)
+                .foregroundColor(themeStore.accessibleSecondaryText)
                 .lineLimit(1)
         }
     }
@@ -150,10 +150,10 @@ struct iOS26LiquidListRow: View {
                 HStack(spacing: 4) {
                     Image(systemName: "calendar")
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(themeStore.accessibleSecondaryText)
                     Text(String(format: "%d", year))
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(themeStore.accessibleSecondaryText)
                 }
             }
 
@@ -162,10 +162,10 @@ struct iOS26LiquidListRow: View {
                 HStack(spacing: 4) {
                     Image(systemName: "book.pages")
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(themeStore.accessibleSecondaryText)
                     Text("\(pageCount)p")
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(themeStore.accessibleSecondaryText)
                 }
             }
 
@@ -174,10 +174,10 @@ struct iOS26LiquidListRow: View {
                 HStack(spacing: 4) {
                     Image(systemName: "building.2")
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(themeStore.accessibleSecondaryText)
                     Text(publisher)
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(themeStore.accessibleSecondaryText)
                         .lineLimit(1)
                 }
             }
@@ -187,10 +187,10 @@ struct iOS26LiquidListRow: View {
                 HStack(spacing: 4) {
                     Image(systemName: edition.format.icon)
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(themeStore.accessibleSecondaryText)
                     Text(edition.format.shortName)
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(themeStore.accessibleSecondaryText)
                 }
             }
 
@@ -228,7 +228,7 @@ struct iOS26LiquidListRow: View {
             HStack {
                 Text("Progress")
                     .font(.caption2)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(themeStore.accessibleSecondaryText)
 
                 Spacer()
 
@@ -279,7 +279,7 @@ struct iOS26LiquidListRow: View {
                     if displayStyle == .standard {
                         Text(status.shortName)
                             .font(.caption2)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(themeStore.accessibleSecondaryText)
                     }
                 }
 
@@ -307,7 +307,7 @@ struct iOS26LiquidListRow: View {
         } label: {
             Image(systemName: "ellipsis")
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundColor(themeStore.accessibleSecondaryText)
                 .frame(width: 24, height: 24)
                 .background(.quaternary, in: Circle())
                 .glassEffect(.subtle, interactive: true)

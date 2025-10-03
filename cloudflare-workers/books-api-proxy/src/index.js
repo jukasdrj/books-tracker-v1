@@ -9,7 +9,7 @@
  * 5. NEW: Multi-context search (Author/Title/Subject) with dedicated endpoints
  */
 
-import { handleAuthorSearch, handleTitleSearch, handleSubjectSearch } from './search-contexts.js';
+import { handleAuthorSearch, handleTitleSearch, handleSubjectSearch, handleAdvancedSearch } from './search-contexts.js';
 import {
     transformWorkToGoogleFormat,
     deduplicateGoogleBooksItems,
@@ -82,6 +82,25 @@ export default {
         }
 
         const result = await handleSubjectSearch(query, { maxResults, page }, env, ctx);
+        return new Response(JSON.stringify(result), { headers });
+      }
+
+      // Advanced search with multiple criteria
+      if (path.startsWith('/search/advanced')) {
+        const authorName = url.searchParams.get('author');
+        const bookTitle = url.searchParams.get('title');
+        const isbn = url.searchParams.get('isbn');
+        const maxResults = parseInt(url.searchParams.get('maxResults') || '20');
+        const page = parseInt(url.searchParams.get('page') || '0');
+
+        // Require at least one search criterion
+        if (!authorName && !bookTitle && !isbn) {
+          return new Response(JSON.stringify({ error: "At least one search parameter required (author, title, or isbn)" }), {
+            status: 400, headers
+          });
+        }
+
+        const result = await handleAdvancedSearch({ authorName, bookTitle, isbn }, { maxResults, page }, env, ctx);
         return new Response(JSON.stringify(result), { headers });
       }
 

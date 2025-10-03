@@ -56,20 +56,20 @@ struct EditionMetadataView: View {
             // Author Names
             Text(work.authorNames)
                 .font(.subheadline)
-                .foregroundColor(.secondary)
+                .foregroundColor(themeStore.accessibleSecondaryText)
 
             // Publisher Info
             if !edition.publisherInfo.isEmpty {
                 Text(edition.publisherInfo)
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(themeStore.accessibleSecondaryText)
             }
 
             // Page Count
             if let pageCountString = edition.pageCountString {
                 Text(pageCountString)
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(themeStore.accessibleSecondaryText)
             }
 
             // Edition Format
@@ -79,7 +79,7 @@ struct EditionMetadataView: View {
 
                 Text(edition.format.displayName)
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(themeStore.accessibleSecondaryText)
             }
         }
     }
@@ -128,14 +128,14 @@ struct EditionMetadataView: View {
 
                         Text(currentStatus.description)
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(themeStore.accessibleSecondaryText)
                     }
 
                     Spacer()
 
                     Image(systemName: "chevron.right")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(themeStore.accessibleSecondaryText)
                 }
                 .padding()
                 .background {
@@ -191,14 +191,14 @@ struct EditionMetadataView: View {
                 HStack {
                     Text("Page \(libraryEntry?.currentPage ?? 0)")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(themeStore.accessibleSecondaryText)
 
                     Spacer()
 
                     if let pageCount = edition.pageCount {
                         Text("of \(pageCount)")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(themeStore.accessibleSecondaryText)
                     }
                 }
             }
@@ -216,7 +216,7 @@ struct EditionMetadataView: View {
             }) {
                 Text(libraryEntry?.notes?.isEmpty == false ? libraryEntry!.notes! : "Add your thoughts...")
                     .font(.subheadline)
-                    .foregroundColor(libraryEntry?.notes?.isEmpty == false ? .primary : .secondary)
+                    .foregroundColor(libraryEntry?.notes?.isEmpty == false ? .primary : themeStore.accessibleSecondaryText)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding()
                     .background {
@@ -362,7 +362,7 @@ struct StarRatingView: View {
                     triggerHaptic(.light)
                 }) {
                     Image(systemName: star <= Int(rating) ? "star.fill" : "star")
-                        .foregroundColor(star <= Int(rating) ? .yellow : .secondary)
+                        .foregroundColor(star <= Int(rating) ? .yellow : themeStore.accessibleSecondaryText)
                         .font(.title3)
                 }
                 .buttonStyle(.plain)
@@ -371,7 +371,7 @@ struct StarRatingView: View {
             if rating > 0 {
                 Text("\(Int(rating))/5")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(themeStore.accessibleSecondaryText)
                     .padding(.leading, 4)
             }
         }
@@ -388,6 +388,7 @@ struct StarRatingView: View {
 struct ReadingStatusPicker: View {
     @Binding var selectedStatus: ReadingStatus
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.iOS26ThemeStore) private var themeStore
 
     var body: some View {
         NavigationStack {
@@ -409,7 +410,7 @@ struct ReadingStatusPicker: View {
 
                             Text(status.description)
                                 .font(.caption)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(themeStore.accessibleSecondaryText)
                         }
 
                         Spacer()
@@ -443,6 +444,7 @@ struct NotesEditorView: View {
     @Binding var notes: String
     let workTitle: String
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.iOS26ThemeStore) private var themeStore
     @FocusState private var isTextEditorFocused: Bool
 
     var body: some View {
@@ -450,7 +452,7 @@ struct NotesEditorView: View {
             VStack(spacing: 16) {
                 Text("Notes for \(workTitle)")
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(themeStore.accessibleSecondaryText)
                     .multilineTextAlignment(.center)
                     .padding(.top)
 
@@ -467,7 +469,7 @@ struct NotesEditorView: View {
                             VStack {
                                 HStack {
                                     Text("Add your thoughts...")
-                                        .foregroundColor(.secondary)
+                                        .foregroundColor(themeStore.accessibleSecondaryText)
                                         .padding(.leading, 20)
                                         .padding(.top, 8)
                                     Spacer()

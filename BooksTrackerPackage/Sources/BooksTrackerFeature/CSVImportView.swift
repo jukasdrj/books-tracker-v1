@@ -61,7 +61,7 @@ public struct CSVImportView: View {
 
                         Text("Import your book collection from a CSV file")
                             .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(themeStore.accessibleSecondaryText)
                             .multilineTextAlignment(.center)
                     }
                     .padding(.top, 40)
@@ -88,7 +88,7 @@ public struct CSVImportView: View {
 
                         Text("Example:")
                             .font(.caption.bold())
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(themeStore.accessibleSecondaryText)
 
                         Text("Title,Author,ISBN,Status\nKindred,Octavia Butler,9780807083697,read")
                             .font(.system(.caption, design: .monospaced))
@@ -126,7 +126,7 @@ public struct CSVImportView: View {
 
                             Text("Importing books...")
                                 .font(.subheadline)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(themeStore.accessibleSecondaryText)
                         }
                         .padding()
                     }
@@ -303,17 +303,18 @@ public struct CSVImportView: View {
 private struct FormatRow: View {
     let label: String
     let value: String
+    @Environment(\.iOS26ThemeStore) private var themeStore
 
-    var body: some View {
+    var body: some View{
         HStack(alignment: .top, spacing: 12) {
             Text(label)
                 .font(.caption.bold())
-                .foregroundStyle(.secondary)
+                .foregroundStyle(themeStore.accessibleSecondaryText)
                 .frame(width: 90, alignment: .leading)
 
             Text(value)
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(themeStore.accessibleSecondaryText)
         }
     }
 }
@@ -333,7 +334,7 @@ private struct ImportResultView: View {
 
             Text(result.message)
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(themeStore.accessibleSecondaryText)
                 .multilineTextAlignment(.center)
         }
         .padding()

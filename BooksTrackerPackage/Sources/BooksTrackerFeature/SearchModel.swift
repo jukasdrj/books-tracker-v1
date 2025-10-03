@@ -89,6 +89,48 @@ public final class SearchModel {
 
     // MARK: - Public Methods
 
+    // MARK: - Advanced Search
+
+    func advancedSearch(criteria: AdvancedSearchCriteria) {
+        // Cancel previous search
+        searchTask?.cancel()
+
+        searchTask = Task {
+            await performAdvancedSearch(criteria: criteria)
+        }
+    }
+
+    private func performAdvancedSearch(criteria: AdvancedSearchCriteria) async {
+        searchState = .searching
+        isSearching = true
+
+        let startTime = Date()
+
+        do {
+            let response = try await apiService.advancedSearch(
+                author: criteria.authorName.isEmpty ? nil : criteria.authorName,
+                title: criteria.bookTitle.isEmpty ? nil : criteria.bookTitle,
+                isbn: criteria.isbn.isEmpty ? nil : criteria.isbn
+            )
+
+            // Backend returns filtered SearchResults directly
+            searchResults = response.results
+            searchState = response.results.isEmpty ? .noResults : .results
+            lastSearchTime = Date().timeIntervalSince(startTime) * 1000 // milliseconds
+
+            // Update search text for display (combined query)
+            if let query = criteria.buildSearchQuery() {
+                searchText = query
+            }
+
+        } catch {
+            searchState = .error(error.localizedDescription)
+            errorMessage = error.localizedDescription
+        }
+
+        isSearching = false
+    }
+
     func search(query: String, scope: SearchScope = .all) {
         let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -306,10 +348,8 @@ public final class SearchModel {
         let startTime = CFAbsoluteTimeGetCurrent()
 
         do {
-            // Build scope-filtered query
-            let scopedQuery = buildScopedQuery(query: query, scope: scope)
-
-            let response = try await apiService.search(query: scopedQuery, maxResults: 20)
+            // Pass scope directly to API service (no need for prefix approach)
+            let response = try await apiService.search(query: query, maxResults: 20, scope: scope)
 
             // Check if task was cancelled
             guard !Task.isCancelled else { return }
@@ -366,21 +406,7 @@ public final class SearchModel {
         isSearching = false
     }
 
-    /// Build scope-specific query string
-    private func buildScopedQuery(query: String, scope: SearchScope) -> String {
-        switch scope {
-        case .all:
-            return query
-        case .title:
-            return "intitle:\(query)"
-        case .author:
-            return "inauthor:\(query)"
-        case .isbn:
-            return "isbn:\(query)"
-        }
-    }
-
-    /// Filter results by scope (additional client-side filtering)
+    /// Filter results by scope (additional client-side filtering for quality)
     private func filterResultsByScope(_ results: [SearchResult], scope: SearchScope, query: String) -> [SearchResult] {
         switch scope {
         case .all:
@@ -529,12 +555,25 @@ public actor BookSearchAPIService {
 
     // MARK: - Search Methods
 
-    func search(query: String, maxResults: Int = 20) async throws -> SearchResponse {
+    func search(query: String, maxResults: Int = 20, scope: SearchScope = .all) async throws -> SearchResponse {
         guard let encodedQuery = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
             throw SearchError.invalidQuery
         }
 
-        let urlString = "\(baseURL)/search/auto?q=\(encodedQuery)&maxResults=\(maxResults)"
+        // Use scoped endpoints based on search scope
+        let endpoint: String
+        switch scope {
+        case .all:
+            endpoint = "/search/auto"
+        case .title:
+            endpoint = "/search/title"
+        case .author:
+            endpoint = "/search/author"
+        case .isbn:
+            endpoint = "/search/auto" // ISBN search works through general endpoint
+        }
+
+        let urlString = "\(baseURL)\(endpoint)?q=\(encodedQuery)&maxResults=\(maxResults)"
         guard let url = URL(string: urlString) else {
             throw SearchError.invalidURL
         }
@@ -622,6 +661,108 @@ public actor BookSearchAPIService {
         // For now, return a curated list of trending books
         // In the future, this could be a separate API endpoint
         return try await search(query: "bestseller 2024", maxResults: 12)
+    }
+
+    /// Advanced search with multiple criteria (author, title, ISBN)
+    /// Backend performs filtering to return clean results
+    func advancedSearch(
+        author: String?,
+        title: String?,
+        isbn: String?
+    ) async throws -> SearchResponse {
+        // Build query parameters
+        var urlComponents = URLComponents(string: "\(baseURL)/search/advanced")!
+        var queryItems: [URLQueryItem] = []
+        
+        if let author = author, !author.isEmpty {
+            queryItems.append(URLQueryItem(name: "author", value: author))
+        }
+        if let title = title, !title.isEmpty {
+            queryItems.append(URLQueryItem(name: "title", value: title))
+        }
+        if let isbn = isbn, !isbn.isEmpty {
+            queryItems.append(URLQueryItem(name: "isbn", value: isbn))
+        }
+        
+        queryItems.append(URLQueryItem(name: "maxResults", value: "20"))
+        urlComponents.queryItems = queryItems
+        
+        guard let url = urlComponents.url else {
+            throw SearchError.invalidURL
+        }
+        
+        let (data, response): (Data, URLResponse)
+        do {
+            (data, response) = try await urlSession.data(from: url)
+        } catch {
+            throw SearchError.networkError(error)
+        }
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw SearchError.invalidResponse
+        }
+        
+        guard httpResponse.statusCode == 200 else {
+            throw SearchError.httpError(httpResponse.statusCode)
+        }
+        
+        // Extract performance headers
+        let cacheStatus = httpResponse.allHeaderFields["X-Cache"] as? String ?? "MISS"
+        let provider = httpResponse.allHeaderFields["X-Provider"] as? String ?? "advanced-search"
+        let cacheHitRate = calculateCacheHitRate(from: cacheStatus)
+        
+        // Parse response
+        let apiResponse: APISearchResponse
+        do {
+            apiResponse = try JSONDecoder().decode(APISearchResponse.self, from: data)
+        } catch {
+            throw SearchError.decodingError(error)
+        }
+        
+        // Check format and convert
+        let isEnhancedFormat = apiResponse.format == "enhanced_work_edition_v1"
+        
+        let results: [SearchResult]
+        if isEnhancedFormat {
+            results = apiResponse.items.compactMap { bookItem in
+                return convertEnhancedItemToSearchResult(bookItem, provider: provider)
+            }
+        } else {
+            // Legacy format conversion
+            results = apiResponse.items.map { bookItem in
+                let authors = (bookItem.volumeInfo.authors ?? []).map { authorName in
+                    Author(name: authorName, gender: .unknown, culturalRegion: .international)
+                }
+                
+                let work = Work(
+                    title: bookItem.volumeInfo.title,
+                    authors: authors.isEmpty ? [] : authors,
+                    originalLanguage: bookItem.volumeInfo.language,
+                    firstPublicationYear: extractYear(from: bookItem.volumeInfo.publishedDate),
+                    subjectTags: bookItem.volumeInfo.categories ?? []
+                )
+                
+                work.googleBooksVolumeID = bookItem.id
+                work.isbndbQuality = 75
+                
+                let edition = convertToEdition(from: bookItem, work: work)
+                
+                return SearchResult(
+                    work: work,
+                    editions: [edition],
+                    authors: authors,
+                    relevanceScore: 1.0,
+                    provider: provider
+                )
+            }
+        }
+        
+        return SearchResponse(
+            results: results,
+            cacheHitRate: cacheHitRate,
+            provider: provider,
+            responseTime: 0
+        )
     }
 
     // MARK: - Helper Methods
