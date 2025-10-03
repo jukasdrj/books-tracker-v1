@@ -108,7 +108,39 @@ struct SearchView: View {
 - `@Observable`: Observable model classes (replaces ObservableObject)
 - `@Environment`: Dependency injection (ThemeStore, ModelContext)
 - `@Binding`: Two-way data flow
+- `@Bindable`: **CRITICAL for SwiftData models in views!**
 - No separate ViewModel layer - models are observable directly
+
+**🚨 CRITICAL: SwiftData Reactivity Pattern**
+```swift
+// ❌ WRONG: SwiftUI won't observe relationship changes
+struct BookDetailView: View {
+    let work: Work  // Static reference - no observation
+
+    var body: some View {
+        Text("\(work.userLibraryEntries?.first?.personalRating ?? 0)")
+        // User updates rating → Database saves ✅
+        // View updates → ❌ DOESN'T HAPPEN!
+    }
+}
+
+// ✅ CORRECT: @Bindable enables reactive updates
+struct BookDetailView: View {
+    @Bindable var work: Work  // Observed reference
+
+    var body: some View {
+        Text("\(work.userLibraryEntries?.first?.personalRating ?? 0)")
+        // User updates rating → Database saves ✅
+        // @Bindable observes change → View updates ✅
+    }
+}
+```
+
+**When to use `@Bindable`:**
+- Passing SwiftData models to child views
+- Views that display/edit model relationships
+- Any view that needs to react to model changes
+- Star ratings, progress bars, status indicators, etc.
 
 ### Backend Architecture
 
@@ -357,6 +389,41 @@ var body: some View {
     .background(GlassEffectContainer())
 }
 ```
+
+**🎨 CRITICAL: Text Contrast & Accessibility**
+
+**❌ WRONG - Custom "Accessible" Colors (Don't do this!):**
+```swift
+// These custom colors DON'T adapt to glass backgrounds!
+Text("Author Name")
+    .foregroundColor(themeStore.accessibleSecondaryText)  // White with opacity = invisible!
+```
+
+**✅ CORRECT - System Semantic Colors:**
+```swift
+// System colors automatically adapt to backgrounds
+Text("Author Name")
+    .foregroundColor(.secondary)  // Auto-adapts to glass material ✨
+
+Text("Publisher")
+    .foregroundColor(.secondary)  // Always readable!
+
+Text("Page Count")
+    .foregroundColor(.secondary)  // WCAG AA compliant!
+```
+
+**The Hard-Learned Lesson:**
+- Custom theme colors are great for accents and primary UI
+- **But secondary/tertiary text should ALWAYS use system semantic colors**
+- `.secondary` adapts to `.ultraThinMaterial` glass backgrounds
+- Custom opacity values (0.75, 0.85) create illegible text on light glass
+- Don't reinvent the wheel - Apple's got this covered! 🍎
+
+**When to use what:**
+- `themeStore.primaryColor` → Buttons, icons, highlights
+- `themeStore.secondaryColor` → Gradients, subtle accents
+- `.secondary` → **ALL metadata text** (authors, publishers, dates, etc.)
+- `.primary` → Headlines, titles, main content
 
 ## Documentation Structure
 

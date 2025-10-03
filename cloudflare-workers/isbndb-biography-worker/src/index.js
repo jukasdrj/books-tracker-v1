@@ -82,7 +82,9 @@ function processAndDeduplicateEditions(books) {
     const unwantedTitleKeywords = [
         'study guide', 'summary', 'workbook', 'audiobook', 'box set', 'collection',
         'companion', 'large print', 'classroom', 'abridged', 'collectors', 'deluxe',
-        ' unabridged', 'audio cd'
+        ' unabridged', 'audio cd', 'teacher', 'teaching', 'instructor', 'student edition',
+        'annotated', 'critical edition', 'sparknotes', 'cliffsnotes', 'test bank',
+        'lesson plan', 'curriculum', 'educational'
     ];
     const unwantedPublishers = [
         'createspace', 'independently published', 'kdp', 'lulu.com',

@@ -4,7 +4,7 @@ import SwiftData
 /// Edition Metadata Card - iOS 26 Liquid Glass Design
 /// Displays core bibliographic information and user tracking data
 struct EditionMetadataView: View {
-    let work: Work
+    @Bindable var work: Work
     let edition: Edition
 
     @Environment(\.modelContext) private var modelContext
@@ -12,13 +12,10 @@ struct EditionMetadataView: View {
     @State private var showingStatusPicker = false
     @State private var showingNotesEditor = false
 
-    // User's library entry for this work
-    private var userEntry: UserLibraryEntry? {
+    // User's library entry for this work (reactive to SwiftData changes)
+    private var libraryEntry: UserLibraryEntry? {
         work.userLibraryEntries?.first
     }
-
-    // Create or get user library entry
-    @State private var libraryEntry: UserLibraryEntry?
 
     var body: some View {
         GlassEffectContainer(spacing: 20) {
@@ -39,7 +36,7 @@ struct EditionMetadataView: View {
         }
         .glassEffect(.regular, tint: themeStore.primaryColor.opacity(0.1))
         .onAppear {
-            setupLibraryEntry()
+            ensureLibraryEntry()
         }
     }
 
@@ -56,20 +53,20 @@ struct EditionMetadataView: View {
             // Author Names
             Text(work.authorNames)
                 .font(.subheadline)
-                .foregroundColor(themeStore.accessibleSecondaryText)
+                .foregroundColor(.secondary)
 
             // Publisher Info
             if !edition.publisherInfo.isEmpty {
                 Text(edition.publisherInfo)
                     .font(.caption)
-                    .foregroundColor(themeStore.accessibleSecondaryText)
+                    .foregroundColor(.secondary)
             }
 
             // Page Count
             if let pageCountString = edition.pageCountString {
                 Text(pageCountString)
                     .font(.caption)
-                    .foregroundColor(themeStore.accessibleSecondaryText)
+                    .foregroundColor(.secondary)
             }
 
             // Edition Format
@@ -79,7 +76,7 @@ struct EditionMetadataView: View {
 
                 Text(edition.format.displayName)
                     .font(.caption)
-                    .foregroundColor(themeStore.accessibleSecondaryText)
+                    .foregroundColor(.secondary)
             }
         }
     }
@@ -128,14 +125,14 @@ struct EditionMetadataView: View {
 
                         Text(currentStatus.description)
                             .font(.caption)
-                            .foregroundColor(themeStore.accessibleSecondaryText)
+                            .foregroundColor(.secondary)
                     }
 
                     Spacer()
 
                     Image(systemName: "chevron.right")
                         .font(.caption)
-                        .foregroundColor(themeStore.accessibleSecondaryText)
+                        .foregroundColor(.secondary)
                 }
                 .padding()
                 .background {
@@ -169,9 +166,14 @@ struct EditionMetadataView: View {
                 rating: Binding(
                     get: { libraryEntry?.personalRating ?? 0 },
                     set: { newRating in
-                        libraryEntry?.personalRating = newRating
-                        libraryEntry?.touch()
+                        guard let entry = libraryEntry else {
+                            print("⚠️ Cannot set rating: libraryEntry is nil")
+                            return
+                        }
+                        entry.personalRating = newRating
+                        entry.touch()
                         saveContext()
+                        print("✅ Rating set to \(newRating) for \(work.title)")
                     }
                 )
             )
@@ -188,17 +190,46 @@ struct EditionMetadataView: View {
                 ProgressView(value: libraryEntry?.readingProgress ?? 0.0)
                     .tint(themeStore.primaryColor)
 
-                HStack {
-                    Text("Page \(libraryEntry?.currentPage ?? 0)")
+                HStack(spacing: 4) {
+                    Text("Page")
                         .font(.caption)
-                        .foregroundColor(themeStore.accessibleSecondaryText)
+                        .foregroundColor(.secondary)
 
-                    Spacer()
+                    // Editable page number input
+                    TextField("0", value: Binding(
+                        get: { libraryEntry?.currentPage ?? 0 },
+                        set: { newPage in
+                            guard let entry = libraryEntry else { return }
+                            // Validate against page count
+                            if let pageCount = edition.pageCount {
+                                entry.currentPage = min(newPage, pageCount)
+                            } else {
+                                entry.currentPage = newPage
+                            }
+                            // Auto-calculate progress
+                            updateReadingProgress()
+                            entry.touch()
+                            saveContext()
+                        }
+                    ), format: .number)
+                    .keyboardType(.numberPad)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 60)
+                    .multilineTextAlignment(.center)
 
                     if let pageCount = edition.pageCount {
                         Text("of \(pageCount)")
                             .font(.caption)
-                            .foregroundColor(themeStore.accessibleSecondaryText)
+                            .foregroundColor(.secondary)
+                    }
+
+                    Spacer()
+
+                    // Progress percentage
+                    if let progress = libraryEntry?.readingProgress {
+                        Text("\(Int(progress * 100))%")
+                            .font(.caption.bold())
+                            .foregroundColor(themeStore.primaryColor)
                     }
                 }
             }
@@ -216,7 +247,7 @@ struct EditionMetadataView: View {
             }) {
                 Text(libraryEntry?.notes?.isEmpty == false ? libraryEntry!.notes! : "Add your thoughts...")
                     .font(.subheadline)
-                    .foregroundColor(libraryEntry?.notes?.isEmpty == false ? .primary : themeStore.accessibleSecondaryText)
+                    .foregroundColor(libraryEntry?.notes?.isEmpty == false ? .primary : .secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding()
                     .background {
@@ -286,14 +317,11 @@ struct EditionMetadataView: View {
 
     // MARK: - Setup and State Management
 
-    private func setupLibraryEntry() {
-        if let existingEntry = userEntry {
-            libraryEntry = existingEntry
-        } else {
-            // Create wishlist entry if none exists
+    private func ensureLibraryEntry() {
+        // Create wishlist entry if none exists
+        if libraryEntry == nil {
             let wishlistEntry = UserLibraryEntry.createWishlistEntry(for: work)
             modelContext.insert(wishlistEntry)
-            libraryEntry = wishlistEntry
             saveContext()
         }
     }
@@ -334,6 +362,11 @@ struct EditionMetadataView: View {
         saveContext()
     }
 
+    private func updateReadingProgress() {
+        guard let entry = libraryEntry, let pageCount = edition.pageCount, pageCount > 0 else { return }
+        entry.readingProgress = Double(entry.currentPage) / Double(pageCount)
+    }
+
     private func saveContext() {
         do {
             try modelContext.save()
@@ -362,7 +395,7 @@ struct StarRatingView: View {
                     triggerHaptic(.light)
                 }) {
                     Image(systemName: star <= Int(rating) ? "star.fill" : "star")
-                        .foregroundColor(star <= Int(rating) ? .yellow : themeStore.accessibleSecondaryText)
+                        .foregroundColor(star <= Int(rating) ? .yellow : .secondary)
                         .font(.title3)
                 }
                 .buttonStyle(.plain)
@@ -371,7 +404,7 @@ struct StarRatingView: View {
             if rating > 0 {
                 Text("\(Int(rating))/5")
                     .font(.caption)
-                    .foregroundColor(themeStore.accessibleSecondaryText)
+                    .foregroundColor(.secondary)
                     .padding(.leading, 4)
             }
         }
@@ -410,7 +443,7 @@ struct ReadingStatusPicker: View {
 
                             Text(status.description)
                                 .font(.caption)
-                                .foregroundColor(themeStore.accessibleSecondaryText)
+                                .foregroundColor(.secondary)
                         }
 
                         Spacer()
@@ -452,7 +485,7 @@ struct NotesEditorView: View {
             VStack(spacing: 16) {
                 Text("Notes for \(workTitle)")
                     .font(.subheadline)
-                    .foregroundColor(themeStore.accessibleSecondaryText)
+                    .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
                     .padding(.top)
 
@@ -469,7 +502,7 @@ struct NotesEditorView: View {
                             VStack {
                                 HStack {
                                     Text("Add your thoughts...")
-                                        .foregroundColor(themeStore.accessibleSecondaryText)
+                                        .foregroundColor(.secondary)
                                         .padding(.leading, 20)
                                         .padding(.top, 8)
                                     Spacer()

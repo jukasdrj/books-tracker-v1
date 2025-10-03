@@ -10,6 +10,7 @@ struct WorkDetailView: View {
     @Environment(\.iOS26ThemeStore) private var themeStore
     @State private var selectedEdition: Edition?
     @State private var showingEditionPicker = false
+    @State private var selectedAuthor: Author?
 
     // Primary edition for display
     private var primaryEdition: Edition {
@@ -71,6 +72,9 @@ struct WorkDetailView: View {
                 )
             )
             .iOS26SheetGlass()
+        }
+        .sheet(item: $selectedAuthor) { author in
+            AuthorSearchResultsView(author: author)
         }
     }
 
@@ -183,11 +187,29 @@ struct WorkDetailView: View {
                     .multilineTextAlignment(.center)
                     .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 1)
 
-                Text(work.authorNames)
-                    .font(.title2)
-                    .foregroundColor(.white.opacity(0.9))
-                    .multilineTextAlignment(.center)
-                    .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 1)
+                // Clickable author names
+                if let authors = work.authors, authors.count == 1, let author = authors.first {
+                    Button {
+                        selectedAuthor = author
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(author.name)
+                                .font(.title2)
+                                .foregroundColor(.white.opacity(0.9))
+                            Image(systemName: "magnifyingglass")
+                                .font(.footnote)
+                                .foregroundColor(.white.opacity(0.7))
+                        }
+                        .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 1)
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    Text(work.authorNames)
+                        .font(.title2)
+                        .foregroundColor(.white.opacity(0.9))
+                        .multilineTextAlignment(.center)
+                        .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 1)
+                }
             }
             .padding(.horizontal, 20)
         }
@@ -200,6 +222,7 @@ struct EditionPickerView: View {
     let work: Work
     @Binding var selectedEdition: Edition
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.iOS26ThemeStore) private var themeStore
 
     var body: some View {
         NavigationStack {
@@ -218,20 +241,20 @@ struct EditionPickerView: View {
                         if !edition.publisherInfo.isEmpty {
                             Text(edition.publisherInfo)
                                 .font(.caption)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(themeStore.accessibleSecondaryText)
                         }
 
                         // Format and pages
                         HStack {
                             Label(edition.format.displayName, systemImage: edition.format.icon)
                                 .font(.caption)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(themeStore.accessibleSecondaryText)
 
                             if let pageCount = edition.pageCountString {
                                 Spacer()
                                 Text(pageCount)
                                     .font(.caption)
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(themeStore.accessibleSecondaryText)
                             }
                         }
 
@@ -239,7 +262,7 @@ struct EditionPickerView: View {
                         if let isbn = edition.primaryISBN {
                             Text("ISBN: \(isbn)")
                                 .font(.caption)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(themeStore.accessibleSecondaryText)
                         }
                     }
                     .padding(.vertical, 4)
@@ -260,6 +283,143 @@ struct EditionPickerView: View {
                     }
                 }
             }
+        }
+    }
+}
+
+// MARK: - Author Search Results View
+
+/// Dedicated view for displaying search results for a specific author
+struct AuthorSearchResultsView: View {
+    let author: Author
+
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.iOS26ThemeStore) private var themeStore
+    @State private var searchModel = SearchModel()
+    @State private var selectedBook: SearchResult?
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                // Background
+                themeStore.backgroundGradient
+                    .ignoresSafeArea()
+
+                // Content
+                Group {
+                    switch searchModel.searchState {
+                    case .searching:
+                        searchingView
+                    case .results:
+                        resultsView
+                    case .noResults:
+                        noResultsView
+                    case .error:
+                        errorView
+                    default:
+                        searchingView
+                    }
+                }
+            }
+            .navigationTitle("Books by \(author.name)")
+            .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                    .foregroundColor(themeStore.primaryColor)
+                }
+            }
+            .navigationDestination(item: $selectedBook) { result in
+                WorkDiscoveryView(searchResult: result)
+            }
+            .task {
+                let criteria = AdvancedSearchCriteria()
+                criteria.authorName = author.name
+                searchModel.advancedSearch(criteria: criteria)
+            }
+        }
+    }
+
+    // MARK: - State Views
+
+    private var searchingView: some View {
+        VStack(spacing: 20) {
+            ProgressView()
+                .scaleEffect(1.5)
+                .tint(themeStore.primaryColor)
+
+            Text("Searching for books by \(author.name)...")
+                .font(.headline)
+                .foregroundStyle(themeStore.accessiblePrimaryText)
+        }
+    }
+
+    private var resultsView: some View {
+        ScrollView {
+            LazyVStack(spacing: 16) {
+                ForEach(searchModel.searchResults) { result in
+                    Button {
+                        selectedBook = result
+                    } label: {
+                        iOS26AdaptiveBookCard(
+                            work: result.work,
+                            displayMode: .standard
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding()
+        }
+    }
+
+    private var noResultsView: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "books.vertical")
+                .font(.system(size: 60))
+                .foregroundStyle(themeStore.accessibleSecondaryText)
+
+            Text("No books found")
+                .font(.title2.bold())
+                .foregroundStyle(themeStore.accessiblePrimaryText)
+
+            Text("We couldn't find any books by \(author.name)")
+                .font(.subheadline)
+                .foregroundStyle(themeStore.accessibleSecondaryText)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 40)
+        }
+    }
+
+    private var errorView: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.system(size: 60))
+                .foregroundStyle(.red)
+
+            Text("Search Error")
+                .font(.title2.bold())
+                .foregroundStyle(themeStore.accessiblePrimaryText)
+
+            if let errorMessage = searchModel.errorMessage {
+                Text(errorMessage)
+                    .font(.subheadline)
+                    .foregroundStyle(themeStore.accessibleSecondaryText)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 40)
+            }
+
+            Button("Try Again") {
+                Task {
+                    let criteria = AdvancedSearchCriteria()
+                    criteria.authorName = author.name
+                    searchModel.advancedSearch(criteria: criteria)
+                }
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(themeStore.primaryColor)
         }
     }
 }

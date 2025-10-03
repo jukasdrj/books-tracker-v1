@@ -46,8 +46,12 @@ public struct ContentView: View {
         }
         .tint(themeStore.primaryColor)
         .themedBackground()
-        .onAppear {
-            setupSampleData()
+        // Sample data disabled for production - empty library on first launch
+        // .onAppear {
+        //     setupSampleData()
+        // }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SwitchToLibraryTab"))) { _ in
+            selectedTab = .library
         }
     }
 

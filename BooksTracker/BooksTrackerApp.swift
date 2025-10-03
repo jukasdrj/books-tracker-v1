@@ -19,11 +19,11 @@ struct BooksTrackerApp: App {
         ])
 
         #if targetEnvironment(simulator)
-        // Simulator: Use in-memory storage for clean testing (no CloudKit)
-        print("🧪 Running on simulator - using in-memory database")
+        // Simulator: Use persistent storage (no CloudKit on simulator)
+        print("🧪 Running on simulator - using persistent local database")
         let modelConfiguration = ModelConfiguration(
             schema: schema,
-            isStoredInMemoryOnly: true,  // ← Clean slate every launch
+            isStoredInMemoryOnly: false,  // ← Persist data across launches
             cloudKitDatabase: .none  // Explicitly disable CloudKit on simulator
         )
         #else
@@ -47,12 +47,12 @@ struct BooksTrackerApp: App {
             print("❌ Error details: \(error.localizedDescription)")
 
             #if targetEnvironment(simulator)
-            print("💡 Simulator detected - trying in-memory fallback")
+            print("💡 Simulator detected - trying persistent fallback")
             // Last resort fallback for simulator
             do {
                 let fallbackConfig = ModelConfiguration(
                     schema: schema,
-                    isStoredInMemoryOnly: true,
+                    isStoredInMemoryOnly: false,  // Persist data
                     cloudKitDatabase: .none
                 )
                 return try ModelContainer(for: schema, configurations: [fallbackConfig])

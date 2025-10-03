@@ -58,50 +58,48 @@ public struct iOS26LiquidLibraryView: View {
     public init() {}
 
     public var body: some View {
-        NavigationStack {
-            mainContentView
-                .searchable(text: $searchText, prompt: "Search your library")
-                .onChange(of: searchText) { _, newValue in
-                    updateFilteredWorks()
-                }
-                .onChange(of: libraryWorks) { _, _ in
-                    updateFilteredWorks()
-                }
-                .onAppear {
-                    updateFilteredWorks()
-                }
-        }
-        .navigationTitle("My Library")
-        .navigationBarTitleDisplayMode(.large)
-        .toolbar {
-            ToolbarItemGroup(placement: .navigationBarTrailing) {
-                Button("Insights") {
-                    showingDiversityInsights.toggle()
-                }
-                .buttonStyle(GlassButtonStyle())
-
-                Menu {
-                    Picker("Layout", selection: $selectedLayout.animation(.smooth)) {
-                        ForEach(LibraryLayout.allCases, id: \.self) { layout in
-                            Label(layout.displayName, systemImage: layout.icon)
-                                .tag(layout)
-                        }
-                    }
-                } label: {
-                    Image(systemName: selectedLayout.icon)
-                }
-                .buttonStyle(GlassButtonStyle())
+        mainContentView
+            .searchable(text: $searchText, prompt: "Search your library")
+            .onChange(of: searchText) { _, newValue in
+                updateFilteredWorks()
             }
-        }
-        // ✅ FIX 4: Navigation with Work objects (SwiftData PersistentIdentifier)
-        .navigationDestination(for: Work.self) { work in
-            WorkDetailView(work: work)
-        }
-        .sheet(isPresented: $showingDiversityInsights) {
-            CulturalDiversityInsightsView(works: cachedFilteredWorks)
-                .presentationDetents([.medium, .large])
-                .iOS26SheetGlass()
-        }
+            .onChange(of: libraryWorks) { _, _ in
+                updateFilteredWorks()
+            }
+            .onAppear {
+                updateFilteredWorks()
+            }
+            .navigationTitle("My Library")
+            .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                ToolbarItemGroup(placement: .navigationBarTrailing) {
+                    Button("Insights") {
+                        showingDiversityInsights.toggle()
+                    }
+                    .buttonStyle(GlassButtonStyle())
+
+                    Menu {
+                        Picker("Layout", selection: $selectedLayout.animation(.smooth)) {
+                            ForEach(LibraryLayout.allCases, id: \.self) { layout in
+                                Label(layout.displayName, systemImage: layout.icon)
+                                    .tag(layout)
+                            }
+                        }
+                    } label: {
+                        Image(systemName: selectedLayout.icon)
+                    }
+                    .buttonStyle(GlassButtonStyle())
+                }
+            }
+            // ✅ FIX 4: Navigation with Work objects (SwiftData PersistentIdentifier)
+            .navigationDestination(for: Work.self) { work in
+                WorkDetailView(work: work)
+            }
+            .sheet(isPresented: $showingDiversityInsights) {
+                CulturalDiversityInsightsView(works: cachedFilteredWorks)
+                    .presentationDetents([.medium, .large])
+                    .iOS26SheetGlass()
+            }
     }
 
     // MARK: - Main Content View
@@ -203,7 +201,7 @@ public struct iOS26LiquidLibraryView: View {
 
                         Text("Reading Goals")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(themeStore.accessibleSecondaryText)
                     }
 
                     Spacer()
@@ -232,7 +230,7 @@ public struct iOS26LiquidLibraryView: View {
 
                 Text("Diverse")
                     .font(.caption2)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(themeStore.accessibleSecondaryText)
             }
         }
         .onTapGesture {
@@ -257,7 +255,7 @@ public struct iOS26LiquidLibraryView: View {
 
                     Text(status.displayName)
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(themeStore.accessibleSecondaryText)
                 }
                 .frame(maxWidth: .infinity)
             }
@@ -341,7 +339,8 @@ public struct UltraOptimizedLibraryView: View {
     
     @Namespace private var layoutTransition
     @State private var scrollPosition = ScrollPosition()
-    
+    @Environment(\.iOS26ThemeStore) private var themeStore
+
     // ✅ FIX 4: Memory management
     private let memoryHandler = MemoryPressureHandler.shared
 
@@ -455,7 +454,7 @@ public struct UltraOptimizedLibraryView: View {
 
                         Text("Start building your personal collection of books")
                             .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(themeStore.accessibleSecondaryText)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 32)
                     }
@@ -516,7 +515,7 @@ public struct UltraOptimizedLibraryView: View {
 
                 Text(description)
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(themeStore.accessibleSecondaryText)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
@@ -604,7 +603,7 @@ public struct UltraOptimizedLibraryView: View {
 
                         Text("Reading Goals")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(themeStore.accessibleSecondaryText)
                     }
 
                     Spacer()
@@ -633,7 +632,7 @@ public struct UltraOptimizedLibraryView: View {
 
                 Text("Diverse")
                     .font(.caption2)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(themeStore.accessibleSecondaryText)
             }
         }
         .onTapGesture {
@@ -658,7 +657,7 @@ public struct UltraOptimizedLibraryView: View {
 
                     Text(status.displayName)
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(themeStore.accessibleSecondaryText)
                 }
                 .frame(maxWidth: .infinity)
             }
@@ -729,6 +728,7 @@ public struct UltraOptimizedLibraryView: View {
 struct CulturalDiversityInsightsView: View {
     let works: [Work]
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.iOS26ThemeStore) private var themeStore
 
     var body: some View {
         NavigationStack {
@@ -816,7 +816,7 @@ struct CulturalDiversityInsightsView: View {
 
                             Text("\(count) books")
                                 .font(.caption)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(themeStore.accessibleSecondaryText)
                         }
 
                         Spacer()
@@ -932,6 +932,7 @@ struct CulturalDiversityInsightsView: View {
 // MARK: - Metric View Component
 
 struct MetricView: View {
+    @Environment(\.iOS26ThemeStore) private var themeStore
     let title: String
     let value: String
     let color: Color
@@ -944,7 +945,7 @@ struct MetricView: View {
 
             Text(title)
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundColor(themeStore.accessibleSecondaryText)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)

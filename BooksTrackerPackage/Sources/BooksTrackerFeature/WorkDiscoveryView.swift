@@ -84,10 +84,20 @@ public struct WorkDiscoveryView: View {
             }
             .alert("Success!", isPresented: $showingSuccessAlert) {
                 Button("View Library") {
+                    // Dismiss this view first
                     dismiss()
-                    // Navigate to library tab - this would need coordination with parent
+
+                    // Post notification to switch to library tab
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        NotificationCenter.default.post(
+                            name: NSNotification.Name("SwitchToLibraryTab"),
+                            object: nil
+                        )
+                    }
                 }
-                Button("OK") { }
+                Button("OK") {
+                    dismiss()
+                }
             } message: {
                 Text(alertMessage)
             }
@@ -112,11 +122,11 @@ public struct WorkDiscoveryView: View {
                         VStack(spacing: 8) {
                             Image(systemName: "book.closed")
                                 .font(.title)
-                                .foregroundStyle(.secondary)
-                            
+                                .foregroundStyle(themeStore.accessibleSecondaryText)
+
                             Text("Loading Cover...")
                                 .font(.caption2)
-                                .foregroundStyle(.tertiary)
+                                .foregroundStyle(themeStore.accessibleTertiaryText)
                         }
                     }
             }
@@ -134,20 +144,20 @@ public struct WorkDiscoveryView: View {
 
                     Text(searchResult.work.authorNames)
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(themeStore.accessibleSecondaryText)
                         .multilineTextAlignment(.leading)
                 }
 
                 if let year = searchResult.work.firstPublicationYear {
                     Label("Published \(year)", systemImage: "calendar")
                         .font(.caption)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(themeStore.accessibleTertiaryText)
                 }
 
                 if let pageCount = searchResult.work.primaryEdition?.pageCount {
                     Label("\(pageCount) pages", systemImage: "doc.text")
                         .font(.caption)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(themeStore.accessibleTertiaryText)
                 }
 
                 // Provider badge
@@ -204,7 +214,7 @@ public struct WorkDiscoveryView: View {
                         Text("Categories")
                             .font(.subheadline)
                             .fontWeight(.medium)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(themeStore.accessibleSecondaryText)
 
                         LazyVGrid(columns: [
                             GridItem(.adaptive(minimum: 80), spacing: 8)
@@ -216,7 +226,7 @@ public struct WorkDiscoveryView: View {
                                     .padding(.vertical, 4)
                                     .background(.ultraThinMaterial)
                                     .clipShape(Capsule())
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(themeStore.accessibleSecondaryText)
                             }
                         }
                     }
@@ -295,7 +305,7 @@ public struct WorkDiscoveryView: View {
 
             Text(actionDescription(for: action))
                 .font(.caption)
-                .foregroundColor(selectedAction == action ? .white.opacity(0.8) : .secondary)
+                .foregroundColor(selectedAction == action ? .white.opacity(0.8) : themeStore.accessibleSecondaryText)
         }
     }
     
@@ -371,6 +381,12 @@ public struct WorkDiscoveryView: View {
                     status: selectedAction.readingStatus
                 )
             }
+
+            // ✅ FIX: Link the entry to the work for library view filtering
+            if work.userLibraryEntries == nil {
+                work.userLibraryEntries = []
+            }
+            work.userLibraryEntries?.append(libraryEntry)
 
             modelContext.insert(libraryEntry)
 
@@ -463,6 +479,7 @@ public struct WorkDiscoveryView: View {
 // MARK: - Detail Row Component
 
 private struct DetailRow: View {
+    @Environment(\.iOS26ThemeStore) private var themeStore
     let title: String
     let value: String
 
@@ -471,7 +488,7 @@ private struct DetailRow: View {
             Text(title)
                 .font(.subheadline)
                 .fontWeight(.medium)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(themeStore.accessibleSecondaryText)
                 .frame(width: 80, alignment: .leading)
 
             Text(value)
