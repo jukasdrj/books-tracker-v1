@@ -201,7 +201,7 @@ public struct iOS26LiquidLibraryView: View {
 
                         Text("Reading Goals")
                             .font(.caption)
-                            .foregroundColor(themeStore.accessibleSecondaryText)
+                            .foregroundColor(.secondary)
                     }
 
                     Spacer()
@@ -230,7 +230,7 @@ public struct iOS26LiquidLibraryView: View {
 
                 Text("Diverse")
                     .font(.caption2)
-                    .foregroundColor(themeStore.accessibleSecondaryText)
+                    .foregroundColor(.secondary)
             }
         }
         .onTapGesture {
@@ -255,7 +255,7 @@ public struct iOS26LiquidLibraryView: View {
 
                     Text(status.displayName)
                         .font(.caption2)
-                        .foregroundColor(themeStore.accessibleSecondaryText)
+                        .foregroundColor(.secondary)
                 }
                 .frame(maxWidth: .infinity)
             }
@@ -454,7 +454,7 @@ public struct UltraOptimizedLibraryView: View {
 
                         Text("Start building your personal collection of books")
                             .font(.subheadline)
-                            .foregroundStyle(themeStore.accessibleSecondaryText)
+                            .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 32)
                     }
@@ -515,7 +515,7 @@ public struct UltraOptimizedLibraryView: View {
 
                 Text(description)
                     .font(.subheadline)
-                    .foregroundStyle(themeStore.accessibleSecondaryText)
+                    .foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
@@ -603,7 +603,7 @@ public struct UltraOptimizedLibraryView: View {
 
                         Text("Reading Goals")
                             .font(.caption)
-                            .foregroundColor(themeStore.accessibleSecondaryText)
+                            .foregroundColor(.secondary)
                     }
 
                     Spacer()
@@ -632,7 +632,7 @@ public struct UltraOptimizedLibraryView: View {
 
                 Text("Diverse")
                     .font(.caption2)
-                    .foregroundColor(themeStore.accessibleSecondaryText)
+                    .foregroundColor(.secondary)
             }
         }
         .onTapGesture {
@@ -657,7 +657,7 @@ public struct UltraOptimizedLibraryView: View {
 
                     Text(status.displayName)
                         .font(.caption2)
-                        .foregroundColor(themeStore.accessibleSecondaryText)
+                        .foregroundColor(.secondary)
                 }
                 .frame(maxWidth: .infinity)
             }
@@ -816,7 +816,7 @@ struct CulturalDiversityInsightsView: View {
 
                             Text("\(count) books")
                                 .font(.caption)
-                                .foregroundColor(themeStore.accessibleSecondaryText)
+                                .foregroundColor(.secondary)
                         }
 
                         Spacer()
@@ -945,7 +945,7 @@ struct MetricView: View {
 
             Text(title)
                 .font(.caption)
-                .foregroundColor(themeStore.accessibleSecondaryText)
+                .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)

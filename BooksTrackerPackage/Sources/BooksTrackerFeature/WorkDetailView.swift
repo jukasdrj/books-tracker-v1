@@ -241,20 +241,20 @@ struct EditionPickerView: View {
                         if !edition.publisherInfo.isEmpty {
                             Text(edition.publisherInfo)
                                 .font(.caption)
-                                .foregroundColor(themeStore.accessibleSecondaryText)
+                                .foregroundColor(.secondary)
                         }
 
                         // Format and pages
                         HStack {
                             Label(edition.format.displayName, systemImage: edition.format.icon)
                                 .font(.caption)
-                                .foregroundColor(themeStore.accessibleSecondaryText)
+                                .foregroundColor(.secondary)
 
                             if let pageCount = edition.pageCountString {
                                 Spacer()
                                 Text(pageCount)
                                     .font(.caption)
-                                    .foregroundColor(themeStore.accessibleSecondaryText)
+                                    .foregroundColor(.secondary)
                             }
                         }
 
@@ -262,7 +262,7 @@ struct EditionPickerView: View {
                         if let isbn = edition.primaryISBN {
                             Text("ISBN: \(isbn)")
                                 .font(.caption)
-                                .foregroundColor(themeStore.accessibleSecondaryText)
+                                .foregroundColor(.secondary)
                         }
                     }
                     .padding(.vertical, 4)
@@ -352,7 +352,7 @@ struct AuthorSearchResultsView: View {
 
             Text("Searching for books by \(author.name)...")
                 .font(.headline)
-                .foregroundStyle(themeStore.accessiblePrimaryText)
+                .foregroundColor(.primary)
         }
     }
 
@@ -379,15 +379,15 @@ struct AuthorSearchResultsView: View {
         VStack(spacing: 20) {
             Image(systemName: "books.vertical")
                 .font(.system(size: 60))
-                .foregroundStyle(themeStore.accessibleSecondaryText)
+                .foregroundColor(.secondary)
 
             Text("No books found")
                 .font(.title2.bold())
-                .foregroundStyle(themeStore.accessiblePrimaryText)
+                .foregroundColor(.primary)
 
             Text("We couldn't find any books by \(author.name)")
                 .font(.subheadline)
-                .foregroundStyle(themeStore.accessibleSecondaryText)
+                .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
         }
@@ -401,12 +401,12 @@ struct AuthorSearchResultsView: View {
 
             Text("Search Error")
                 .font(.title2.bold())
-                .foregroundStyle(themeStore.accessiblePrimaryText)
+                .foregroundColor(.primary)
 
             if let errorMessage = searchModel.errorMessage {
                 Text(errorMessage)
                     .font(.subheadline)
-                    .foregroundStyle(themeStore.accessibleSecondaryText)
+                    .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 40)
             }

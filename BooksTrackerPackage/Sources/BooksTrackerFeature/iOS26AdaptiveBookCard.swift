@@ -151,7 +151,7 @@ struct iOS26AdaptiveBookCard: View {
 
                 Text(work.authorNames)
                     .font(.caption)
-                    .foregroundColor(themeStore.accessibleSecondaryText)
+                    .foregroundColor(.secondary)
                     .lineLimit(1)
 
                 if let userEntry = userEntry {
@@ -186,13 +186,13 @@ struct iOS26AdaptiveBookCard: View {
 
                 Text(work.authorNames)
                     .font(.subheadline)
-                    .foregroundColor(themeStore.accessibleSecondaryText)
+                    .foregroundColor(.secondary)
                     .lineLimit(1)
 
                 if let year = work.firstPublicationYear {
                     Text("\(year)")
                         .font(.caption)
-                        .foregroundColor(themeStore.accessibleSecondaryText)
+                        .foregroundColor(.secondary)
                 }
 
                 HStack {
@@ -205,7 +205,7 @@ struct iOS26AdaptiveBookCard: View {
                     if let edition = primaryEdition {
                         Label(edition.format.displayName, systemImage: edition.format.icon)
                             .font(.caption2)
-                            .foregroundColor(themeStore.accessibleSecondaryText)
+                            .foregroundColor(.secondary)
                     }
                 }
             }
@@ -250,20 +250,20 @@ struct iOS26AdaptiveBookCard: View {
 
                 Text(work.authorNames)
                     .font(.body)
-                    .foregroundColor(themeStore.accessibleSecondaryText)
+                    .foregroundColor(.secondary)
                     .lineLimit(2)
 
                 HStack(spacing: 12) {
                     if let year = work.firstPublicationYear {
                         Label("\(year)", systemImage: "calendar")
                             .font(.caption)
-                            .foregroundColor(themeStore.accessibleSecondaryText)
+                            .foregroundColor(.secondary)
                     }
 
                     if let edition = primaryEdition {
                         Label(edition.format.displayName, systemImage: edition.format.icon)
                             .font(.caption)
-                            .foregroundColor(themeStore.accessibleSecondaryText)
+                            .foregroundColor(.secondary)
                     }
                 }
 

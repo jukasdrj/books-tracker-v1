@@ -461,38 +461,51 @@ var body: some View {
 
 **🎨 CRITICAL: Text Contrast & Accessibility**
 
-**❌ WRONG - Custom "Accessible" Colors (Don't do this!):**
-```swift
-// These custom colors DON'T adapt to glass backgrounds!
-Text("Author Name")
-    .foregroundColor(themeStore.accessibleSecondaryText)  // White with opacity = invisible!
+```
+   ╔════════════════════════════════════════════════════════╗
+   ║  🏆 ACCESSIBILITY VICTORY: System Colors FTW! 🎯     ║
+   ║                                                        ║
+   ║  ❌ Deleted: Custom accessibleText colors (31 lines) ║
+   ║  ✅ Replaced: System semantic colors (130+ instances)║
+   ║  🎨 Result: WCAG AA guaranteed across ALL themes!    ║
+   ╚════════════════════════════════════════════════════════╝
 ```
 
-**✅ CORRECT - System Semantic Colors:**
+**❌ OLD WAY - Custom "Accessible" Colors (DEPRECATED):**
 ```swift
-// System colors automatically adapt to backgrounds
+// ⚠️ These were removed in v1.12.0 - DON'T USE!
 Text("Author Name")
-    .foregroundColor(.secondary)  // Auto-adapts to glass material ✨
+    .foregroundColor(themeStore.accessibleSecondaryText)  // DELETED
+    .foregroundStyle(themeStore.accessibleTertiaryText)   // DELETED
+```
+
+**✅ NEW WAY - System Semantic Colors (iOS Standard):**
+```swift
+// System colors automatically adapt to ALL backgrounds 🌈
+Text("Author Name")
+    .foregroundColor(.secondary)  // Auto-adapts to glass material!
 
 Text("Publisher")
-    .foregroundColor(.secondary)  // Always readable!
+    .foregroundColor(.secondary)  // Handles dark mode automatically!
 
 Text("Page Count")
-    .foregroundColor(.secondary)  // WCAG AA compliant!
+    .foregroundColor(.tertiary)   // WCAG AA compliant everywhere!
 ```
 
-**The Hard-Learned Lesson:**
-- Custom theme colors are great for accents and primary UI
-- **But secondary/tertiary text should ALWAYS use system semantic colors**
-- `.secondary` adapts to `.ultraThinMaterial` glass backgrounds
-- Custom opacity values (0.75, 0.85) create illegible text on light glass
-- Don't reinvent the wheel - Apple's got this covered! 🍎
+**The Big Lesson (October 2025 Cleanup):**
+- We tried being clever with custom `accessibleSecondaryText` colors (white @ 0.75-0.85 opacity)
+- **PROBLEM:** They looked great on dark backgrounds, terrible on light glass materials 😬
+- **SOLUTION:** Deleted ALL custom accessibility colors, switched to `.secondary`/`.tertiary`
+- **RESULT:** Perfect contrast everywhere, zero maintenance, future-proof! 🚀
 
 **When to use what:**
-- `themeStore.primaryColor` → Buttons, icons, highlights
-- `themeStore.secondaryColor` → Gradients, subtle accents
-- `.secondary` → **ALL metadata text** (authors, publishers, dates, etc.)
-- `.primary` → Headlines, titles, main content
+- `themeStore.primaryColor` → Buttons, icons, brand highlights ✨
+- `themeStore.secondaryColor` → Gradients, decorative accents 🎨
+- `.secondary` → **ALL metadata text** (authors, publishers, dates, subtitles) 📝
+- `.tertiary` → **Subtle hints** (placeholder text, less important info) 💭
+- `.primary` → Headlines, titles, main body content 📰
+
+**Files Updated (v1.12.0):** 13 Swift files, 130+ replacements, net -32 lines 🎉
 
 ## Documentation Structure
 

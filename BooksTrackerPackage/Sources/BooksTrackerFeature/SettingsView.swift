@@ -71,7 +71,7 @@ public struct SettingsView: View {
                         Spacer()
 
                         Text(themeStore.currentTheme.displayName)
-                            .foregroundStyle(themeStore.accessibleSecondaryText)
+                            .foregroundColor(.secondary)
                     }
                 }
 
@@ -139,7 +139,7 @@ public struct SettingsView: View {
                         Text("iCloud Sync")
                         Text(cloudKitStatus.description)
                             .font(.caption)
-                            .foregroundStyle(themeStore.accessibleSecondaryText)
+                            .foregroundColor(.secondary)
                     }
                 }
 
@@ -174,7 +174,7 @@ public struct SettingsView: View {
                     Spacer()
 
                     Text(versionString)
-                        .foregroundStyle(themeStore.accessibleSecondaryText)
+                        .foregroundColor(.secondary)
                 }
 
                 Button {
@@ -201,7 +201,7 @@ public struct SettingsView: View {
 
                         Image(systemName: "arrow.up.right")
                             .font(.caption)
-                            .foregroundStyle(themeStore.accessibleSecondaryText)
+                            .foregroundColor(.secondary)
                     }
                 }
 
@@ -217,7 +217,7 @@ public struct SettingsView: View {
 
                         Image(systemName: "arrow.up.right")
                             .font(.caption)
-                            .foregroundStyle(themeStore.accessibleSecondaryText)
+                            .foregroundColor(.secondary)
                     }
                 }
 

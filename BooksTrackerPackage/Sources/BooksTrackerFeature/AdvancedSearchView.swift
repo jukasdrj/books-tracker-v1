@@ -129,7 +129,7 @@ public struct AdvancedSearchView: View {
                     Button("Clear") {
                         clearAllFields()
                     }
-                    .foregroundStyle(themeStore.accessibleSecondaryText)
+                    .foregroundColor(.secondary)
                     .disabled(!criteria.hasAnyCriteria)
                 }
             }
@@ -151,7 +151,7 @@ public struct AdvancedSearchView: View {
 
             Text("Fill any combination of fields to find exactly what you're looking for")
                 .font(.subheadline)
-                .foregroundStyle(themeStore.accessibleSecondaryText)
+                .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
         }
@@ -215,7 +215,7 @@ public struct AdvancedSearchView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("From")
                         .font(.caption)
-                        .foregroundStyle(themeStore.accessibleSecondaryText)
+                        .foregroundColor(.secondary)
 
                     TextField("1900", text: $criteria.yearStart)
                         .keyboardType(.numberPad)
@@ -235,7 +235,7 @@ public struct AdvancedSearchView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("To")
                         .font(.caption)
-                        .foregroundStyle(themeStore.accessibleSecondaryText)
+                        .foregroundColor(.secondary)
 
                     TextField("2025", text: $criteria.yearEnd)
                         .keyboardType(.numberPad)
@@ -305,7 +305,7 @@ public struct AdvancedSearchView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Search Criteria:")
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(themeStore.accessibleSecondaryText)
+                .foregroundColor(.secondary)
 
             HStack(spacing: 8) {
                 if !criteria.authorName.isEmpty {
@@ -407,7 +407,7 @@ private struct GlassSearchField: View {
                         }
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(themeStore.accessibleSecondaryText)
+                            .foregroundColor(.secondary)
                             .font(.system(size: 16))
                     }
                     .accessibilityLabel("Clear \(title)")

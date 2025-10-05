@@ -45,7 +45,7 @@ public struct CloudKitHelpView: View {
 
                         Text("Keep your library in sync across all your devices")
                             .font(.subheadline)
-                            .foregroundStyle(themeStore.accessibleSecondaryText)
+                            .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
                     }
                     .frame(maxWidth: .infinity)
@@ -166,7 +166,7 @@ public struct CloudKitHelpView: View {
 
                         Text("Your library data is encrypted and stored in your personal iCloud account. Only you can access it.")
                             .font(.caption)
-                            .foregroundStyle(themeStore.accessibleSecondaryText)
+                            .foregroundColor(.secondary)
                     }
                     .padding()
                     .background(
@@ -223,11 +223,11 @@ private struct HelpSection: View {
                     HStack(alignment: .top, spacing: 12) {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.caption)
-                            .foregroundStyle(themeStore.accessibleSecondaryText)
+                            .foregroundColor(.secondary)
 
                         Text(item)
                             .font(.subheadline)
-                            .foregroundStyle(themeStore.accessibleSecondaryText)
+                            .foregroundColor(.secondary)
                     }
                 }
             }
@@ -258,7 +258,7 @@ private struct HowItWorksStep: View {
 
             Text(description)
                 .font(.subheadline)
-                .foregroundStyle(themeStore.accessibleSecondaryText)
+                .foregroundColor(.secondary)
         }
     }
 }
@@ -277,11 +277,11 @@ private struct TroubleshootingItem: View {
                 ForEach(solutions, id: \.self) { solution in
                     HStack(alignment: .top, spacing: 8) {
                         Text("•")
-                            .foregroundStyle(themeStore.accessibleSecondaryText)
+                            .foregroundColor(.secondary)
 
                         Text(solution)
                             .font(.caption)
-                            .foregroundStyle(themeStore.accessibleSecondaryText)
+                            .foregroundColor(.secondary)
                     }
                 }
             }
