@@ -7,12 +7,15 @@
 
 import WidgetKit
 import SwiftUI
+import BooksTrackerFeature
 
 @main
 struct BooksTrackerWidgetsBundle: WidgetBundle {
     var body: some Widget {
         BooksTrackerWidgets()
         BooksTrackerWidgetsControl()
-        BooksTrackerWidgetsLiveActivity()
+        if #available(iOS 16.2, *) {
+            CSVImportLiveActivity()
+        }
     }
 }

@@ -1,5 +1,6 @@
 import Foundation
 import ActivityKit
+import SwiftUI
 
 // MARK: - CSV Import Live Activity Attributes
 
@@ -86,14 +87,64 @@ public struct CSVImportActivityAttributes: ActivityAttributes, Sendable {
     /// File size in bytes (for display purposes)
     public var fileSizeBytes: Int?
 
+    /// Theme primary color (hex string for Live Activity serialization)
+    public var themePrimaryColorHex: String
+
+    /// Theme secondary color (hex string for Live Activity serialization)
+    public var themeSecondaryColorHex: String
+
     public init(
         importSessionID: UUID = UUID(),
         fileName: String,
-        fileSizeBytes: Int? = nil
+        fileSizeBytes: Int? = nil,
+        themePrimaryColorHex: String = "#007AFF",
+        themeSecondaryColorHex: String = "#4DB0FF"
     ) {
         self.importSessionID = importSessionID
         self.fileName = fileName
         self.fileSizeBytes = fileSizeBytes
+        self.themePrimaryColorHex = themePrimaryColorHex
+        self.themeSecondaryColorHex = themeSecondaryColorHex
+    }
+
+    // MARK: - Theme Color Helpers
+
+    /// Convert Color to hex string for serialization
+    public static func colorToHex(_ color: Color) -> String {
+        guard let components = color.cgColor?.components else {
+            return "#007AFF" // Fallback to system blue
+        }
+
+        let r = Int((components[0]) * 255.0)
+        let g = Int((components[1]) * 255.0)
+        let b = Int((components[2]) * 255.0)
+
+        return String(format: "#%02X%02X%02X", r, g, b)
+    }
+
+    /// Convert hex string to Color for display
+    public func hexToColor(_ hex: String) -> Color {
+        var hexSanitized = hex.trimmingCharacters(in: .whitespacesAndNewlines)
+        hexSanitized = hexSanitized.replacingOccurrences(of: "#", with: "")
+
+        var rgb: UInt64 = 0
+        Scanner(string: hexSanitized).scanHexInt64(&rgb)
+
+        let r = Double((rgb & 0xFF0000) >> 16) / 255.0
+        let g = Double((rgb & 0x00FF00) >> 8) / 255.0
+        let b = Double(rgb & 0x0000FF) / 255.0
+
+        return Color(red: r, green: g, blue: b)
+    }
+
+    /// Get theme primary color as SwiftUI Color
+    public var themePrimaryColor: Color {
+        hexToColor(themePrimaryColorHex)
+    }
+
+    /// Get theme secondary color as SwiftUI Color
+    public var themeSecondaryColor: Color {
+        hexToColor(themeSecondaryColorHex)
     }
 }
 
@@ -121,14 +172,18 @@ public final class CSVImportActivityManager: @unchecked Sendable {
     public func startActivity(
         fileName: String,
         totalBooks: Int,
-        fileSizeBytes: Int? = nil
+        fileSizeBytes: Int? = nil,
+        themePrimaryColorHex: String = "#007AFF",
+        themeSecondaryColorHex: String = "#4DB0FF"
     ) async throws {
         // End any existing activity first
         await endActivity()
 
         let attributes = CSVImportActivityAttributes(
             fileName: fileName,
-            fileSizeBytes: fileSizeBytes
+            fileSizeBytes: fileSizeBytes,
+            themePrimaryColorHex: themePrimaryColorHex,
+            themeSecondaryColorHex: themeSecondaryColorHex
         )
 
         let contentState = CSVImportActivityAttributes.ContentState(

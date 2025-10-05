@@ -10,6 +10,7 @@
 		07A08D102E917C03009FD1E1 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 07A08D0F2E917C03009FD1E1 /* WidgetKit.framework */; };
 		07A08D122E917C03009FD1E1 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 07A08D112E917C03009FD1E1 /* SwiftUI.framework */; };
 		07A08D232E917C04009FD1E1 /* BooksTrackerWidgetsExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 07A08D0E2E917C03009FD1E1 /* BooksTrackerWidgetsExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		07A08D2A2E917D00009FD1E1 /* BooksTrackerFeature in Frameworks */ = {isa = PBXBuildFile; productRef = 07A08D292E917D00009FD1E1 /* BooksTrackerFeature */; };
 		8B41F6832DEDD23B001A66F9 /* BooksTrackerFeature in Frameworks */ = {isa = PBXBuildFile; productRef = 8B41F6822DEDD23B001A66F9 /* BooksTrackerFeature */; };
 		8B41F6852DEDD25C001A66F9 /* BooksTrackerFeature in Frameworks */ = {isa = PBXBuildFile; productRef = 8B41F6842DEDD25C001A66F9 /* BooksTrackerFeature */; };
 /* End PBXBuildFile section */
@@ -108,6 +109,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				07A08D2A2E917D00009FD1E1 /* BooksTrackerFeature in Frameworks */,
 				07A08D122E917C03009FD1E1 /* SwiftUI.framework in Frameworks */,
 				07A08D102E917C03009FD1E1 /* WidgetKit.framework in Frameworks */,
 			);
@@ -184,6 +186,7 @@
 			);
 			name = BooksTrackerWidgetsExtension;
 			packageProductDependencies = (
+				07A08D292E917D00009FD1E1 /* BooksTrackerFeature */,
 			);
 			productName = BooksTrackerWidgetsExtension;
 			productReference = 07A08D0E2E917C03009FD1E1 /* BooksTrackerWidgetsExtension.appex */;
@@ -667,6 +670,10 @@
 /* End XCConfigurationList section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		07A08D292E917D00009FD1E1 /* BooksTrackerFeature */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = BooksTrackerFeature;
+		};
 		8B41F6822DEDD23B001A66F9 /* BooksTrackerFeature */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = BooksTrackerFeature;

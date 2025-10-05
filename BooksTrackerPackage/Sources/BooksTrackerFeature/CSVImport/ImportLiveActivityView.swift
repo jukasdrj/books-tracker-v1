@@ -58,7 +58,13 @@ struct LockScreenLiveActivityView: View {
             HStack(alignment: .center, spacing: 8) {
                 Image(systemName: "books.vertical.fill")
                     .font(.title2)
-                    .foregroundStyle(.blue.gradient)
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [context.attributes.themePrimaryColor, context.attributes.themeSecondaryColor],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
                     .symbolEffect(.pulse)
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -84,7 +90,7 @@ struct LockScreenLiveActivityView: View {
                     }
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .background(.blue.opacity(0.2))
+                    .background(context.attributes.themePrimaryColor.opacity(0.2))
                     .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
             }
@@ -102,7 +108,7 @@ struct LockScreenLiveActivityView: View {
                         RoundedRectangle(cornerRadius: 6)
                             .fill(
                                 LinearGradient(
-                                    colors: [.blue, .cyan],
+                                    colors: [context.attributes.themePrimaryColor, context.attributes.themeSecondaryColor],
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 )
@@ -141,7 +147,7 @@ struct LockScreenLiveActivityView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "book.closed")
                         .font(.caption)
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(context.attributes.themePrimaryColor)
 
                     Text(context.state.currentBookTitle)
                         .font(.caption)
@@ -152,7 +158,7 @@ struct LockScreenLiveActivityView: View {
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 6)
-                .background(.blue.opacity(0.1))
+                .background(context.attributes.themePrimaryColor.opacity(0.1))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
             }
 
@@ -203,7 +209,13 @@ struct ExpandedLeadingView: View {
         VStack(alignment: .leading, spacing: 4) {
             Image(systemName: "books.vertical.fill")
                 .font(.title2)
-                .foregroundStyle(.blue.gradient)
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [context.attributes.themePrimaryColor, context.attributes.themeSecondaryColor],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
                 .symbolEffect(.pulse)
 
             Text("\(context.state.processedBooks)")
@@ -224,8 +236,12 @@ struct ExpandedTrailingView: View {
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 4) {
-            CircularProgressView(progress: context.state.progress)
-                .frame(width: 48, height: 48)
+            CircularProgressView(
+                progress: context.state.progress,
+                primaryColor: context.attributes.themePrimaryColor,
+                secondaryColor: context.attributes.themeSecondaryColor
+            )
+            .frame(width: 48, height: 48)
 
             if let remaining = context.state.estimatedTimeRemaining {
                 Text(remaining.formattedTimeRemaining)
@@ -266,7 +282,7 @@ struct ExpandedBottomView: View {
                 HStack(spacing: 6) {
                     Image(systemName: "book.closed.fill")
                         .font(.caption2)
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(context.attributes.themePrimaryColor)
 
                     Text(context.state.currentBookTitle)
                         .font(.caption)
@@ -285,7 +301,7 @@ struct ExpandedBottomView: View {
                     RoundedRectangle(cornerRadius: 4)
                         .fill(
                             LinearGradient(
-                                colors: [.blue, .cyan],
+                                colors: [context.attributes.themePrimaryColor, context.attributes.themeSecondaryColor],
                                 startPoint: .leading,
                                 endPoint: .trailing
                             )
@@ -336,7 +352,7 @@ struct CompactLeadingView: View {
 
     var body: some View {
         Image(systemName: "books.vertical.fill")
-            .foregroundStyle(.blue)
+            .foregroundStyle(context.attributes.themePrimaryColor)
             .symbolEffect(.pulse)
     }
 }
@@ -351,8 +367,12 @@ struct CompactTrailingView: View {
                 .font(.caption2.bold())
                 .foregroundStyle(.primary)
 
-            CircularProgressView(progress: context.state.progress)
-                .frame(width: 20, height: 20)
+            CircularProgressView(
+                progress: context.state.progress,
+                primaryColor: context.attributes.themePrimaryColor,
+                secondaryColor: context.attributes.themeSecondaryColor
+            )
+            .frame(width: 20, height: 20)
         }
     }
 }
@@ -364,8 +384,12 @@ struct MinimalView: View {
     let context: ActivityViewContext<CSVImportActivityAttributes>
 
     var body: some View {
-        CircularProgressView(progress: context.state.progress)
-            .frame(width: 24, height: 24)
+        CircularProgressView(
+            progress: context.state.progress,
+            primaryColor: context.attributes.themePrimaryColor,
+            secondaryColor: context.attributes.themeSecondaryColor
+        )
+        .frame(width: 24, height: 24)
     }
 }
 
@@ -416,6 +440,8 @@ struct MiniStatBadge: View {
 
 struct CircularProgressView: View {
     let progress: Double
+    var primaryColor: Color = .blue
+    var secondaryColor: Color = .cyan
 
     var body: some View {
         ZStack {
@@ -428,7 +454,7 @@ struct CircularProgressView: View {
                 .trim(from: 0, to: progress)
                 .stroke(
                     LinearGradient(
-                        colors: [.blue, .cyan],
+                        colors: [primaryColor, secondaryColor],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ),

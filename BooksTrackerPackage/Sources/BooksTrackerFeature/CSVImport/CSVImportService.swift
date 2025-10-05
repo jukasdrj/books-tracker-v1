@@ -142,7 +142,7 @@ public class CSVImportService: ObservableObject {
 
     // MARK: - Import Execution
 
-    public func startImport() async {
+    public func startImport(themeStore: iOS26ThemeStore? = nil) async {
         guard !parsedData.rows.isEmpty else {
             importState = .failed("No data to import")
             return
@@ -152,12 +152,18 @@ public class CSVImportService: ObservableObject {
         progress.startTime = Date()
         progress.errors = []
 
-        // Start Live Activity
+        // Start Live Activity with theme colors
         if #available(iOS 16.2, *) {
             do {
+                // Extract theme colors for Live Activity
+                let primaryColorHex = themeStore.map { CSVImportActivityAttributes.colorToHex($0.primaryColor) } ?? "#007AFF"
+                let secondaryColorHex = themeStore.map { CSVImportActivityAttributes.colorToHex($0.secondaryColor) } ?? "#4DB0FF"
+
                 try await CSVImportActivityManager.shared.startActivity(
                     fileName: fileName,
-                    totalBooks: parsedData.rows.count
+                    totalBooks: parsedData.rows.count,
+                    themePrimaryColorHex: primaryColorHex,
+                    themeSecondaryColorHex: secondaryColorHex
                 )
             } catch {
                 print("⚠️ Failed to start Live Activity: \(error)")

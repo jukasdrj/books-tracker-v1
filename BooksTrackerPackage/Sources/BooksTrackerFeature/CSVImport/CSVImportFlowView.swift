@@ -261,7 +261,7 @@ struct ColumnMappingView: View {
 
                 Button {
                     Task {
-                        await importService.startImport()
+                        await importService.startImport(themeStore: themeStore)
                     }
                 } label: {
                     HStack {

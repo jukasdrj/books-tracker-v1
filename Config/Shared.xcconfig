@@ -10,7 +10,7 @@ PRODUCT_NAME = BooksTracker
 PRODUCT_DISPLAY_NAME = Books Tracker
 PRODUCT_BUNDLE_IDENTIFIER = Z67H8Y8DW.com.oooefam.booksV26
 MARKETING_VERSION = 1.0.0
-CURRENT_PROJECT_VERSION = 42
+CURRENT_PROJECT_VERSION = 43
 
 // ==========================================
 // Platform Configuration
