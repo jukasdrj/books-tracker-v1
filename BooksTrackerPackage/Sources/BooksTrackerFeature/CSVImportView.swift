@@ -405,28 +405,8 @@ enum ImportError: LocalizedError {
     }
 }
 
-// MARK: - ReadingStatus Extension
-
-extension ReadingStatus {
-    static func from(string: String?) -> ReadingStatus? {
-        guard let string = string?.lowercased() else { return nil }
-
-        switch string {
-        case "toread", "to read", "want to read":
-            return .toRead
-        case "reading", "currently reading":
-            return .reading
-        case "read", "finished":
-            return .read
-        case "wishlist", "want":
-            return .wishlist
-        default:
-            return nil
-        }
-    }
-}
-
 // MARK: - Preview
+// NOTE: ReadingStatus.from() is now in UserLibraryEntry.swift (more comprehensive implementation)
 
 #Preview {
     CSVImportView()

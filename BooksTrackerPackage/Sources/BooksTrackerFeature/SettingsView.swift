@@ -230,7 +230,9 @@ public struct SettingsView: View {
         .navigationBarTitleDisplayMode(.large)
         .background(backgroundView.ignoresSafeArea())
         .sheet(isPresented: $showingCSVImporter) {
-            CSVImportView()
+            CSVImportFlowView()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showingCloudKitHelp) {
             CloudKitHelpView()

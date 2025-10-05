@@ -3,14 +3,14 @@ import SwiftUI
 // MARK: - iOS 26 Theme System
 
 /// Theme variants optimized for iOS 26 Liquid Glass design
-enum iOS26Theme: String, CaseIterable, Identifiable {
+public enum iOS26Theme: String, CaseIterable, Identifiable {
     // Original themes
     case liquidBlue = "liquid_blue"
     case cosmicPurple = "cosmic_purple"
     case forestGreen = "forest_green"
     case sunsetOrange = "sunset_orange"
     case moonlightSilver = "moonlight_silver"
-    
+
     // 🆕 NEW THEMES (Complete Transformation - v1.9)
     case crimsonEmber = "crimson_ember"
     case deepOcean = "deep_ocean"
@@ -18,7 +18,7 @@ enum iOS26Theme: String, CaseIterable, Identifiable {
     case arcticAurora = "arctic_aurora"
     case royalViolet = "royal_violet"
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
     var displayName: String {
         switch self {
