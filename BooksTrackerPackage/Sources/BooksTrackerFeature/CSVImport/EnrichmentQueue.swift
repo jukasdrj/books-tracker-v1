@@ -84,7 +84,7 @@ public final class EnrichmentQueue {
         }
 
         // Update priority and re-sort
-        var item = queue[index]
+        let item = queue[index]
         queue.remove(at: index)
 
         var mutableItem = item

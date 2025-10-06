@@ -14,8 +14,9 @@ struct BooksTrackerWidgetsBundle: WidgetBundle {
     var body: some Widget {
         BooksTrackerWidgets()
         BooksTrackerWidgetsControl()
-        if #available(iOS 16.2, *) {
-            CSVImportLiveActivity()
-        }
+        // TODO: Re-enable in v1.13.0 once provisioning profile is updated
+        // if #available(iOS 16.2, *) {
+        //     CSVImportLiveActivity()
+        // }
     }
 }
