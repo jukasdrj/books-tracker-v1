@@ -1,6 +1,6 @@
 # 📚 BooksTrack by oooe - Claude Code Guide
 
-**Version 3.0.0** | **iOS 26.0+** | **Swift 6.1+** | **Updated: October 2025**
+**Version 3.0.1** | **iOS 26.0+** | **Swift 6.1+** | **Updated: October 2025**
 
 This is a personal book tracking iOS app with cultural diversity insights, built with SwiftUI, SwiftData, and a Cloudflare Workers backend.
 
@@ -55,6 +55,13 @@ wrangler tail --format pretty  # Real-time logs
 ```bash
 ./Scripts/update_version.sh patch          # 1.0.0 → 1.0.1
 ./Scripts/release.sh minor "New features"  # Complete release
+```
+
+**App Icon Generation:**
+```bash
+./Scripts/generate_app_icons.sh ~/path/to/icon-1024x1024.png
+# Generates all 15 iOS icon sizes (20px → 1024px)
+# Updates BooksTracker/Assets.xcassets/AppIcon.appiconset/
 ```
 
 ## Architecture
@@ -285,6 +292,55 @@ let schema = Schema([
     UserLibraryEntry.self
 ])
 ```
+
+### App Icon Generation 🎨
+
+**Script:** `Scripts/generate_app_icons.sh`
+
+**Purpose:** Automate iOS app icon generation from a single 1024x1024 source image. Because nobody wants to manually resize 15 different icon variants! 😅
+
+**Usage:**
+```bash
+# Basic usage (outputs to BooksTracker/Assets.xcassets/AppIcon.appiconset/)
+./Scripts/generate_app_icons.sh ~/Downloads/app-icon-1024.png
+
+# Custom output directory
+./Scripts/generate_app_icons.sh icon.png ./path/to/Assets.xcassets/AppIcon.appiconset
+```
+
+**What It Does:**
+1. ✅ Validates source image exists and is accessible
+2. ✅ Generates 15 icon sizes using macOS `sips` (20px, 29px, 40px, 60px, 76px, 83.5px, 1024px + @2x/@3x variants)
+3. ✅ Creates/updates `Contents.json` with proper Xcode Asset Catalog structure
+4. ✅ Handles iPhone, iPad, App Store, Spotlight, Settings, and Notification icons
+
+**Icon Sizes Generated:**
+| Use Case | Sizes | Notes |
+|----------|-------|-------|
+| **iPhone App** | 120px (@2x), 180px (@3x) | Main home screen icon |
+| **iPad App** | 76px, 152px (@2x), 167px (@2x) | iPad Pro uses 167px |
+| **Spotlight** | 40px, 80px (@2x), 120px (@3x) | Search results |
+| **Settings** | 29px, 58px (@2x), 87px (@3x) | Settings app |
+| **Notifications** | 20px, 40px (@2x), 60px (@3x) | Push notifications |
+| **App Store** | 1024px | Required for App Store submission |
+
+**Requirements:**
+- Source image must be 1024x1024 PNG (square, high quality)
+- macOS `sips` tool (pre-installed on macOS)
+- Xcode project with existing Asset Catalog
+
+**Pro Tips:**
+- Use transparent background if you want rounded corners (iOS adds them automatically)
+- Avoid text smaller than 44pt (won't be readable at small sizes)
+- Test on both light and dark home screen backgrounds
+- Preview generated icons: Open Xcode → Assets.xcassets → AppIcon
+
+**Example Workflow:**
+1. Designer creates 1024x1024 icon (Figma, Photoshop, Midjourney, etc.)
+2. Save as PNG to Downloads folder
+3. Run: `./Scripts/generate_app_icons.sh ~/Downloads/my-awesome-icon.png`
+4. Open Xcode → Asset Catalog shows all sizes ✨
+5. Build & run → See your icon on the simulator/device!
 
 ### Barcode Scanning Integration
 

@@ -229,6 +229,6 @@ public final class EnrichmentQueue {
 extension ModelContext {
     /// Get a work by its persistent identifier
     public func work(for id: PersistentIdentifier) -> Work? {
-        return try? model(for: id) as? Work
+        return model(for: id) as? Work
     }
 }
