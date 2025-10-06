@@ -197,11 +197,11 @@ public struct iOS26LiquidLibraryView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("\(cachedFilteredWorks.count) Books")
                             .font(.title2.bold())
-                            .foregroundColor(.primary)
+                            .foregroundStyle(.primary)
 
                         Text("Reading Goals")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                     }
 
                     Spacer()
@@ -226,11 +226,11 @@ public struct iOS26LiquidLibraryView: View {
             VStack(alignment: .trailing, spacing: 2) {
                 Text("\(Int(cachedDiversityScore * 100))%")
                     .font(.headline.bold())
-                    .foregroundColor(.primary)
+                    .foregroundStyle(.primary)
 
                 Text("Diverse")
                     .font(.caption2)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
             }
         }
         .onTapGesture {
@@ -251,11 +251,11 @@ public struct iOS26LiquidLibraryView: View {
 
                     Text("\(count)")
                         .font(.caption.bold())
-                        .foregroundColor(.primary)
+                        .foregroundStyle(.primary)
 
                     Text(status.displayName)
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity)
             }
@@ -454,7 +454,7 @@ public struct UltraOptimizedLibraryView: View {
 
                         Text("Start building your personal collection of books")
                             .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 32)
                     }
@@ -515,7 +515,7 @@ public struct UltraOptimizedLibraryView: View {
 
                 Text(description)
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
@@ -599,11 +599,11 @@ public struct UltraOptimizedLibraryView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("\(filteredWorks.count) Books")
                             .font(.title2.bold())
-                            .foregroundColor(.primary)
+                            .foregroundStyle(.primary)
 
                         Text("Reading Goals")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                     }
 
                     Spacer()
@@ -628,11 +628,11 @@ public struct UltraOptimizedLibraryView: View {
             VStack(alignment: .trailing, spacing: 2) {
                 Text("\(Int(diversityScore * 100))%")
                     .font(.headline.bold())
-                    .foregroundColor(.primary)
+                    .foregroundStyle(.primary)
 
                 Text("Diverse")
                     .font(.caption2)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
             }
         }
         .onTapGesture {
@@ -653,11 +653,11 @@ public struct UltraOptimizedLibraryView: View {
 
                     Text("\(count)")
                         .font(.caption.bold())
-                        .foregroundColor(.primary)
+                        .foregroundStyle(.primary)
 
                     Text(status.displayName)
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity)
             }
@@ -816,14 +816,14 @@ struct CulturalDiversityInsightsView: View {
 
                             Text("\(count) books")
                                 .font(.caption)
-                                .foregroundColor(.secondary)
+                                .foregroundStyle(.secondary)
                         }
 
                         Spacer()
 
                         Text("\(Int(Double(count) / Double(works.count) * 100))%")
                             .font(.callout.bold())
-                            .foregroundColor(.primary)
+                            .foregroundStyle(.primary)
                     }
                     .padding(.vertical, 4)
                 }
@@ -845,7 +845,7 @@ struct CulturalDiversityInsightsView: View {
                     HStack {
                         Image(systemName: gender.icon)
                             .font(.title3)
-                            .foregroundColor(.primary)
+                            .foregroundStyle(.primary)
                             .frame(width: 24)
 
                         Text(gender.displayName)
@@ -855,7 +855,7 @@ struct CulturalDiversityInsightsView: View {
 
                         Text("\(count)")
                             .font(.callout.bold())
-                            .foregroundColor(.primary)
+                            .foregroundStyle(.primary)
                     }
                     .padding(.vertical, 4)
                 }
@@ -945,7 +945,7 @@ struct MetricView: View {
 
             Text(title)
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)

@@ -176,7 +176,7 @@ struct FileDropZone: View {
 
                     Text("or tap to browse")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
 
                     Button {
                         showingPicker = true
@@ -299,7 +299,7 @@ struct MappingRowView: View {
                 if let firstSample = mapping.sampleValues.first {
                     Text(firstSample)
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
             }
@@ -327,7 +327,7 @@ struct MappingRowView: View {
                         .foregroundColor(mapping.mappedField != nil ? .primary : .secondary)
                     Image(systemName: "chevron.up.chevron.down")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
@@ -389,7 +389,7 @@ struct ImportProgressView: View {
                 VStack(spacing: 4) {
                     Text("Processing")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
 
                     Text(progress.currentBook)
                         .font(.headline)
@@ -408,14 +408,14 @@ struct ImportProgressView: View {
                 HStack {
                     Text("\(progress.processedRows) of \(progress.totalRows)")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
 
                     Spacer()
 
                     if let remaining = progress.estimatedTimeRemaining {
                         Text(formatTimeRemaining(remaining))
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                     }
                 }
             }
@@ -484,7 +484,7 @@ struct StatisticView: View {
 
             Text(label)
                 .font(.caption2)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
         }
         .frame(width: 80)
     }
@@ -507,7 +507,7 @@ struct AnalyzingFileView: View {
 
             Text("Detecting column formats and data types")
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
         }
         .padding(40)
         .background(
@@ -545,7 +545,7 @@ struct MappingStatusHeader: View {
             VStack(alignment: .trailing, spacing: 4) {
                 Text("Auto-Detect")
                     .font(.caption2)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
 
                 HStack(spacing: 4) {
                     Image(systemName: avgConfidence > 0.7 ? "checkmark.circle.fill" : "exclamationmark.circle.fill")

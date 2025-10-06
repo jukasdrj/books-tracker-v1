@@ -61,7 +61,7 @@ public struct CSVImportView: View {
 
                         Text("Import your book collection from a CSV file")
                             .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
                     }
                     .padding(.top, 40)
@@ -88,7 +88,7 @@ public struct CSVImportView: View {
 
                         Text("Example:")
                             .font(.caption.bold())
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
 
                         Text("Title,Author,ISBN,Status\nKindred,Octavia Butler,9780807083697,read")
                             .font(.system(.caption, design: .monospaced))
@@ -126,7 +126,7 @@ public struct CSVImportView: View {
 
                             Text("Importing books...")
                                 .font(.subheadline)
-                                .foregroundColor(.secondary)
+                                .foregroundStyle(.secondary)
                         }
                         .padding()
                     }
@@ -309,12 +309,12 @@ private struct FormatRow: View {
         HStack(alignment: .top, spacing: 12) {
             Text(label)
                 .font(.caption.bold())
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
                 .frame(width: 90, alignment: .leading)
 
             Text(value)
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
         }
     }
 }
@@ -334,7 +334,7 @@ private struct ImportResultView: View {
 
             Text(result.message)
                 .font(.subheadline)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
         }
         .padding()

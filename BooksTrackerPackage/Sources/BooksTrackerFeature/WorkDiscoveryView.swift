@@ -122,11 +122,11 @@ public struct WorkDiscoveryView: View {
                         VStack(spacing: 8) {
                             Image(systemName: "book.closed")
                                 .font(.title)
-                                .foregroundColor(.secondary)
+                                .foregroundStyle(.secondary)
 
                             Text("Loading Cover...")
                                 .font(.caption2)
-                                .foregroundColor(.tertiary)
+                                .foregroundStyle(.tertiary)
                         }
                     }
             }
@@ -144,20 +144,20 @@ public struct WorkDiscoveryView: View {
 
                     Text(searchResult.work.authorNames)
                         .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .multilineTextAlignment(.leading)
                 }
 
                 if let year = searchResult.work.firstPublicationYear {
                     Label("Published \(year)", systemImage: "calendar")
                         .font(.caption)
-                        .foregroundColor(.tertiary)
+                        .foregroundStyle(.tertiary)
                 }
 
                 if let pageCount = searchResult.work.primaryEdition?.pageCount {
                     Label("\(pageCount) pages", systemImage: "doc.text")
                         .font(.caption)
-                        .foregroundColor(.tertiary)
+                        .foregroundStyle(.tertiary)
                 }
 
                 // Provider badge
@@ -214,7 +214,7 @@ public struct WorkDiscoveryView: View {
                         Text("Categories")
                             .font(.subheadline)
                             .fontWeight(.medium)
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
 
                         LazyVGrid(columns: [
                             GridItem(.adaptive(minimum: 80), spacing: 8)
@@ -226,7 +226,7 @@ public struct WorkDiscoveryView: View {
                                     .padding(.vertical, 4)
                                     .background(.ultraThinMaterial)
                                     .clipShape(Capsule())
-                                    .foregroundColor(.secondary)
+                                    .foregroundStyle(.secondary)
                             }
                         }
                     }
@@ -488,7 +488,7 @@ private struct DetailRow: View {
             Text(title)
                 .font(.subheadline)
                 .fontWeight(.medium)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
                 .frame(width: 80, alignment: .leading)
 
             Text(value)

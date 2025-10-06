@@ -235,26 +235,26 @@ struct EditionPickerView: View {
                         // Edition title or format
                         Text(edition.editionTitle ?? edition.format.displayName)
                             .font(.subheadline.bold())
-                            .foregroundColor(.primary)
+                            .foregroundStyle(.primary)
 
                         // Publisher info
                         if !edition.publisherInfo.isEmpty {
                             Text(edition.publisherInfo)
                                 .font(.caption)
-                                .foregroundColor(.secondary)
+                                .foregroundStyle(.secondary)
                         }
 
                         // Format and pages
                         HStack {
                             Label(edition.format.displayName, systemImage: edition.format.icon)
                                 .font(.caption)
-                                .foregroundColor(.secondary)
+                                .foregroundStyle(.secondary)
 
                             if let pageCount = edition.pageCountString {
                                 Spacer()
                                 Text(pageCount)
                                     .font(.caption)
-                                    .foregroundColor(.secondary)
+                                    .foregroundStyle(.secondary)
                             }
                         }
 
@@ -262,7 +262,7 @@ struct EditionPickerView: View {
                         if let isbn = edition.primaryISBN {
                             Text("ISBN: \(isbn)")
                                 .font(.caption)
-                                .foregroundColor(.secondary)
+                                .foregroundStyle(.secondary)
                         }
                     }
                     .padding(.vertical, 4)
@@ -352,7 +352,7 @@ struct AuthorSearchResultsView: View {
 
             Text("Searching for books by \(author.name)...")
                 .font(.headline)
-                .foregroundColor(.primary)
+                .foregroundStyle(.primary)
         }
     }
 
@@ -379,15 +379,15 @@ struct AuthorSearchResultsView: View {
         VStack(spacing: 20) {
             Image(systemName: "books.vertical")
                 .font(.system(size: 60))
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
 
             Text("No books found")
                 .font(.title2.bold())
-                .foregroundColor(.primary)
+                .foregroundStyle(.primary)
 
             Text("We couldn't find any books by \(author.name)")
                 .font(.subheadline)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
         }
@@ -401,12 +401,12 @@ struct AuthorSearchResultsView: View {
 
             Text("Search Error")
                 .font(.title2.bold())
-                .foregroundColor(.primary)
+                .foregroundStyle(.primary)
 
             if let errorMessage = searchModel.errorMessage {
                 Text(errorMessage)
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 40)
             }

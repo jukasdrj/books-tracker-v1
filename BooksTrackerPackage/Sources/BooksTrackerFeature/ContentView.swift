@@ -210,7 +210,7 @@ struct InsightsView: View {
         VStack(spacing: 24) {
             Image(systemName: "chart.bar")
                 .font(.system(size: 48, weight: .ultraLight))
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
 
             Text("Reading Insights")
                 .font(.title2)
@@ -218,7 +218,7 @@ struct InsightsView: View {
 
             Text("Track your reading progress and discover patterns in your literary journey")
                 .font(.subheadline)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
         }

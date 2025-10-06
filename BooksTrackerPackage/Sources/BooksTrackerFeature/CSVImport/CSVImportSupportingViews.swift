@@ -25,7 +25,7 @@ struct ImportResultsView: View {
 
                     Text("Your library has been updated")
                         .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
 
                 // Statistics grid
@@ -146,7 +146,7 @@ struct ImportErrorView: View {
 
                 Text(error)
                     .font(.body)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
             }
@@ -242,7 +242,7 @@ struct ServiceTemplateSection: View {
 
                     Text(service.exportInstructions)
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
 
                     Text("Expected columns:")
                         .font(.caption.bold())
@@ -250,7 +250,7 @@ struct ServiceTemplateSection: View {
 
                     Text(service.expectedColumns.joined(separator: ", "))
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
                 .padding()
                 .background(
@@ -314,7 +314,7 @@ struct SupportedFormatsCard: View {
                 Spacer()
 
                 Image(systemName: "chevron.down")
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .rotationEffect(.degrees(isExpanded ? 180 : 0))
             }
             .contentShape(Rectangle())
@@ -360,12 +360,12 @@ struct FormatRequirement: View {
         HStack(alignment: .top, spacing: 8) {
             Text("\(label):")
                 .font(.caption.bold())
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
                 .frame(width: 80, alignment: .leading)
 
             Text(items.joined(separator: ", "))
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
         }
     }
 }
@@ -381,11 +381,11 @@ struct BulletPoint: View {
         HStack(alignment: .top, spacing: 6) {
             Text("•")
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
 
             Text(text)
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
         }
     }
 }
@@ -403,7 +403,7 @@ struct PreviewSheetView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     Text("This preview shows how your data will be imported based on current column mappings.")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .padding(.horizontal)
 
                     // Sample preview cards
@@ -446,7 +446,7 @@ struct SampleBookPreview: View {
                index < authorMapping.sampleValues.count {
                 Text("by \(authorMapping.sampleValues[index])")
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
             }
 
             // Show other mapped fields
@@ -456,7 +456,7 @@ struct SampleBookPreview: View {
                 }), index < isbnMapping.sampleValues.count {
                     Label(isbnMapping.sampleValues[index], systemImage: "barcode")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
 
                 if let ratingMapping = mappings.first(where: {
@@ -497,7 +497,7 @@ struct StatCard: View {
 
             Text(title)
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
         .padding()
@@ -521,7 +521,7 @@ struct ImportedBookCard: View {
             if let author = work.authors?.first {
                 Text(author.name)
                     .font(.caption2)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
         }
@@ -552,13 +552,13 @@ struct ErrorDetailsSheet: View {
 
                         Text(error.title)
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
 
                     Text(error.message)
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
                 .padding(.vertical, 4)
             }

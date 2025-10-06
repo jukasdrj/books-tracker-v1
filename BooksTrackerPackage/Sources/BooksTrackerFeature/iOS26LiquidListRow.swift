@@ -131,14 +131,14 @@ struct iOS26LiquidListRow: View {
             Text(work.title)
                 .font(titleFont)
                 .fontWeight(.semibold)
-                .foregroundColor(.primary)
+                .foregroundStyle(.primary)
                 .lineLimit(titleLineLimit)
                 .multilineTextAlignment(.leading)
 
             // Author names
             Text(work.authorNames)
                 .font(authorFont)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
                 .lineLimit(1)
         }
     }
@@ -150,10 +150,10 @@ struct iOS26LiquidListRow: View {
                 HStack(spacing: 4) {
                     Image(systemName: "calendar")
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                     Text(String(format: "%d", year))
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
             }
 
@@ -162,10 +162,10 @@ struct iOS26LiquidListRow: View {
                 HStack(spacing: 4) {
                     Image(systemName: "book.pages")
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                     Text("\(pageCount)p")
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
             }
 
@@ -174,10 +174,10 @@ struct iOS26LiquidListRow: View {
                 HStack(spacing: 4) {
                     Image(systemName: "building.2")
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                     Text(publisher)
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
             }
@@ -187,10 +187,10 @@ struct iOS26LiquidListRow: View {
                 HStack(spacing: 4) {
                     Image(systemName: edition.format.icon)
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                     Text(edition.format.shortName)
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
             }
 
@@ -228,13 +228,13 @@ struct iOS26LiquidListRow: View {
             HStack {
                 Text("Progress")
                     .font(.caption2)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
 
                 Spacer()
 
                 Text("\(Int(progress * 100))%")
                     .font(.caption2.bold())
-                    .foregroundColor(.primary)
+                    .foregroundStyle(.primary)
             }
 
             ProgressView(value: progress)
@@ -279,7 +279,7 @@ struct iOS26LiquidListRow: View {
                     if displayStyle == .standard {
                         Text(status.shortName)
                             .font(.caption2)
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                     }
                 }
 
@@ -295,7 +295,7 @@ struct iOS26LiquidListRow: View {
 
                     Text(status.shortName)
                         .font(.caption2.bold())
-                        .foregroundColor(.primary)
+                        .foregroundStyle(.primary)
                 }
             }
         }
@@ -307,7 +307,7 @@ struct iOS26LiquidListRow: View {
         } label: {
             Image(systemName: "ellipsis")
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
                 .frame(width: 24, height: 24)
                 .background(.quaternary, in: Circle())
                 .glassEffect(.subtle, interactive: true)

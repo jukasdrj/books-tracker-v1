@@ -47,26 +47,26 @@ struct EditionMetadataView: View {
             // Work Title
             Text(work.title)
                 .font(.headline.bold())
-                .foregroundColor(.primary)
+                .foregroundStyle(.primary)
                 .lineLimit(3)
 
             // Author Names
             Text(work.authorNames)
                 .font(.subheadline)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
 
             // Publisher Info
             if !edition.publisherInfo.isEmpty {
                 Text(edition.publisherInfo)
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
             }
 
             // Page Count
             if let pageCountString = edition.pageCountString {
                 Text(pageCountString)
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
             }
 
             // Edition Format
@@ -76,7 +76,7 @@ struct EditionMetadataView: View {
 
                 Text(edition.format.displayName)
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
             }
         }
     }
@@ -107,7 +107,7 @@ struct EditionMetadataView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Reading Status")
                 .font(.caption.bold())
-                .foregroundColor(.primary)
+                .foregroundStyle(.primary)
 
             Button(action: {
                 showingStatusPicker.toggle()
@@ -121,18 +121,18 @@ struct EditionMetadataView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(currentStatus.displayName)
                             .font(.subheadline.bold())
-                            .foregroundColor(.primary)
+                            .foregroundStyle(.primary)
 
                         Text(currentStatus.description)
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                     }
 
                     Spacer()
 
                     Image(systemName: "chevron.right")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
                 .padding()
                 .background {
@@ -160,7 +160,7 @@ struct EditionMetadataView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Your Rating")
                 .font(.caption.bold())
-                .foregroundColor(.primary)
+                .foregroundStyle(.primary)
 
             StarRatingView(
                 rating: Binding(
@@ -184,7 +184,7 @@ struct EditionMetadataView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Reading Progress")
                 .font(.caption.bold())
-                .foregroundColor(.primary)
+                .foregroundStyle(.primary)
 
             VStack(spacing: 8) {
                 ProgressView(value: libraryEntry?.readingProgress ?? 0.0)
@@ -193,7 +193,7 @@ struct EditionMetadataView: View {
                 HStack(spacing: 4) {
                     Text("Page")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
 
                     // Editable page number input
                     TextField("0", value: Binding(
@@ -220,7 +220,7 @@ struct EditionMetadataView: View {
                     if let pageCount = edition.pageCount {
                         Text("of \(pageCount)")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                     }
 
                     Spacer()
@@ -240,7 +240,7 @@ struct EditionMetadataView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Your Notes")
                 .font(.caption.bold())
-                .foregroundColor(.primary)
+                .foregroundStyle(.primary)
 
             Button(action: {
                 showingNotesEditor.toggle()
@@ -404,7 +404,7 @@ struct StarRatingView: View {
             if rating > 0 {
                 Text("\(Int(rating))/5")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .padding(.leading, 4)
             }
         }
@@ -439,11 +439,11 @@ struct ReadingStatusPicker: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(status.displayName)
                                 .font(.subheadline.bold())
-                                .foregroundColor(.primary)
+                                .foregroundStyle(.primary)
 
                             Text(status.description)
                                 .font(.caption)
-                                .foregroundColor(.secondary)
+                                .foregroundStyle(.secondary)
                         }
 
                         Spacer()
@@ -485,7 +485,7 @@ struct NotesEditorView: View {
             VStack(spacing: 16) {
                 Text("Notes for \(workTitle)")
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .padding(.top)
 
@@ -502,7 +502,7 @@ struct NotesEditorView: View {
                             VStack {
                                 HStack {
                                     Text("Add your thoughts...")
-                                        .foregroundColor(.secondary)
+                                        .foregroundStyle(.secondary)
                                         .padding(.leading, 20)
                                         .padding(.top, 8)
                                     Spacer()

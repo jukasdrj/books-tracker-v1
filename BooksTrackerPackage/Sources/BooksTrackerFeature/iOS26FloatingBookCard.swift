@@ -134,13 +134,13 @@ struct iOS26FloatingBookCard: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(work.title)
                 .font(.subheadline.weight(.bold))
-                .foregroundColor(.primary)
+                .foregroundStyle(.primary)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true) // Prevents text from truncating prematurely
 
             Text(work.authorNames)
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
                 .lineLimit(1)
             
             // Refined metadata row for status and format
@@ -155,7 +155,7 @@ struct iOS26FloatingBookCard: View {
                     // ✅ FIX: Use Image(systemName:) for proper icon display
                     Image(systemName: edition.format.icon)
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
             }
             .padding(.top, 2)
@@ -462,13 +462,13 @@ struct OptimizedFloatingBookCard: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(work.title)
                 .font(.subheadline.weight(.bold))
-                .foregroundColor(.primary)
+                .foregroundStyle(.primary)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
             
             Text(work.authorNames)
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
                 .lineLimit(1)
             
             HStack {
@@ -481,7 +481,7 @@ struct OptimizedFloatingBookCard: View {
                 if let edition = cachedPrimaryEdition {
                     Image(systemName: edition.format.icon)
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
             }
             .padding(.top, 2)
@@ -828,12 +828,12 @@ struct QuickActionsSheet: View {
 
                         Text(work.authorNames)
                             .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
 
                         if let year = work.firstPublicationYear {
                             Text("\(year)")
                                 .font(.caption)
-                                .foregroundColor(.secondary)
+                                .foregroundStyle(.secondary)
                         }
                     }
 
@@ -917,7 +917,7 @@ struct QuickActionButton: View {
 
                 Text(title)
                     .font(.caption.bold())
-                    .foregroundColor(.primary)
+                    .foregroundStyle(.primary)
             }
             .frame(height: 80)
             .frame(maxWidth: .infinity)

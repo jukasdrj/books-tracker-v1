@@ -287,7 +287,7 @@ extension iOS26FluidGridSystem {
                         .font(.headline.bold())
                     Text("Author Name")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 4)

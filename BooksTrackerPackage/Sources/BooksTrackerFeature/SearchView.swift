@@ -215,7 +215,7 @@ public struct SearchView: View {
                 } label: {
                     HStack {
                         Image(systemName: suggestionIcon(for: suggestion))
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                         Text(suggestion)
                         Spacer()
                     }
@@ -320,7 +320,7 @@ public struct SearchView: View {
 
                         Text("Search millions of books or scan a barcode to get started")
                             .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 32)
                     }
@@ -392,7 +392,7 @@ public struct SearchView: View {
                         HStack(spacing: 8) {
                             Image(systemName: "arrow.right")
                                 .font(.caption)
-                                .foregroundColor(.secondary)
+                                .foregroundStyle(.secondary)
 
                             Text(search)
                                 .font(.subheadline)
@@ -488,7 +488,7 @@ public struct SearchView: View {
 
                 Text(description)
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
             }
         }
         .padding(12)
@@ -523,7 +523,7 @@ public struct SearchView: View {
 
                     Text(searchStatusMessage)
                         .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                 }
             }
@@ -616,7 +616,7 @@ public struct SearchView: View {
         HStack {
             Text("\(searchModel.searchResults.count) results")
                 .font(.subheadline)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
 
             Spacer()
 
@@ -628,7 +628,7 @@ public struct SearchView: View {
 
                     Text("Cached")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
             }
         }
@@ -644,7 +644,7 @@ public struct SearchView: View {
 
             Text("Loading more results...")
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
         }
         .padding()
         .frame(maxWidth: .infinity)
@@ -768,7 +768,7 @@ public struct SearchView: View {
 
             Text(performanceText)
                 .font(.caption2)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
         }
