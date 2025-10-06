@@ -537,7 +537,7 @@ public class CSVImportService: ObservableObject {
         }
 
         // Add to enrichment queue
-        await EnrichmentQueue.shared.enqueueBatch(workIDs)
+        EnrichmentQueue.shared.enqueueBatch(workIDs)
 
         print("📚 Queued \(workIDs.count) books for background enrichment")
 

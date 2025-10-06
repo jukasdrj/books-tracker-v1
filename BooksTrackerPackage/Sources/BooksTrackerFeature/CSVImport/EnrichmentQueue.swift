@@ -161,7 +161,7 @@ public final class EnrichmentQueue {
                 guard let workID = pop() else { break }
 
                 // Fetch work from context
-                guard let work = try? modelContext.model(for: workID) as? Work else {
+                guard let work = modelContext.model(for: workID) as? Work else {
                     continue
                 }
 

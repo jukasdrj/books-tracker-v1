@@ -1,6 +1,157 @@
-# BooksTracker Changelog
+# BooksTrack by oooe - Changelog
 
 All notable changes, achievements, and debugging victories for this project.
+
+---
+
+## [Version 3.0.0] - October 5, 2025 🚢
+
+### 🚀 APP STORE LAUNCH CONFIGURATION!
+
+```
+   ╔═══════════════════════════════════════════════════╗
+   ║  🎯 FROM DEV BUILD TO PRODUCTION READY! 📱      ║
+   ║                                                   ║
+   ║  Display Name: "BooksTrack by oooe"              ║
+   ║  Bundle ID: Z67H8Y8DW.com.oooefam.booksV3       ║
+   ║  Version: 3.0.0 (Build 44)                       ║
+   ║  Status: READY FOR APP STORE! ✅                ║
+   ╚═══════════════════════════════════════════════════╝
+```
+
+**The Mission:** Configure everything for App Store submission without breaking anything! 🎯
+
+---
+
+### 🔧 Configuration Changes
+
+**Config/Shared.xcconfig:**
+- `PRODUCT_DISPLAY_NAME`: "Books Tracker" → "BooksTrack by oooe"
+- `PRODUCT_BUNDLE_IDENTIFIER`: `booksV26` → `booksV3`
+- `MARKETING_VERSION`: 1.0.0 → 3.0.0
+- `CURRENT_PROJECT_VERSION`: 44 (synced across all targets)
+
+**Config/BooksTracker.entitlements:**
+- `aps-environment`: `development` → `production` (App Store push notifications)
+- Removed legacy `iCloud.userLibrary` container
+- CloudKit container now auto-expands: `iCloud.$(CFBundleIdentifier)`
+
+**BooksTrackerWidgets/Info.plist:**
+- **CRITICAL FIX:** Hardcoded versions → xcconfig variables
+  ```xml
+  <!-- Before: Version drift! -->
+  <string>1.0.0</string>
+  <string>43</string>
+
+  <!-- After: Single source of truth! -->
+  <string>$(MARKETING_VERSION)</string>
+  <string>$(CURRENT_PROJECT_VERSION)</string>
+  ```
+
+**BooksTracker.xcodeproj/project.pbxproj:**
+- Widget bundle ID: `booksV26.BooksTrackerWidgets` → `booksV3.BooksTrackerWidgets`
+- Removed hardcoded `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` (now inherit from xcconfig)
+
+---
+
+### 🐛 Code Fixes
+
+**CSVImportService.swift:540**
+- ❌ Removed: `await EnrichmentQueue.shared.enqueueBatch(workIDs)`
+- ✅ Fixed: `EnrichmentQueue.shared.enqueueBatch(workIDs)` (function is synchronous!)
+- **Lesson:** Swift 6 compiler caught unnecessary `await` keyword
+
+**EnrichmentQueue.swift:164**
+- ❌ Removed: `try? modelContext.model(for: workID)`
+- ✅ Fixed: `modelContext.model(for: workID)` (method doesn't throw!)
+- **Lesson:** SwiftData's `model(for:)` is non-throwing in iOS 26
+
+---
+
+### 🎯 The Big Win: Version Synchronization Pattern
+
+**The Problem:**
+```
+ERROR: CFBundleVersion of extension ('43') must match parent app ('44')
+```
+
+**The Root Cause:**
+- Main app: Versions controlled by `Config/Shared.xcconfig` ✅
+- Widget extension: Hardcoded versions in `Info.plist` ❌
+- Result: Manual updates required, easy to forget, submission failures!
+
+**The Solution:**
+```
+ONE FILE TO RULE THEM ALL: Config/Shared.xcconfig
+  ├─> Main App (inherits automatically)
+  └─> Widget Extension (now uses $(MARKETING_VERSION) variables)
+
+Update version once → Everything syncs! 🎉
+```
+
+**How to Update Versions:**
+```bash
+./Scripts/update_version.sh patch   # 3.0.0 → 3.0.1
+./Scripts/update_version.sh minor   # 3.0.0 → 3.1.0
+./Scripts/update_version.sh major   # 3.0.0 → 4.0.0
+
+# All targets update together - ZERO manual work!
+```
+
+---
+
+### 🛠️ New Tools
+
+**Slash Command: `/gogo`**
+- Created: `.claude/commands/gogo.md`
+- Purpose: One-step App Store build verification
+- What it does:
+  1. Cleans build folder
+  2. Builds Release configuration
+  3. Verifies bundle IDs match App Store Connect
+  4. Verifies version synchronization
+  5. Reports build status & next steps
+
+**Usage:**
+```
+/gogo  # That's it! 🚀
+```
+
+---
+
+### 📊 Quality Metrics
+
+| Check | Status |
+|-------|--------|
+| **Bundle ID Prefix** | ✅ Widget correctly prefixed with parent |
+| **Version Sync** | ✅ All targets at 3.0.0 (44) |
+| **Push Notifications** | ✅ Production environment |
+| **CloudKit** | ✅ Auto-expanding container ID |
+| **Build Warnings** | ✅ Zero (removed unnecessary await/try) |
+| **App Store Validation** | ✅ Ready to archive! |
+
+---
+
+### 💡 Lessons Learned
+
+**1. Version Management Architecture**
+- Hardcoded versions = technical debt waiting to explode 💣
+- Xcconfig variables = single source of truth, zero maintenance ✅
+- Always use `$(VARIABLE_NAME)` in Info.plist for versions!
+
+**2. Swift 6 Compiler is Your Friend**
+- "No 'async' operations occur within 'await'" = remove `await`
+- "No calls to throwing functions occur within 'try'" = remove `try`
+- Trust the compiler warnings - they're usually right! 🤖
+
+**3. App Store Submission Checklist**
+- [ ] Bundle IDs match App Store Connect
+- [ ] Widget bundle ID prefixed with parent
+- [ ] All target versions synchronized
+- [ ] Push notification environment = production
+- [ ] CloudKit containers properly configured
+- [ ] Zero build warnings
+- [ ] No sample data pre-populated
 
 ---
 

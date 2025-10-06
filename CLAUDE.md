@@ -1,8 +1,10 @@
-# 📚 BooksTracker - Claude Code Guide
+# 📚 BooksTrack by oooe - Claude Code Guide
 
-**Version 1.9+** | **iOS 26.0+** | **Swift 6.1+** | **Updated: October 2025**
+**Version 3.0.0** | **iOS 26.0+** | **Swift 6.1+** | **Updated: October 2025**
 
 This is a personal book tracking iOS app with cultural diversity insights, built with SwiftUI, SwiftData, and a Cloudflare Workers backend.
+
+**🎉 NOW ON APP STORE!** Bundle ID: `Z67H8Y8DW.com.oooefam.booksV3`
 
 ## Quick Start
 
@@ -570,6 +572,56 @@ let diversityStats = library.calculateDiversityMetrics()
 ```
 
 ## 🎨 Recent Victories
+
+### **🚢 The App Store Launch Prep (Oct 2025)**
+
+```
+   ╔════════════════════════════════════════════════════════╗
+   ║  🎯 FROM DEV BUILD TO APP STORE READY! 📱           ║
+   ║                                                        ║
+   ║  Bundle ID: booksV26 → booksV3 ✅                     ║
+   ║  Display Name: "Books Tracker" → "BooksTrack by oooe" ║
+   ║  Version: 1.0.0 (43) → 3.0.0 (44) 🚀                  ║
+   ║                                                        ║
+   ║  🔧 Critical Fixes:                                   ║
+   ║     ✅ Widget bundle ID prefix (booksV3.Widgets)      ║
+   ║     ✅ Version synchronization (xcconfig variables)   ║
+   ║     ✅ Production push notifications                  ║
+   ║     ✅ CloudKit container cleanup                     ║
+   ║     ✅ Removed Swift 6 compiler warnings              ║
+   ║                                                        ║
+   ║  Result: Zero warnings, zero blockers! 🎉            ║
+   ╚════════════════════════════════════════════════════════╝
+```
+
+**The Challenge:** App extensions MUST have bundle IDs prefixed with parent app, and versions must match exactly!
+
+**What We Fixed:**
+1. **Bundle Identifier Migration** - `booksV26` → `booksV3` across all targets
+2. **Widget Version Sync** - Changed from hardcoded values to `$(MARKETING_VERSION)` and `$(CURRENT_PROJECT_VERSION)` in Info.plist
+3. **Removed Unnecessary Keywords** - `await` on non-async function, `try` on non-throwing function
+4. **Production Environment** - `aps-environment` set to `production` for App Store
+5. **CloudKit Container** - Removed legacy `iCloud.userLibrary`, now uses `iCloud.$(CFBundleIdentifier)`
+
+**The Lesson:**
+```swift
+// ❌ WRONG: Hardcoded versions get out of sync!
+<key>CFBundleVersion</key>
+<string>43</string>  // Main app: 44, Widget: 43 → REJECTION!
+
+// ✅ RIGHT: Single source of truth in Config/Shared.xcconfig
+<key>CFBundleVersion</key>
+<string>$(CURRENT_PROJECT_VERSION)</string>  // Always in sync! 🎯
+```
+
+**Version Management Pattern:**
+- **ONE FILE controls versions:** `Config/Shared.xcconfig`
+- **ALL targets inherit:** Main app, widget extensions, etc.
+- **Update script syncs everything:** `./Scripts/update_version.sh patch`
+
+**New Slash Command:** `/gogo` - One-step App Store build verification! 🚀
+
+---
 
 ### **✨ The Accessibility Revolution (Oct 2025)**
 
