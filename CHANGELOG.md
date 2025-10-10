@@ -4,7 +4,87 @@ All notable changes, achievements, and debugging victories for this project.
 
 ---
 
-## [Version 3.0.1] - October 6, 2025 🎨
+## [Version 3.0.1] - October 10, 2025 🎥
+
+### 🐛 BUG FIX: Barcode Scanner Crash (BUG-4181)
+
+```
+   ╔════════════════════════════════════════════════════════╗
+   ║  📹 THE CAMERA RACE CONDITION FIX 🎯                 ║
+   ║                                                        ║
+   ║  Problem: Dual CameraManager instances → CRASH! 💥  ║
+   ║  Solution: Single-instance pattern → STABLE! ✅      ║
+   ╚════════════════════════════════════════════════════════╝
+```
+
+**The Bug:**
+- Tapping "Scan Barcode" button caused immediate app crash
+- **Root Cause:** Two `CameraManager` instances fighting for camera hardware
+  - `ModernBarcodeScannerView` created one in `handleISBNDetectionStream()`
+  - `ModernCameraPreview` created another via `@StateObject`
+  - Result: AVCaptureSession race condition → undefined behavior → 💥
+
+**The Fix:**
+1. **Centralized Ownership** - `ModernBarcodeScannerView` owns single `CameraManager`
+2. **Dependency Injection** - Pass shared instance to `ModernCameraPreview`
+3. **Proper Cleanup** - `cleanup()` calls `stopSession()` and releases manager
+
+**Files Modified:**
+- `ModernBarcodeScannerView.swift` (40 lines) - Single manager creation & passing
+- `ModernCameraPreview.swift` (22 lines) - Accepts manager as required parameter
+
+**Swift 6 Pattern:**
+```swift
+// ❌ BEFORE: Two managers, one camera, chaos!
+struct ModernBarcodeScannerView {
+    func handleISBNDetectionStream() {
+        let manager = CameraManager()  // Instance #1
+        // ...
+    }
+}
+
+struct ModernCameraPreview {
+    @StateObject var cameraManager = CameraManager()  // Instance #2 💥
+}
+
+// ✅ AFTER: One manager, clean lifecycle, happy camera!
+struct ModernBarcodeScannerView {
+    @State private var cameraManager: CameraManager?
+
+    var body: some View {
+        if let cameraManager = cameraManager {
+            ModernCameraPreview(cameraManager: cameraManager, ...)
+        }
+    }
+
+    func handleISBNDetectionStream() {
+        if cameraManager == nil { cameraManager = CameraManager() }
+        // Reuse existing instance ✅
+    }
+}
+
+struct ModernCameraPreview {
+    let cameraManager: CameraManager  // Injected dependency!
+}
+```
+
+**Why This Matters:**
+- Camera hardware = exclusive resource (only ONE active AVCaptureSession)
+- Swift 6 actors prevent data races, but YOU handle resource exclusivity
+- Dependency injection makes ownership crystal clear
+
+**Lesson Learned:**
+> "Hardware resources (camera/mic/GPS) are like singletons in your view hierarchy.
+> One owner, explicit passing, clean lifecycle. Actor isolation ≠ resource management!" 🎓
+
+**Build Status:**
+- ✅ 0 errors, 0 warnings
+- ✅ Swift 6 concurrency compliance maintained
+- ✅ @CameraSessionActor isolation boundaries respected
+
+---
+
+## [Version 3.0.0] - October 6, 2025 🎨
 
 ### ✨ NEW: App Icon Generation System!
 

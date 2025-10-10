@@ -135,16 +135,19 @@ struct ModernBarcodeScannerView: View {
     @ViewBuilder
     private var authorizedContent: some View {
         ZStack {
-            // Camera preview
-            ModernCameraPreview(
-                configuration: cameraConfiguration,
-                detectionConfiguration: detectionConfiguration
-            ) { error in
-                handleCameraError(error)
-            }
-            .ignoresSafeArea()
-            .onAppear {
-                startISBNDetection()
+            // Camera preview - pass shared cameraManager
+            if let cameraManager = cameraManager {
+                ModernCameraPreview(
+                    cameraManager: cameraManager,
+                    configuration: cameraConfiguration,
+                    detectionConfiguration: detectionConfiguration
+                ) { error in
+                    handleCameraError(error)
+                }
+                .ignoresSafeArea()
+                .onAppear {
+                    startISBNDetection()
+                }
             }
 
             // Controls overlay
@@ -291,21 +294,31 @@ struct ModernBarcodeScannerView: View {
             scanFeedback = .scanning
         }
 
-        // Create camera manager and detection service
-        let manager = await Task { @CameraSessionActor in
-            return CameraManager()
-        }.value
+        // Create camera manager once if not already created
+        if cameraManager == nil {
+            let manager = await Task { @CameraSessionActor in
+                return CameraManager()
+            }.value
 
-        // Store for reuse in other methods
-        await MainActor.run {
-            cameraManager = manager
+            await MainActor.run {
+                cameraManager = manager
+            }
         }
 
+        // Use the existing camera manager instance
+        guard let manager = cameraManager else {
+            await MainActor.run {
+                handleCameraError(.deviceUnavailable)
+            }
+            return
+        }
+
+        // Create detection service
         let detectionService = await Task { @CameraSessionActor in
             return BarcodeDetectionService(configuration: detectionConfiguration)
         }.value
 
-        // Start the detection stream
+        // Start the detection stream using the shared camera manager
         for await isbn in await detectionService.isbnDetectionStream(cameraManager: manager) {
             handleISBNDetected(isbn)
             break // Exit after first successful detection
@@ -425,23 +438,26 @@ struct ModernBarcodeScannerView: View {
     }
 
     private func cleanup() {
+        // Cancel detection task
         isbnDetectionTask?.cancel()
         isbnDetectionTask = nil
 
-        // Turn off torch if it's on
-        if isTorchOn {
-            Task {
-                if let manager = cameraManager {
+        // Stop camera session and cleanup
+        Task {
+            if let manager = cameraManager {
+                // Turn off torch if enabled
+                if isTorchOn {
                     try? await manager.setTorchMode(.off)
                 }
-                await MainActor.run {
-                    isTorchOn = false
-                    cameraManager = nil
-                }
+
+                // Stop the camera session
+                await manager.stopSession()
             }
-        } else {
-            // Clean up camera manager reference
-            cameraManager = nil
+
+            await MainActor.run {
+                isTorchOn = false
+                cameraManager = nil
+            }
         }
     }
 }

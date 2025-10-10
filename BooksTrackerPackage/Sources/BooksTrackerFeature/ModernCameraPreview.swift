@@ -44,8 +44,9 @@ struct ModernCameraPreview: View {
 
     private let configuration: Configuration
     private let onError: (CameraError) -> Void
+    private let detectionConfiguration: BarcodeDetectionService.Configuration
 
-    @StateObject private var cameraManager: CameraManager
+    private let cameraManager: CameraManager
     @State private var detectionService: BarcodeDetectionService?
     @State private var sessionState: CameraSessionState = .idle
     @State private var focusPoint: CGPoint?
@@ -54,17 +55,18 @@ struct ModernCameraPreview: View {
     // MARK: - Initialization
 
     init(
-        cameraManager: CameraManager? = nil,
+        cameraManager: CameraManager,
         configuration: Configuration = .default,
         detectionConfiguration: BarcodeDetectionService.Configuration = .default,
         onError: @escaping (CameraError) -> Void = { _ in }
     ) {
         self.configuration = configuration
         self.onError = onError
-        self._cameraManager = StateObject(wrappedValue: cameraManager ?? CameraManager())
+        self.detectionConfiguration = detectionConfiguration
+        self.cameraManager = cameraManager
 
-        // Initialize detection service with provided configuration
-        self._detectionService = State(initialValue: BarcodeDetectionService(configuration: detectionConfiguration))
+        // Detection service will be initialized in onAppear
+        self._detectionService = State(initialValue: nil)
     }
 
     // MARK: - Body
@@ -110,6 +112,15 @@ struct ModernCameraPreview: View {
         }
         .aspectRatio(configuration.aspectRatio, contentMode: .fit)
         .onAppear {
+            // Initialize detection service if needed
+            if detectionService == nil {
+                Task { @CameraSessionActor in
+                    let service = BarcodeDetectionService(configuration: detectionConfiguration)
+                    await MainActor.run {
+                        detectionService = service
+                    }
+                }
+            }
             startSession()
         }
         .onDisappear {
@@ -473,7 +484,7 @@ private struct ScanningOverlay: View {
 extension ModernCameraPreview {
     /// Create preview specifically for ISBN barcode scanning
     static func forISBNScanning(
-        cameraManager: CameraManager? = nil,
+        cameraManager: CameraManager,
         onError: @escaping (CameraError) -> Void = { _ in }
     ) -> ModernCameraPreview {
         ModernCameraPreview(
@@ -485,7 +496,7 @@ extension ModernCameraPreview {
 
     /// Create minimal preview without overlays
     static func minimal(
-        cameraManager: CameraManager? = nil,
+        cameraManager: CameraManager,
         aspectRatio: CGFloat = 16/9,
         onError: @escaping (CameraError) -> Void = { _ in }
     ) -> ModernCameraPreview {
@@ -506,7 +517,7 @@ extension ModernCameraPreview {
 
     /// Create full-featured preview
     static func fullFeatured(
-        cameraManager: CameraManager? = nil,
+        cameraManager: CameraManager,
         onError: @escaping (CameraError) -> Void = { _ in }
     ) -> ModernCameraPreview {
         ModernCameraPreview(
