@@ -352,7 +352,7 @@ class BookshelfScanModel {
     var uncertainCount: Int = 0
     var scanResult: ScanResult?
 
-    enum ScanState {
+    enum ScanState: Equatable {
         case idle
         case processing
         case completed
