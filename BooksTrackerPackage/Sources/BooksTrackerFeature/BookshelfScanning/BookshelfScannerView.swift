@@ -357,6 +357,7 @@ public struct BookshelfScannerView: View {
 
 // MARK: - Bookshelf Scan Model
 
+@MainActor
 @Observable
 class BookshelfScanModel {
     var scanState: ScanState = .idle
@@ -384,7 +385,6 @@ class BookshelfScanModel {
     }
 
     #if canImport(UIKit)
-    @MainActor
     func startScanning(_ items: [PhotosPickerItem]) async {
         guard !items.isEmpty else { return }
 

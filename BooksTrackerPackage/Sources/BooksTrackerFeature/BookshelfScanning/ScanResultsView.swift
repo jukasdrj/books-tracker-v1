@@ -341,6 +341,7 @@ struct DetectedBookRow: View {
 
 // MARK: - Scan Results Model
 
+@MainActor
 @Observable
 class ScanResultsModel {
     var detectedBooks: [DetectedBook]
@@ -355,7 +356,6 @@ class ScanResultsModel {
 
     // MARK: - Duplicate Detection
 
-    @MainActor
     func performDuplicateCheck(modelContext: ModelContext) async {
         for index in detectedBooks.indices {
             let book = detectedBooks[index]
