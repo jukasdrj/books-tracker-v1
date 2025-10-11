@@ -1,0 +1,120 @@
+import Foundation
+import SwiftUI
+
+// MARK: - Detected Book Model
+
+/// Represents a book detected from a bookshelf photo via Vision framework
+/// This is temporary data before enrichment and SwiftData persistence
+public struct DetectedBook: Identifiable, Sendable {
+    public let id = UUID()
+
+    /// Detected ISBN (13-digit or 10-digit)
+    public var isbn: String?
+
+    /// Detected book title
+    public var title: String?
+
+    /// Detected author name(s)
+    public var author: String?
+
+    /// Confidence score from Vision API (0.0 - 1.0)
+    public var confidence: Double
+
+    /// Bounding box of detected spine in normalized coordinates (0.0 - 1.0)
+    public var boundingBox: CGRect
+
+    /// Raw OCR text extracted from spine
+    public var rawText: String
+
+    /// Detection status for user review
+    public var status: DetectionStatus
+
+    public init(
+        isbn: String? = nil,
+        title: String? = nil,
+        author: String? = nil,
+        confidence: Double,
+        boundingBox: CGRect,
+        rawText: String,
+        status: DetectionStatus = .detected
+    ) {
+        self.isbn = isbn
+        self.title = title
+        self.author = author
+        self.confidence = confidence
+        self.boundingBox = boundingBox
+        self.rawText = rawText
+        self.status = status
+    }
+}
+
+// MARK: - Detection Status
+
+public enum DetectionStatus: String, CaseIterable, Sendable {
+    case detected = "Detected"
+    case confirmed = "Confirmed"
+    case alreadyInLibrary = "Already in Library"
+    case uncertain = "Needs Review"
+    case rejected = "Rejected"
+
+    var displayName: String { rawValue }
+
+    var color: Color {
+        switch self {
+        case .detected: return .blue
+        case .confirmed: return .green
+        case .alreadyInLibrary: return .orange
+        case .uncertain: return .yellow
+        case .rejected: return .red
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .detected: return "book.closed"
+        case .confirmed: return "checkmark.circle.fill"
+        case .alreadyInLibrary: return "books.vertical.fill"
+        case .uncertain: return "questionmark.circle"
+        case .rejected: return "xmark.circle"
+        }
+    }
+}
+
+// MARK: - Scan Result Summary
+
+/// Summary of a bookshelf scan session
+public struct ScanResult: Sendable {
+    public let sessionId = UUID()
+    public let scanDate = Date()
+    public var detectedBooks: [DetectedBook]
+    public var totalProcessingTime: TimeInterval
+
+    public init(detectedBooks: [DetectedBook], totalProcessingTime: TimeInterval) {
+        self.detectedBooks = detectedBooks
+        self.totalProcessingTime = totalProcessingTime
+    }
+
+    /// Statistics for user feedback
+    public var statistics: ScanStatistics {
+        ScanStatistics(
+            totalDetected: detectedBooks.count,
+            withISBN: detectedBooks.filter { $0.isbn != nil }.count,
+            highConfidence: detectedBooks.filter { $0.confidence >= 0.7 }.count,
+            needsReview: detectedBooks.filter { $0.confidence < 0.5 }.count
+        )
+    }
+}
+
+public struct ScanStatistics: Sendable {
+    public let totalDetected: Int
+    public let withISBN: Int
+    public let highConfidence: Int
+    public let needsReview: Int
+
+    public init(totalDetected: Int, withISBN: Int, highConfidence: Int, needsReview: Int) {
+        self.totalDetected = totalDetected
+        self.withISBN = withISBN
+        self.highConfidence = highConfidence
+        self.needsReview = needsReview
+    }
+}

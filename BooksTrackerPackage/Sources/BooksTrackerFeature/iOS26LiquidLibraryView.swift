@@ -73,10 +73,15 @@ public struct iOS26LiquidLibraryView: View {
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItemGroup(placement: .navigationBarTrailing) {
-                    Button("Insights") {
+                    Button {
                         showingDiversityInsights.toggle()
+                    } label: {
+                        Image(systemName: "chart.bar.xaxis")
                     }
                     .buttonStyle(GlassButtonStyle())
+                    .foregroundStyle(.primary)
+                    .accessibilityLabel("Diversity Insights")
+                    .accessibilityHint("View reading diversity and cultural statistics")
 
                     Menu {
                         Picker("Layout", selection: $selectedLayout.animation(.smooth)) {
@@ -86,9 +91,12 @@ public struct iOS26LiquidLibraryView: View {
                             }
                         }
                     } label: {
-                        Image(systemName: selectedLayout.icon)
+                        Image(systemName: "square.grid.2x2")
                     }
                     .buttonStyle(GlassButtonStyle())
+                    .foregroundStyle(.primary)
+                    .accessibilityLabel("Change layout")
+                    .accessibilityHint("Switch between grid, cards, and list views")
                 }
             }
             // ✅ FIX 4: Navigation with Work objects (SwiftData PersistentIdentifier)
@@ -364,10 +372,15 @@ public struct UltraOptimizedLibraryView: View {
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
             ToolbarItemGroup(placement: .navigationBarTrailing) {
-                Button("Insights") {
+                Button {
                     showingDiversityInsights.toggle()
+                } label: {
+                    Image(systemName: "chart.bar.xaxis")
                 }
                 .buttonStyle(GlassButtonStyle())
+                .foregroundStyle(.primary)
+                .accessibilityLabel("Diversity Insights")
+                .accessibilityHint("View reading diversity and cultural statistics")
 
                 Menu {
                     Picker("Layout", selection: $selectedLayout.animation(.smooth)) {
@@ -377,9 +390,12 @@ public struct UltraOptimizedLibraryView: View {
                         }
                     }
                 } label: {
-                    Image(systemName: selectedLayout.icon)
+                    Image(systemName: "square.grid.2x2")
                 }
                 .buttonStyle(GlassButtonStyle())
+                .foregroundStyle(.primary)
+                .accessibilityLabel("Change layout")
+                .accessibilityHint("Switch between grid, cards, and list views")
             }
         }
         .modifier(SafeWorkNavigation(

@@ -306,6 +306,26 @@ struct EditionMetadataView: View {
                 .buttonStyle(GlassProminentButtonStyle(tint: .green))
                 .frame(maxWidth: .infinity)
             }
+
+            // Delete button (always available)
+            Button {
+                deleteFromLibrary()
+            } label: {
+                HStack {
+                    Image(systemName: "trash")
+                        .font(.system(size: 16, weight: .semibold))
+                    Text("Remove from Library")
+                        .fontWeight(.medium)
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.red)
+                }
+            }
+            .buttonStyle(.plain)
         }
     }
 
@@ -365,6 +385,21 @@ struct EditionMetadataView: View {
     private func updateReadingProgress() {
         guard let entry = libraryEntry, let pageCount = edition.pageCount, pageCount > 0 else { return }
         entry.readingProgress = Double(entry.currentPage) / Double(pageCount)
+    }
+
+    private func deleteFromLibrary() {
+        guard let entry = libraryEntry else { return }
+
+        // Delete the library entry
+        modelContext.delete(entry)
+
+        // If work has no more library entries, delete the work (and cascade to editions/authors)
+        if work.userLibraryEntries?.isEmpty == true || work.userLibraryEntries == nil {
+            modelContext.delete(work)
+        }
+
+        saveContext()
+        triggerHaptic(.medium)
     }
 
     private func saveContext() {
