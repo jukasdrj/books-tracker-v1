@@ -360,6 +360,15 @@ public struct WorkDiscoveryView: View {
         isAddingToLibrary = true
 
         do {
+            // ✅ DUPLICATE CHECK: Search for existing work with same title + author
+            if try await findExistingWork() != nil {
+                // Book already exists - show message
+                alertMessage = "\"\(searchResult.work.title)\" is already in your library!"
+                showingSuccessAlert = true
+                isAddingToLibrary = false
+                return
+            }
+
             // Create Work, Authors, and Edition objects from search result
             let work = createWorkFromSearchResult()
             let edition = createEditionFromSearchResult(work: work)
@@ -404,6 +413,26 @@ public struct WorkDiscoveryView: View {
         }
 
         isAddingToLibrary = false
+    }
+
+    /// Find existing work in library by title and author
+    private func findExistingWork() async throws -> Work? {
+        let titleToSearch = searchResult.work.title.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        let authorToSearch = searchResult.work.authorNames.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Query all works with library entries
+        let descriptor = FetchDescriptor<Work>()
+        let allWorks = try modelContext.fetch(descriptor)
+
+        // Find match by title + author
+        return allWorks.first { work in
+            guard work.userLibraryEntries?.isEmpty == false else { return false }
+
+            let workTitle = work.title.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+            let workAuthor = work.authorNames.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+
+            return workTitle == titleToSearch && workAuthor == authorToSearch
+        }
     }
 
     private func createWorkFromSearchResult() -> Work {

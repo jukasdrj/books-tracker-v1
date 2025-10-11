@@ -460,6 +460,86 @@ struct ModernCameraPreview: UIViewRepresentable {
 > explicit passing, clean lifecycle. Trust Swift 6 actors for thread safety,
 > but YOU handle resource exclusivity!" 🎯
 
+### Bookshelf Scanner (Beta)
+
+**Status:** Phase 1 Complete ✅ (October 2025)
+
+**Key Files:**
+- `DetectedBook.swift` - Model for Vision framework detection results
+- `VisionProcessingActor.swift` - On-device OCR and spine detection
+- `BookshelfScannerView.swift` - PhotosPicker integration and scan UI
+- `ScanResultsView.swift` - Review and confirmation interface
+
+**Architecture:**
+```swift
+// Bookshelf Scanning Flow (Phase 1 - Beta)
+PhotosPicker → VisionProcessingActor → DetectedBook[] → ScanResultsView → Library
+     ↓                  ↓                    ↓                ↓              ↓
+  Max 10 images    Spine detection     ISBN extraction   Duplicate     SwiftData
+                   OCR (Revision3)      Title/Author    detection      insertion
+```
+
+**Vision Framework Integration:**
+- **VNDetectRectanglesRequest**: Finds vertical book spines (aspect ratio < 0.5)
+- **VNRecognizeTextRequest**: iOS 26 Live Text (Revision3) for accurate OCR
+- **On-Device Processing**: Zero photo uploads, privacy-first design
+- **Metadata Parsing**: ISBN regex, title extraction, author heuristics
+
+**Features:**
+- **Duplicate Detection**: ISBN-first strategy with title+author fallback
+- **Auto-Selection**: High-confidence books (>70%) automatically selected
+- **Status Indicators**: detected, confirmed, alreadyInLibrary, uncertain
+- **Batch Add**: Bulk add confirmed books to library
+- **Privacy Banner**: HIG-compliant disclosure shown before picker
+
+**Usage:**
+```swift
+// In SettingsView - Experimental Features section
+Button {
+    showingBookshelfScanner = true
+} label: {
+    HStack {
+        Image(systemName: "books.vertical.fill")
+        VStack(alignment: .leading) {
+            HStack {
+                Text("Scan Bookshelf")
+                Image(systemName: "flask.fill")  // Beta badge
+                    .foregroundStyle(.orange)
+            }
+            Text("Detect books from photos • On-device analysis • Requires iPhone")
+        }
+    }
+}
+.sheet(isPresented: $showingBookshelfScanner) {
+    BookshelfScannerView()
+}
+```
+
+**Swift 6 Concurrency:**
+- `VisionProcessingActor`: @globalActor for thread-safe Vision operations
+- `#if canImport(UIKit)`: iOS-only code properly guarded for SPM
+- Explicit continuation types for region-based isolation checker
+- MainActor isolation for SwiftData operations
+
+**Phase 2 Roadmap (Post Real-Device Validation):**
+- Move from Settings → Search toolbar Menu (alongside barcode scanner)
+- Search API integration: "Search Matches" button enrichment
+- Performance optimization for batch processing
+- Accuracy metrics and user feedback collection
+
+**Privacy Requirements:**
+Add to Xcode target Info settings (see `PRIVACY_STRINGS_REQUIRED.md`):
+```
+Key: NSPhotoLibraryUsageDescription
+Value: "BooksTrack analyzes bookshelf photos on your device to detect book titles and ISBNs. No photos are uploaded to servers."
+```
+
+**Testing Notes:**
+- SPM build shows UIKit errors (expected - iOS-only code)
+- Xcode builds successfully for iOS targets
+- Requires real iPhone for accuracy testing (Vision hardware optimization)
+- Simulator testing limited to UI/UX validation
+
 ### CSV Import & Enrichment System
 
 **Status:** Phase 1 Complete ✅ (October 2025)

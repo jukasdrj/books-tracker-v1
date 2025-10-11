@@ -94,10 +94,12 @@ struct GlassButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.vertical, 14)
+            .frame(minHeight: 44)
             .glassEffect(.regular, tint: tint ?? .clear, in: RoundedRectangle(cornerRadius: 12))
             .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
             .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
+            .contentShape(RoundedRectangle(cornerRadius: 12))
     }
 }
 

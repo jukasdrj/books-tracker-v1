@@ -37,12 +37,15 @@ struct WorkDetailView: View {
                     Image(systemName: "chevron.left")
                         .font(.title3.bold())
                         .foregroundColor(.white)
+                        .frame(width: 44, height: 44)
                         .background {
                             Circle()
                                 .fill(.ultraThinMaterial)
-                                .frame(width: 32, height: 32)
+                                .frame(width: 44, height: 44)
                         }
                 }
+                .accessibilityLabel("Back")
+                .accessibilityHint("Return to previous screen")
             }
 
             ToolbarItem(placement: .navigationBarTrailing) {

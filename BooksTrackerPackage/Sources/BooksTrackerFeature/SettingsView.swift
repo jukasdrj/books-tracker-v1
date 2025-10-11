@@ -45,6 +45,7 @@ public struct SettingsView: View {
     @State private var showingCSVImporter = false
     @State private var showingCloudKitHelp = false
     @State private var showingAcknowledgements = false
+    @State private var showingBookshelfScanner = false
 
     // CloudKit status (simplified for now)
     @State private var cloudKitStatus: CloudKitStatus = .unknown
@@ -125,6 +126,48 @@ public struct SettingsView: View {
                 Text("Library Management")
             } footer: {
                 Text("Import books from CSV or reset your entire library. Resetting is permanent and cannot be undone.")
+            }
+
+            // MARK: - Experimental Features Section
+
+            Section {
+                Button {
+                    showingBookshelfScanner = true
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "books.vertical.fill")
+                            .font(.title2)
+                            .foregroundStyle(themeStore.primaryColor)
+                            .frame(width: 28)
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                Text("Scan Bookshelf")
+                                    .font(.body.weight(.medium))
+                                Image(systemName: "flask.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(.orange)
+                            }
+
+                            Text("Detect books from photos • On-device analysis • Requires iPhone")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.leading)
+                        }
+
+                        Spacer()
+
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                .accessibilityLabel("Scan Bookshelf (Beta)")
+                .accessibilityHint("Experimental feature. Detect books from photos using on-device Vision analysis.")
+            } header: {
+                Text("Experimental Features")
+            } footer: {
+                Text("Beta features are under development and may not work on all devices. Your feedback helps improve BooksTrack!")
             }
 
             // MARK: - iCloud Sync Section
@@ -239,6 +282,11 @@ public struct SettingsView: View {
         }
         .sheet(isPresented: $showingAcknowledgements) {
             AcknowledgementsView()
+        }
+        .sheet(isPresented: $showingBookshelfScanner) {
+            BookshelfScannerView()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
         }
         .confirmationDialog(
             "Reset Library",
