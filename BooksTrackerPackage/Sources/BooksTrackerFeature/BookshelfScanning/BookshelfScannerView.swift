@@ -135,7 +135,6 @@ public struct BookshelfScannerView: View {
             ) {
                 photoPickerButton
             }
-            .photosPickerStyle(.automatic)
             .onChange(of: selectedItems) { oldValue, newValue in
                 scanModel.photosSelected(newValue.count)
             }
@@ -177,8 +176,10 @@ public struct BookshelfScannerView: View {
             .fill(.ultraThinMaterial)
             .overlay {
                 RoundedRectangle(cornerRadius: 16)
-                    .strokeBorder(themeStore.primaryColor.opacity(0.3), lineWidth: 2)
-                    .strokeStyle(.init(lineWidth: 2, dash: [8, 4]))
+                    .strokeBorder(
+                        themeStore.primaryColor.opacity(0.3),
+                        style: StrokeStyle(lineWidth: 2, dash: [8, 4])
+                    )
             }
     }
 
