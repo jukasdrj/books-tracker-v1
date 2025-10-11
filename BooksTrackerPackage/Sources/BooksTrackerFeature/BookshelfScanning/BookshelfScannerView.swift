@@ -133,32 +133,7 @@ public struct BookshelfScannerView: View {
                 maxSelectionCount: 10,
                 matching: .images
             ) {
-                VStack(spacing: 12) {
-                    Image(systemName: "photo.on.rectangle.angled")
-                        .font(.system(size: 48))
-                        .foregroundStyle(themeStore.primaryColor.gradient)
-                        .symbolRenderingMode(.hierarchical)
-
-                    Text("Select Bookshelf Photos")
-                        .font(.headline)
-                        .foregroundStyle(.primary)
-
-                    Text("Choose up to 10 photos of your bookshelf")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 40)
-                .background {
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(.ultraThinMaterial)
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 16)
-                                .strokeBorder(themeStore.primaryColor.opacity(0.3), lineWidth: 2)
-                                .strokeStyle(.init(lineWidth: 2, dash: [8, 4]))
-                        }
-                }
+                photoPickerButton
             }
             .photosPickerStyle(.automatic)
             .onChange(of: selectedItems) { oldValue, newValue in
@@ -169,14 +144,51 @@ public struct BookshelfScannerView: View {
 
             // Selected photos count
             if !selectedItems.isEmpty {
-                HStack {
-                    Image(systemName: "photo.stack")
-                        .foregroundStyle(themeStore.primaryColor)
-                    Text("\(selectedItems.count) photo\(selectedItems.count == 1 ? "" : "s") selected")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
+                selectedPhotosCount
             }
+        }
+    }
+
+    private var photoPickerButton: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "photo.on.rectangle.angled")
+                .font(.system(size: 48))
+                .foregroundStyle(themeStore.primaryColor.gradient)
+                .symbolRenderingMode(.hierarchical)
+
+            Text("Select Bookshelf Photos")
+                .font(.headline)
+                .foregroundStyle(.primary)
+
+            Text("Choose up to 10 photos of your bookshelf")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 40)
+        .background {
+            photoPickerBackground
+        }
+    }
+
+    private var photoPickerBackground: some View {
+        RoundedRectangle(cornerRadius: 16)
+            .fill(.ultraThinMaterial)
+            .overlay {
+                RoundedRectangle(cornerRadius: 16)
+                    .strokeBorder(themeStore.primaryColor.opacity(0.3), lineWidth: 2)
+                    .strokeStyle(.init(lineWidth: 2, dash: [8, 4]))
+            }
+    }
+
+    private var selectedPhotosCount: some View {
+        HStack {
+            Image(systemName: "photo.stack")
+                .foregroundStyle(themeStore.primaryColor)
+            Text("\(selectedItems.count) photo\(selectedItems.count == 1 ? "" : "s") selected")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
         }
     }
 
