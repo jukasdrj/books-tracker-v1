@@ -98,3 +98,5 @@ worker-configuration.d.ts
 *.tmp
 *.temp
 .cache/
+.gemini/
+gha-creds-*.json

@@ -56,19 +56,9 @@ secret_name = "ISBN_search_key"
 
 # Service bindings for worker-to-worker RPC communication
 [[services]]
-binding = "ISBNDB_WORKER"
-service = "isbndb-biography-worker-production"
-entrypoint = "ISBNdbWorker"
-
-[[services]]
-binding = "OPENLIBRARY_WORKER"
-service = "openlibrary-search-worker"
-entrypoint = "OpenLibraryWorker"
-
-[[services]]
-binding = "GOOGLE_BOOKS_WORKER"
-service = "google-books-worker"
-entrypoint = "GoogleBooksWorker"
+binding = "EXTERNAL_APIS_WORKER"
+service = "external-apis-worker"
+entrypoint = "ExternalAPIsWorker"
 
 # KV Cache for API responses - primary cache layer
 [[kv_namespaces]]
