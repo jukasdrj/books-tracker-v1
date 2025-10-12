@@ -118,15 +118,36 @@ public final class EnrichmentQueue {
         return queue.count
     }
 
-    /// Check if queue is empty
-    public func isEmpty() -> Bool {
-        return queue.isEmpty
-    }
-
-    /// Clear the entire queue
+    /// Clear all items from the queue
     public func clear() {
         queue.removeAll()
         saveQueue()
+        print("🧹 EnrichmentQueue cleared")
+    }
+
+    /// Validate queue on startup - remove invalid persistent IDs
+    public func validateQueue(in modelContext: ModelContext) {
+        let initialCount = queue.count
+
+        queue.removeAll { item in
+            // Try to fetch the work - if it fails, remove from queue
+            if modelContext.model(for: item.workPersistentID) as? Work == nil {
+                print("🧹 Removing invalid work ID from queue")
+                return true  // Remove this item
+            }
+            return false  // Keep this item
+        }
+
+        let removedCount = initialCount - queue.count
+        if removedCount > 0 {
+            print("🧹 Queue cleanup: Removed \(removedCount) invalid items (was \(initialCount), now \(queue.count))")
+            saveQueue()  // Persist cleanup
+        }
+    }
+
+    /// Check if queue is empty
+    public func isEmpty() -> Bool {
+        return queue.isEmpty
     }
 
     /// Get all pending work IDs (for debugging/monitoring)
@@ -137,15 +158,25 @@ public final class EnrichmentQueue {
     // MARK: - Background Processing
 
     /// Start background enrichment process
+    /// - Parameters:
+    ///   - modelContext: SwiftData model context for database operations
+    ///   - progressHandler: Callback with (processed, total, currentTitle)
     public func startProcessing(
         in modelContext: ModelContext,
-        progressHandler: @escaping (Int, Int) -> Void
+        progressHandler: @escaping (Int, Int, String) -> Void
     ) {
         // Don't start if already processing
         guard !processing else { return }
 
         processing = true
         let totalCount = queue.count
+
+        // Notify ContentView that enrichment started
+        NotificationCenter.default.post(
+            name: NSNotification.Name("EnrichmentStarted"),
+            object: nil,
+            userInfo: ["totalBooks": totalCount]
+        )
 
         currentTask = Task {
             var processedCount = 0
@@ -160,8 +191,11 @@ public final class EnrichmentQueue {
                 // Get next work to enrich
                 guard let workID = pop() else { break }
 
-                // Fetch work from context
+                // Fetch work from context - handle deleted works gracefully
                 guard let work = modelContext.model(for: workID) as? Work else {
+                    // Work was deleted - remove from persisted queue
+                    print("⚠️ Skipping deleted work (cleaning up queue)")
+                    saveQueue()  // Persist cleanup immediately
                     continue
                 }
 
@@ -170,8 +204,19 @@ public final class EnrichmentQueue {
 
                 processedCount += 1
 
-                // Report progress
-                progressHandler(processedCount, totalCount)
+                // Report progress with current book title
+                progressHandler(processedCount, totalCount, work.title)
+
+                // Notify ContentView of progress update
+                NotificationCenter.default.post(
+                    name: NSNotification.Name("EnrichmentProgress"),
+                    object: nil,
+                    userInfo: [
+                        "completed": processedCount,
+                        "total": totalCount,
+                        "currentTitle": work.title
+                    ]
+                )
 
                 // Log result
                 switch result {
@@ -186,6 +231,12 @@ public final class EnrichmentQueue {
             }
 
             processing = false
+
+            // Notify ContentView that enrichment completed
+            NotificationCenter.default.post(
+                name: NSNotification.Name("EnrichmentCompleted"),
+                object: nil
+            )
         }
     }
 

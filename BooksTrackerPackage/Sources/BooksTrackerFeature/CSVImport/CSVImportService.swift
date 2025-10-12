@@ -221,17 +221,15 @@ public class CSVImportService: ObservableObject {
             duration: duration
         )
 
+        // Transition to enrichment phase (keep Live Activity alive!)
+        if #available(iOS 16.2, *) {
+            await CSVImportActivityManager.shared.startEnrichmentPhase(
+                totalBooksToEnrich: importedWorks.count
+            )
+        }
+
         // Queue imported works for background enrichment
         await queueWorksForEnrichment(importedWorks)
-
-        // End Live Activity
-        if #available(iOS 16.2, *) {
-            let finalMessage = progress.failedImports > 0
-                ? "Completed with \(progress.failedImports) errors"
-                : "Successfully imported \(progress.successfulImports) books"
-
-            await CSVImportActivityManager.shared.endActivity(finalMessage: finalMessage)
-        }
 
         importState = .completed(result)
     }
@@ -541,13 +539,37 @@ public class CSVImportService: ObservableObject {
 
         print("📚 Queued \(workIDs.count) books for background enrichment")
 
-        // Start processing immediately in background
+        // Start processing immediately in background with Live Activity updates
         // Use regular Task (not detached) since EnrichmentQueue is @MainActor isolated
         // Capture modelContext explicitly for Swift 6 concurrency
         let context = self.modelContext
         Task(priority: .utility) {
-            await EnrichmentQueue.shared.startProcessing(in: context) { processed, total in
+            await EnrichmentQueue.shared.startProcessing(in: context) { processed, total, currentTitle in
+                // Console logging
                 print("📖 Enrichment progress: \(processed)/\(total)")
+
+                // Update Live Activity
+                if #available(iOS 16.2, *) {
+                    Task {
+                        await CSVImportActivityManager.shared.updateEnrichmentProgress(
+                            enrichedBooks: processed,
+                            totalBooks: total,
+                            currentBookTitle: currentTitle
+                        )
+                    }
+                }
+
+                // End Live Activity when enrichment completes
+                if processed >= total {
+                    if #available(iOS 16.2, *) {
+                        Task {
+                            await CSVImportActivityManager.shared.endActivity(
+                                finalMessage: "Enrichment complete! \(processed) books enriched",
+                                dismissAfter: 4.0
+                            )
+                        }
+                    }
+                }
             }
         }
     }

@@ -6,6 +6,11 @@ public struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var selectedTab: MainTab = .library
 
+    // Enrichment progress tracking (no Live Activity required!)
+    @State private var isEnriching = false
+    @State private var enrichmentProgress: (completed: Int, total: Int) = (0, 0)
+    @State private var currentBookTitle = ""
+
     public var body: some View {
         TabView(selection: $selectedTab) {
             // Library Tab
@@ -50,9 +55,45 @@ public struct ContentView: View {
         // .onAppear {
         //     setupSampleData()
         // }
+        .task {
+            // Validate enrichment queue on app startup - remove stale persistent IDs
+            await EnrichmentQueue.shared.validateQueue(in: modelContext)
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SwitchToLibraryTab"))) { _ in
             selectedTab = .library
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("EnrichmentStarted"))) { notification in
+            if let userInfo = notification.userInfo,
+               let total = userInfo["totalBooks"] as? Int {
+                isEnriching = true
+                enrichmentProgress = (0, total)
+                currentBookTitle = ""
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("EnrichmentProgress"))) { notification in
+            if let userInfo = notification.userInfo,
+               let completed = userInfo["completed"] as? Int,
+               let total = userInfo["total"] as? Int,
+               let title = userInfo["currentTitle"] as? String {
+                enrichmentProgress = (completed, total)
+                currentBookTitle = title
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("EnrichmentCompleted"))) { _ in
+            isEnriching = false
+        }
+        .overlay(alignment: .bottom) {
+            if isEnriching {
+                EnrichmentBanner(
+                    completed: enrichmentProgress.completed,
+                    total: enrichmentProgress.total,
+                    currentBookTitle: currentBookTitle,
+                    themeStore: themeStore
+                )
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isEnriching)
     }
 
     public init() {}
@@ -228,6 +269,100 @@ struct InsightsView: View {
 
 // SettingsView now implemented in SettingsView.swift
 
+// MARK: - Enrichment Banner (No Live Activity Required!)
+
+struct EnrichmentBanner: View {
+    let completed: Int
+    let total: Int
+    let currentBookTitle: String
+    let themeStore: iOS26ThemeStore
+
+    private var progress: Double {
+        guard total > 0 else { return 0 }
+        return Double(completed) / Double(total)
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Progress bar
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    // Background
+                    Rectangle()
+                        .fill(.quaternary)
+                        .frame(height: 4)
+
+                    // Progress fill with gradient
+                    Rectangle()
+                        .fill(
+                            LinearGradient(
+                                colors: [themeStore.primaryColor, themeStore.secondaryColor],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .frame(
+                            width: geometry.size.width * min(1.0, max(0.0, progress)),
+                            height: 4
+                        )
+                        .animation(.smooth(duration: 0.5), value: progress)
+                }
+            }
+            .frame(height: 4)
+
+            // Content
+            HStack(spacing: 12) {
+                // Icon
+                Image(systemName: "sparkles")
+                    .font(.title3)
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [themeStore.primaryColor, themeStore.secondaryColor],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .symbolEffect(.pulse)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Enriching Metadata")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+
+                    if !currentBookTitle.isEmpty {
+                        Text(currentBookTitle)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+
+                Spacer()
+
+                // Progress text
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("\(completed)/\(total)")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+
+                    Text("\(Int(progress * 100))%")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(16)
+            .background {
+                GlassEffectContainer {
+                    Rectangle()
+                        .fill(.clear)
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 8)
+        .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: -4)
+    }
+}
 
 // MARK: - Preview
 

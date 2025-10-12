@@ -34,6 +34,9 @@ INFOPLIST_KEY_NSPhotoLibraryUsageDescription = BooksTrack analyzes bookshelf pho
 // Live Activities Support (for CSV import progress)
 INFOPLIST_KEY_NSSupportsLiveActivities = YES
 
+// CloudKit Push Notifications (required for CloudKit sync)
+INFOPLIST_KEY_UIBackgroundModes = remote-notification
+
 // ==========================================
 // Entitlements
 // ==========================================

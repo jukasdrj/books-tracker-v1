@@ -470,7 +470,7 @@ private struct ScanningOverlay: View {
                     endPoint: .trailing
                 )
             )
-            .frame(width: width - 20, height: thickness)
+            .frame(width: max(0, width - 20), height: thickness)
             .offset(y: isScanning ? -height/2 + 20 : height/2 - 20)
             .animation(
                 .easeInOut(duration: 1.5).repeatForever(autoreverses: true),

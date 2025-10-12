@@ -56,7 +56,7 @@ struct LockScreenLiveActivityView: View {
         VStack(spacing: 12) {
             // Header
             HStack(alignment: .center, spacing: 8) {
-                Image(systemName: "books.vertical.fill")
+                Image(systemName: context.state.isEnrichmentPhase ? "sparkles" : "books.vertical.fill")
                     .font(.title2)
                     .foregroundStyle(
                         LinearGradient(
@@ -68,7 +68,7 @@ struct LockScreenLiveActivityView: View {
                     .symbolEffect(.pulse)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Importing Books")
+                    Text(context.state.isEnrichmentPhase ? "Enriching Metadata" : "Importing Books")
                         .font(.headline)
                         .foregroundStyle(.primary)
 
@@ -114,7 +114,7 @@ struct LockScreenLiveActivityView: View {
                                 )
                             )
                             .frame(
-                                width: geometry.size.width * context.state.progress,
+                                width: geometry.size.width * min(1.0, max(0.0, context.state.progress)),
                                 height: 12
                             )
                             .animation(.smooth(duration: 0.5), value: context.state.progress)
@@ -124,9 +124,15 @@ struct LockScreenLiveActivityView: View {
 
                 // Progress text
                 HStack {
-                    Text("\(context.state.processedBooks) of \(context.state.totalBooks)")
-                        .font(.caption.bold())
-                        .foregroundStyle(.primary)
+                    if context.state.isEnrichmentPhase {
+                        Text("\(context.state.enrichedBooks) of \(context.state.totalBooks) enriched")
+                            .font(.caption.bold())
+                            .foregroundStyle(.primary)
+                    } else {
+                        Text("\(context.state.processedBooks) of \(context.state.totalBooks)")
+                            .font(.caption.bold())
+                            .foregroundStyle(.primary)
+                    }
 
                     Spacer()
 
@@ -162,34 +168,36 @@ struct LockScreenLiveActivityView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 8))
             }
 
-            // Statistics
-            HStack(spacing: 16) {
-                StatBadge(
-                    icon: "checkmark.circle.fill",
-                    value: "\(context.state.successfulImports)",
-                    label: "Imported",
-                    color: .green
-                )
-
-                if context.state.skippedDuplicates > 0 {
+            // Statistics (only show during import phase)
+            if !context.state.isEnrichmentPhase {
+                HStack(spacing: 16) {
                     StatBadge(
-                        icon: "doc.on.doc.fill",
-                        value: "\(context.state.skippedDuplicates)",
-                        label: "Skipped",
-                        color: .orange
+                        icon: "checkmark.circle.fill",
+                        value: "\(context.state.successfulImports)",
+                        label: "Imported",
+                        color: .green
                     )
-                }
 
-                if context.state.failedImports > 0 {
-                    StatBadge(
-                        icon: "xmark.circle.fill",
-                        value: "\(context.state.failedImports)",
-                        label: "Failed",
-                        color: .red
-                    )
-                }
+                    if context.state.skippedDuplicates > 0 {
+                        StatBadge(
+                            icon: "doc.on.doc.fill",
+                            value: "\(context.state.skippedDuplicates)",
+                            label: "Skipped",
+                            color: .orange
+                        )
+                    }
 
-                Spacer()
+                    if context.state.failedImports > 0 {
+                        StatBadge(
+                            icon: "xmark.circle.fill",
+                            value: "\(context.state.failedImports)",
+                            label: "Failed",
+                            color: .red
+                        )
+                    }
+
+                    Spacer()
+                }
             }
         }
         .padding(16)
@@ -207,7 +215,7 @@ struct ExpandedLeadingView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Image(systemName: "books.vertical.fill")
+            Image(systemName: context.state.isEnrichmentPhase ? "sparkles" : "books.vertical.fill")
                 .font(.title2)
                 .foregroundStyle(
                     LinearGradient(
@@ -218,11 +226,11 @@ struct ExpandedLeadingView: View {
                 )
                 .symbolEffect(.pulse)
 
-            Text("\(context.state.processedBooks)")
+            Text("\(context.state.isEnrichmentPhase ? context.state.enrichedBooks : context.state.processedBooks)")
                 .font(.title2.bold())
                 .foregroundStyle(.primary)
 
-            Text("imported")
+            Text(context.state.isEnrichmentPhase ? "enriched" : "imported")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
@@ -307,7 +315,7 @@ struct ExpandedBottomView: View {
                             )
                         )
                         .frame(
-                            width: geometry.size.width * context.state.progress,
+                            width: geometry.size.width * min(1.0, max(0.0, context.state.progress)),
                             height: 8
                         )
                 }
@@ -351,7 +359,7 @@ struct CompactLeadingView: View {
     let context: ActivityViewContext<CSVImportActivityAttributes>
 
     var body: some View {
-        Image(systemName: "books.vertical.fill")
+        Image(systemName: context.state.isEnrichmentPhase ? "sparkles" : "books.vertical.fill")
             .foregroundStyle(context.attributes.themePrimaryColor)
             .symbolEffect(.pulse)
     }

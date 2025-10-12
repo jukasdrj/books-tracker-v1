@@ -1,6 +1,6 @@
 # 📚 BooksTrack by oooe - Claude Code Guide
 
-**Version 3.0.0 (Build 44)** | **iOS 26.0+** | **Swift 6.1+** | **Updated: October 2025**
+**Version 3.0.0 (Build 45)** | **iOS 26.0+** | **Swift 6.1+** | **Updated: October 12, 2025**
 
 This is a personal book tracking iOS app with cultural diversity insights, built with SwiftUI, SwiftData, and a Cloudflare Workers backend.
 
@@ -215,11 +215,19 @@ return AsyncStream { continuation in
 
 ### iOS 26 HIG Compliance
 
-**Search Pattern (100% HIG Compliant):**
+**🚨 CRITICAL: iOS 26 Search Pattern Bug**
 ```swift
+// ❌ WRONG: displayMode: .always blocks keyboard on real devices (iOS 26 regression!)
 .searchable(
     text: $searchModel.searchText,
-    placement: .navigationBarDrawer(displayMode: .always),
+    placement: .navigationBarDrawer(displayMode: .always),  // ← BREAKS KEYBOARD!
+    prompt: "Search books, authors, or ISBN"
+)
+
+// ✅ CORRECT: Omit displayMode parameter
+.searchable(
+    text: $searchModel.searchText,
+    placement: .navigationBarDrawer,  // Works perfectly!
     prompt: "Search books, authors, or ISBN"
 )
 .searchScopes($searchScope) {
@@ -227,8 +235,13 @@ return AsyncStream { continuation in
         Text(scope.rawValue).tag(scope)
     }
 }
-.focused($isSearchFocused)  // Explicit keyboard control
 ```
+
+**🚨 CRITICAL: Don't Mix @FocusState with .searchable()**
+- iOS 26's `.searchable()` manages focus internally
+- Adding manual `@FocusState` creates conflicts
+- Result: Keyboard events blocked, space bar doesn't work
+- **Solution:** Let `.searchable()` handle focus automatically
 
 **Navigation Pattern:**
 ```swift
@@ -617,6 +630,96 @@ await queue.startProcessing(in: modelContext) { progress in
 - `EnrichmentQueue`: @MainActor with persistent storage
 - AsyncStream for real-time progress updates
 
+**🎉 NEW: Enrichment Progress Banner (No Live Activity Required!)**
+
+**Problem:** Users need visual feedback during enrichment, but Live Activity signing is blocked.
+
+**Solution:** NotificationCenter-based enrichment banner in ContentView (Build 45+)
+
+```swift
+// Architecture: EnrichmentQueue → NotificationCenter → ContentView → Banner Overlay
+
+// EnrichmentQueue posts notifications:
+NotificationCenter.default.post(
+    name: NSNotification.Name("EnrichmentStarted"),
+    object: nil,
+    userInfo: ["totalBooks": totalCount]
+)
+
+NotificationCenter.default.post(
+    name: NSNotification.Name("EnrichmentProgress"),
+    object: nil,
+    userInfo: [
+        "completed": processedCount,
+        "total": totalCount,
+        "currentTitle": work.title
+    ]
+)
+
+NotificationCenter.default.post(
+    name: NSNotification.Name("EnrichmentCompleted"),
+    object: nil
+)
+
+// ContentView observes and displays floating banner:
+.onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("EnrichmentProgress"))) { notification in
+    if let userInfo = notification.userInfo,
+       let completed = userInfo["completed"] as? Int,
+       let total = userInfo["total"] as? Int,
+       let title = userInfo["currentTitle"] as? String {
+        enrichmentProgress = (completed, total)
+        currentBookTitle = title
+    }
+}
+```
+
+**Banner Features:**
+- ✨ Real-time progress: "Enriching Metadata... 15/100 (15%)"
+- 📖 Current book title display
+- 🎨 Theme-aware gradient progress bar
+- 💫 Pulsing sparkles icon with gradient
+- 🌊 Glass effect container (iOS 26 Liquid Glass)
+- ♿ WCAG AA compliant (system semantic colors)
+- 🚀 Smooth slide-up/slide-down animations
+- 📱 Floats above tab bar, doesn't block navigation
+- ✅ Works WITHOUT Live Activity entitlements!
+
+**Why This Pattern:**
+- NotificationCenter = zero entitlement requirements
+- Overlay pattern = works on simulator + physical devices
+- Same UX quality as Live Activity, simpler deployment
+- No App Store provisioning headaches!
+
+**Files:**
+- ContentView.swift (banner UI + observers, lines 9-12, 65-96, 272-365)
+- EnrichmentQueue.swift (notification posting, lines 174-179, 210-219, 235-239)
+
+**Enrichment Queue Self-Cleaning (Build 45+):**
+
+**Problem:** Queue persisted 768 deleted book IDs after library reset → "data missing" errors
+
+**Solutions:**
+1. **Graceful Handling:** Skip deleted works, persist cleanup immediately (lines 188-193)
+2. **Startup Validation:** Remove stale IDs on app launch (lines 129-146)
+3. **Manual Clear:** Public `clear()` method (lines 122-126)
+4. **Auto Hook:** Validation runs in ContentView.swift (lines 58-60)
+
+```swift
+// Validation on startup (ContentView.swift)
+.task {
+    await EnrichmentQueue.shared.validateQueue(in: modelContext)
+}
+
+// Graceful handling during processing (EnrichmentQueue.swift)
+guard let work = modelContext.model(for: workID) as? Work else {
+    print("⚠️ Skipping deleted work (cleaning up queue)")
+    saveQueue()  // Persist cleanup immediately
+    continue
+}
+```
+
+**Result:** Queue automatically stays clean, zero "data missing" errors! 🧹
+
 **See Also:** `docs/archive/csvMoon-implementation-notes.md` for detailed implementation roadmap
 
 ## Debugging & Troubleshooting
@@ -672,6 +775,65 @@ curl "https://books-api-proxy.jukasdrj.workers.dev/health"
 - Trust runtime verification over CLI tools for distributed systems
 - Add debug endpoints early in development
 - Use 5 Whys analysis for systematic debugging
+
+**🚨 REAL DEVICE DEBUGGING (Build 45+):**
+
+**iOS 26 Keyboard Regression:**
+- `.navigationBarDrawer(displayMode: .always)` blocks keyboard events on physical devices
+- Symptom: Space bar doesn't insert spaces, keyboard feels "dead"
+- Works fine in simulator, BREAKS on real iPhone/iPad!
+- **Solution:** Omit `displayMode` parameter entirely
+- **Lesson:** Always test keyboard input on real devices!
+
+**Glass Overlay Touch Blocking:**
+```swift
+// ❌ WRONG: Decorative overlay blocks ALL touches
+.overlay {
+    Rectangle()
+        .fill(tint.opacity(0.1))
+        .blendMode(.overlay)
+}
+
+// ✅ CORRECT: Allow touch pass-through
+.overlay {
+    Rectangle()
+        .fill(tint.opacity(0.1))
+        .blendMode(.overlay)
+        .allowsHitTesting(false)  // ← Critical for decorative layers!
+}
+```
+
+**Number Pad Keyboard Trap (iOS HIG Violation):**
+- `.numberPad` has NO dismiss button (expected behavior)
+- Users get stuck with keyboard open after entering numbers
+- **Solution:** Add keyboard toolbar with Done button
+```swift
+TextField("Page Count", value: $pageCount, format: .number)
+    .keyboardType(.numberPad)
+    .focused($isPageFieldFocused)
+    .toolbar {
+        ToolbarItemGroup(placement: .keyboard) {
+            Spacer()
+            Button("Done") {
+                isPageFieldFocused = false
+            }
+            .foregroundStyle(themeStore.primaryColor)
+            .font(.headline)
+        }
+    }
+```
+
+**Frame Safety (Prevent Invalid Dimension Errors):**
+- Always clamp calculations: `max(0, width - 20)` prevents negative values
+- Always clamp progress: `min(1.0, max(0.0, progress))` keeps 0-100%
+- Console errors like "Invalid frame dimension (negative or NaN)" = unclamped math
+- Found in: camera scan lines, progress bars, dynamic layouts
+
+**SwiftData Persistent ID Staleness:**
+- Persistent IDs can outlive their models (deletion, schema changes)
+- Always check existence: `modelContext.model(for: id) as? Type`
+- Validate queues/caches on app startup
+- Skip gracefully and clean up immediately
 
 ## iOS 26 Liquid Glass Design System
 

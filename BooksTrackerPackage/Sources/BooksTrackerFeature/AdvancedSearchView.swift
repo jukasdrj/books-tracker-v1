@@ -132,6 +132,16 @@ public struct AdvancedSearchView: View {
                     .foregroundStyle(.secondary)
                     .disabled(!criteria.hasAnyCriteria)
                 }
+
+                // Keyboard dismissal toolbar for number pad fields
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") {
+                        focusedField = nil  // Dismiss keyboard
+                    }
+                    .foregroundStyle(themeStore.primaryColor)
+                    .font(.headline)
+                }
             }
         }
     }

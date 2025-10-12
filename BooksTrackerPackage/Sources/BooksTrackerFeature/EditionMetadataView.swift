@@ -11,6 +11,7 @@ struct EditionMetadataView: View {
     @Environment(\.iOS26ThemeStore) private var themeStore
     @State private var showingStatusPicker = false
     @State private var showingNotesEditor = false
+    @FocusState private var isPageFieldFocused: Bool
 
     // User's library entry for this work (reactive to SwiftData changes)
     private var libraryEntry: UserLibraryEntry? {
@@ -216,6 +217,17 @@ struct EditionMetadataView: View {
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 60)
                     .multilineTextAlignment(.center)
+                    .focused($isPageFieldFocused)
+                    .toolbar {
+                        ToolbarItemGroup(placement: .keyboard) {
+                            Spacer()
+                            Button("Done") {
+                                isPageFieldFocused = false
+                            }
+                            .foregroundStyle(themeStore.primaryColor)
+                            .font(.headline)
+                        }
+                    }
 
                     if let pageCount = edition.pageCount {
                         Text("of \(pageCount)")
@@ -277,36 +289,6 @@ struct EditionMetadataView: View {
 
     private var actionButtonsSection: some View {
         VStack(spacing: 12) {
-            if libraryEntry?.readingStatus == .wishlist {
-                // Wishlist → To Read conversion
-                Button("Add to Library") {
-                    convertWishlistToOwned()
-                    triggerHaptic(.medium)
-                }
-                .buttonStyle(GlassProminentButtonStyle(tint: themeStore.primaryColor))
-                .frame(maxWidth: .infinity)
-            }
-
-            if libraryEntry?.readingStatus == .toRead {
-                // Start Reading
-                Button("Start Reading") {
-                    startReading()
-                    triggerHaptic(.medium)
-                }
-                .buttonStyle(GlassProminentButtonStyle(tint: .green))
-                .frame(maxWidth: .infinity)
-            }
-
-            if libraryEntry?.readingStatus == .reading {
-                // Mark as Completed
-                Button("Mark as Read") {
-                    markAsCompleted()
-                    triggerHaptic(.medium)
-                }
-                .buttonStyle(GlassProminentButtonStyle(tint: .green))
-                .frame(maxWidth: .infinity)
-            }
-
             // Delete button (always available)
             Button {
                 deleteFromLibrary()

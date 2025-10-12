@@ -16,7 +16,7 @@ public struct CSVImportActivityAttributes: ActivityAttributes, Sendable {
         /// Total number of books to import
         public var totalBooks: Int
 
-        /// Number of books processed so far
+        /// Number of books processed so far (import phase)
         public var processedBooks: Int
 
         /// Number of successfully imported books
@@ -40,17 +40,28 @@ public struct CSVImportActivityAttributes: ActivityAttributes, Sendable {
         /// Start time of the import
         public var startTime: Date
 
+        /// Whether we're in the enrichment phase (vs import phase)
+        public var isEnrichmentPhase: Bool
+
+        /// Number of books enriched so far (enrichment phase)
+        public var enrichedBooks: Int
+
         /// Progress percentage (0.0 to 1.0)
         public var progress: Double {
             guard totalBooks > 0 else { return 0 }
-            return Double(processedBooks) / Double(totalBooks)
+            if isEnrichmentPhase {
+                return Double(enrichedBooks) / Double(totalBooks)
+            } else {
+                return Double(processedBooks) / Double(totalBooks)
+            }
         }
 
         /// Books per minute rate
         public var processingRate: Double {
             let elapsed = Date().timeIntervalSince(startTime)
-            guard elapsed > 0, processedBooks > 0 else { return 0 }
-            return Double(processedBooks) / (elapsed / 60.0)
+            let count = isEnrichmentPhase ? enrichedBooks : processedBooks
+            guard elapsed > 0, count > 0 else { return 0 }
+            return Double(count) / (elapsed / 60.0)
         }
 
         public init(
@@ -62,7 +73,9 @@ public struct CSVImportActivityAttributes: ActivityAttributes, Sendable {
             currentBookTitle: String = "",
             statusMessage: String = "Preparing import...",
             estimatedTimeRemaining: TimeInterval? = nil,
-            startTime: Date = Date()
+            startTime: Date = Date(),
+            isEnrichmentPhase: Bool = false,
+            enrichedBooks: Int = 0
         ) {
             self.totalBooks = totalBooks
             self.processedBooks = processedBooks
@@ -73,6 +86,8 @@ public struct CSVImportActivityAttributes: ActivityAttributes, Sendable {
             self.statusMessage = statusMessage
             self.estimatedTimeRemaining = estimatedTimeRemaining
             self.startTime = startTime
+            self.isEnrichmentPhase = isEnrichmentPhase
+            self.enrichedBooks = enrichedBooks
         }
     }
 
@@ -245,6 +260,54 @@ public final class CSVImportActivityManager: @unchecked Sendable {
         lastUpdateTime = Date()
     }
 
+    /// Transitions Live Activity from import phase to enrichment phase
+    public func startEnrichmentPhase(totalBooksToEnrich: Int) async {
+        guard let activity = currentActivity else {
+            print("⚠️ No active Live Activity to transition to enrichment")
+            return
+        }
+
+        var enrichmentState = activity.content.state
+        enrichmentState.isEnrichmentPhase = true
+        enrichmentState.enrichedBooks = 0
+        enrichmentState.totalBooks = totalBooksToEnrich
+        enrichmentState.statusMessage = "Enriching metadata..."
+        enrichmentState.currentBookTitle = ""
+        enrichmentState.estimatedTimeRemaining = nil
+
+        await activity.update(.init(state: enrichmentState, staleDate: nil))
+        print("📱 Live Activity transitioned to enrichment phase (\(totalBooksToEnrich) books)")
+    }
+
+    /// Updates enrichment progress (called from EnrichmentQueue)
+    public func updateEnrichmentProgress(
+        enrichedBooks: Int,
+        totalBooks: Int,
+        currentBookTitle: String
+    ) async {
+        // Throttle updates
+        if let lastUpdate = lastUpdateTime,
+           Date().timeIntervalSince(lastUpdate) < updateThrottle {
+            return
+        }
+
+        guard let activity = currentActivity else {
+            print("⚠️ No active Live Activity to update")
+            return
+        }
+
+        var enrichmentState = activity.content.state
+        enrichmentState.enrichedBooks = enrichedBooks
+        enrichmentState.currentBookTitle = currentBookTitle
+        enrichmentState.statusMessage = generateEnrichmentStatusMessage(
+            enriched: enrichedBooks,
+            total: totalBooks
+        )
+
+        await activity.update(.init(state: enrichmentState, staleDate: nil))
+        lastUpdateTime = Date()
+    }
+
     /// Ends the Live Activity with final results
     public func endActivity(
         finalMessage: String = "Import complete",
@@ -278,6 +341,20 @@ public final class CSVImportActivityManager: @unchecked Sendable {
             return "Nearly there..."
         } else {
             return "Importing books..."
+        }
+    }
+
+    private func generateEnrichmentStatusMessage(enriched: Int, total: Int) -> String {
+        let remaining = total - enriched
+
+        if remaining == 0 {
+            return "Enrichment complete!"
+        } else if remaining < 10 {
+            return "Finishing enrichment..."
+        } else if Double(enriched) / Double(total) > 0.75 {
+            return "Nearly enriched..."
+        } else {
+            return "Enriching metadata..."
         }
     }
 }

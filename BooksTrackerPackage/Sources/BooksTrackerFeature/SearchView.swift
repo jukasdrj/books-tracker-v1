@@ -67,9 +67,6 @@ public struct SearchView: View {
     @State private var searchScope: SearchScope = .all
     @Namespace private var searchTransition
 
-    // HIG: Focus management for keyboard control
-    @FocusState private var isSearchFocused: Bool
-
     // iOS 26 Scrolling Enhancements
     @State private var scrollPosition = ScrollPosition()
     @State private var scrollPhase: ScrollPhase = .idle
@@ -97,9 +94,11 @@ public struct SearchView: View {
         NavigationStack {
             searchContentArea
                 // HIG: Standard iOS search bar placement (top of navigation)
+                // NOTE: Removed explicit displayMode to fix iOS 26 keyboard bug on physical devices
+                // displayMode: .always was blocking space bar and touch events on iPhone 17 Pro
                 .searchable(
                     text: $searchModel.searchText,
-                    placement: .navigationBarDrawer(displayMode: .always),
+                    placement: .navigationBarDrawer,
                     prompt: searchPrompt
                 )
                 // HIG: Search scopes for filtering
@@ -114,8 +113,6 @@ public struct SearchView: View {
                 .searchSuggestions {
                     searchSuggestionsView
                 }
-                // HIG: Focus management
-                .focused($isSearchFocused)
                 // HIG: Navigation destination for hierarchical navigation
                 .navigationDestination(item: $selectedBook) { book in
                     WorkDiscoveryView(searchResult: book)
@@ -139,7 +136,6 @@ public struct SearchView: View {
                 .accessibilityLabel(accessibilityDescription)
                 .accessibilityAction(named: "Clear search") {
                     searchModel.clearSearch()
-                    isSearchFocused = false
                 }
                 .task {
                     await loadInitialData()
@@ -195,7 +191,6 @@ public struct SearchView: View {
             ForEach(Array(searchModel.searchSuggestions.prefix(5)), id: \.self) { suggestion in
                 Button {
                     searchModel.searchText = suggestion
-                    isSearchFocused = false
                 } label: {
                     HStack {
                         Image(systemName: "sparkles")
@@ -211,7 +206,6 @@ public struct SearchView: View {
             ForEach(searchModel.searchSuggestions, id: \.self) { suggestion in
                 Button {
                     searchModel.searchText = suggestion
-                    isSearchFocused = false
                 } label: {
                     HStack {
                         Image(systemName: suggestionIcon(for: suggestion))
@@ -387,7 +381,6 @@ public struct SearchView: View {
                 ForEach(Array(searchModel.recentSearches.prefix(6)), id: \.self) { search in
                     Button {
                         searchModel.searchText = search
-                        isSearchFocused = false
                     } label: {
                         HStack(spacing: 8) {
                             Image(systemName: "arrow.right")
@@ -696,17 +689,11 @@ public struct SearchView: View {
                 Text(noResultsMessage)
             } actions: {
                 VStack(spacing: 12) {
-                    Button("Try Different Keywords") {
-                        isSearchFocused = true
+                    Button("Clear Search") {
+                        searchModel.clearSearch()
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(themeStore.primaryColor)
-
-                    Button("Clear Search") {
-                        searchModel.clearSearch()
-                        isSearchFocused = false
-                    }
-                    .buttonStyle(.bordered)
                 }
             }
 
@@ -810,9 +797,6 @@ public struct SearchView: View {
 
         // Call backend advanced search endpoint
         searchModel.advancedSearch(criteria: criteria)
-
-        // Dismiss keyboard to show results
-        isSearchFocused = false
     }
 
     /// HIG: Pagination support

@@ -181,6 +181,7 @@ extension View {
             shape
                 .fill(tint.opacity(0.1))
                 .blendMode(.overlay)
+                .allowsHitTesting(false)  // Allow touches through decorative overlay
         }
     }
 

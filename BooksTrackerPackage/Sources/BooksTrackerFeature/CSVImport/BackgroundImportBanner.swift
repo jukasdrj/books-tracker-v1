@@ -73,7 +73,7 @@ public struct BackgroundImportBanner: View {
                             RoundedRectangle(cornerRadius: 2)
                                 .fill(themeStore.primaryColor)
                                 .frame(
-                                    width: geometry.size.width * progress,
+                                    width: geometry.size.width * min(1.0, max(0.0, progress)),
                                     height: 4
                                 )
                                 .animation(.smooth(duration: 0.3), value: progress)
