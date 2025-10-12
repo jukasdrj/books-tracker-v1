@@ -44,12 +44,9 @@ public final class EnrichmentService {
         }
 
         do {
-            // Search for the book using title + author
-            let searchQuery = authorName != "Unknown Author"
-                ? "\(title) \(authorName)"
-                : title
-
-            let response = try await searchAPI(query: searchQuery)
+            // Use advanced search with separated title + author for backend filtering
+            let author = authorName != "Unknown Author" ? authorName : nil
+            let response = try await searchAPI(title: title, author: author)
 
             // Find best match from results
             guard let bestMatch = findBestMatch(
@@ -81,13 +78,21 @@ public final class EnrichmentService {
 
     // MARK: - Private Methods
 
-    private func searchAPI(query: String) async throws -> EnrichmentSearchResponse {
-        guard let encodedQuery = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
-            throw EnrichmentError.invalidQuery
-        }
+    private func searchAPI(title: String, author: String?) async throws -> EnrichmentSearchResponse {
+        // Use advanced search endpoint for CSV enrichment (precise backend filtering)
+        // This leverages the /search/advanced endpoint's multi-field filtering capability
+        var urlComponents = URLComponents(string: "\(baseURL)/search/advanced")!
+        var queryItems: [URLQueryItem] = []
 
-        let urlString = "\(baseURL)/search/auto?q=\(encodedQuery)&maxResults=5"
-        guard let url = URL(string: urlString) else {
+        queryItems.append(URLQueryItem(name: "title", value: title))
+        if let author = author, !author.isEmpty {
+            queryItems.append(URLQueryItem(name: "author", value: author))
+        }
+        queryItems.append(URLQueryItem(name: "maxResults", value: "5"))
+
+        urlComponents.queryItems = queryItems
+
+        guard let url = urlComponents.url else {
             throw EnrichmentError.invalidURL
         }
 

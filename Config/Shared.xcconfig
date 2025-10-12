@@ -31,6 +31,9 @@ INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = UIInterfaceOrientationLand
 INFOPLIST_KEY_NSCameraUsageDescription = BooksTrack uses the camera to scan book barcodes (ISBN) for quick library additions. No images are stored or uploaded.
 INFOPLIST_KEY_NSPhotoLibraryUsageDescription = BooksTrack analyzes bookshelf photos on your device to detect book titles and ISBNs. No photos are uploaded to servers.
 
+// Live Activities Support (for CSV import progress)
+INFOPLIST_KEY_NSSupportsLiveActivities = YES
+
 // ==========================================
 // Entitlements
 // ==========================================

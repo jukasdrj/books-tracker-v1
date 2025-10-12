@@ -114,7 +114,6 @@ public struct iOS26MorphingSearchBar: View {
             .textFieldStyle(.plain)
             .font(.system(size: 17, weight: .medium))
             .foregroundStyle(colorScheme == .dark ? .white : .primary)
-            .autocorrectionDisabled()
             .textInputAutocapitalization(.never)
             .onSubmit {
                 onSearchSubmit()

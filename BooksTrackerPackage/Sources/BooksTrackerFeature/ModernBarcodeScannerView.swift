@@ -296,9 +296,10 @@ struct ModernBarcodeScannerView: View {
 
         // Create camera manager once if not already created
         if cameraManager == nil {
-            let manager = await Task { @CameraSessionActor in
-                return CameraManager()
-            }.value
+            // FIX: Directly initialize CameraManager without explicit actor wrapper
+            // Swift concurrency runtime handles actor initialization correctly
+            // This prevents deadlock between @CameraSessionActor and MainActor
+            let manager = CameraManager()
 
             await MainActor.run {
                 cameraManager = manager

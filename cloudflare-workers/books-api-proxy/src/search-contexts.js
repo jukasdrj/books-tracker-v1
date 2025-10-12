@@ -625,6 +625,139 @@ export async function handleAdvancedSearch(criteria, options, env, ctx) {
 }
 
 /**
+ * ISBN Search Handler
+ *
+ * Strategy: ISBNdb-first for direct ISBN lookup (most accurate source)
+ * Rationale: ISBNdb specializes in ISBN-based lookups with comprehensive edition data
+ * Fallback: Google Books if ISBNdb fails or has no data
+ * Cache: 7 days (ISBNs are immutable identifiers)
+ *
+ * @param {string} query - ISBN-10 or ISBN-13 (with or without hyphens)
+ * @param {object} params - { maxResults, page }
+ * @param {object} env - Worker environment bindings
+ * @param {object} ctx - Execution context
+ * @returns {Promise<object>} - ISBN lookup result with edition details
+ */
+export async function handleISBNSearch(query, params, env, ctx) {
+    const startTime = Date.now();
+    const cleanISBN = query.replace(/[-\s]/g, ''); // Remove hyphens and spaces
+
+    const cacheKey = `search:isbn:${cleanISBN}`;
+
+    try {
+        // Step 1: Check cache (7-day TTL for ISBNs)
+        const cached = await env.CACHE.get(cacheKey, 'json');
+        if (cached) {
+            console.log(`✅ Cache HIT - ISBN search: "${cleanISBN}"`);
+            await trackCacheMetric(env, 'isbn', 'hit', cleanISBN);
+            return {
+                ...cached,
+                cached: true,
+                cacheAge: Date.now() - (cached.timestamp || startTime)
+            };
+        }
+
+        console.log(`❌ Cache MISS - ISBN search: "${cleanISBN}". Querying ISBNdb worker.`);
+        await trackCacheMetric(env, 'isbn', 'miss', cleanISBN);
+
+        // Step 2: Primary strategy - ISBNdb direct lookup
+        console.log(`📘 Primary: ISBNdb lookup for ISBN "${cleanISBN}"`);
+        const isbndbResult = await env.ISBNDB_WORKER.getBookByISBN(cleanISBN);
+
+        if (isbndbResult.success && isbndbResult.book) {
+            console.log(`✅ ISBNdb: Found book for ISBN "${cleanISBN}"`);
+            await trackProviderMetric(env, 'isbndb', 'success', 'isbn', Date.now() - startTime);
+
+            // Transform ISBNdb result to Google Books format
+            const work = isbndbResult.book;
+            const responseData = {
+                kind: "books#volumes",
+                totalItems: 1,
+                items: [transformWorkToGoogleFormat(work)],
+                format: "enhanced_work_edition_v1",
+                provider: "isbndb",
+                searchContext: SEARCH_CONTEXTS.ISBN,
+                cached: false,
+                responseTime: Date.now() - startTime,
+                timestamp: Date.now()
+            };
+
+            // Cache for 7 days (ISBNs are immutable)
+            ctx.waitUntil(
+                env.CACHE.put(cacheKey, JSON.stringify(responseData), {
+                    expirationTtl: CACHE_TTLS.ISBN
+                })
+            );
+
+            return responseData;
+        }
+
+        console.log(`⚠️ ISBNdb: No data for ISBN "${cleanISBN}". Trying Google Books fallback.`);
+        await trackProviderMetric(env, 'isbndb', 'no-data', 'isbn', Date.now() - startTime);
+
+        // Step 3: Fallback - Google Books
+        console.log(`📗 Fallback: Google Books lookup for ISBN "${cleanISBN}"`);
+        const googleResult = await env.GOOGLE_BOOKS_WORKER.search(cleanISBN, { maxResults: 1 });
+
+        if (googleResult.success && googleResult.works && googleResult.works.length > 0) {
+            console.log(`✅ Google Books: Found book for ISBN "${cleanISBN}"`);
+            await trackProviderMetric(env, 'google-books', 'success', 'isbn', Date.now() - startTime);
+
+            const googleItems = googleResult.works.map(work => transformWorkToGoogleFormat(work));
+            const responseData = {
+                kind: "books#volumes",
+                totalItems: googleItems.length,
+                items: googleItems,
+                format: "enhanced_work_edition_v1",
+                provider: "google-books",
+                searchContext: SEARCH_CONTEXTS.ISBN,
+                cached: false,
+                responseTime: Date.now() - startTime,
+                timestamp: Date.now()
+            };
+
+            // Cache for 7 days
+            ctx.waitUntil(
+                env.CACHE.put(cacheKey, JSON.stringify(responseData), {
+                    expirationTtl: CACHE_TTLS.ISBN
+                })
+            );
+
+            return responseData;
+        }
+
+        console.log(`❌ Both providers failed for ISBN "${cleanISBN}"`);
+        await trackProviderMetric(env, 'google-books', 'failure', 'isbn', Date.now() - startTime);
+
+        // No results from any provider
+        return {
+            kind: "books#volumes",
+            totalItems: 0,
+            items: [],
+            error: 'ISBN not found in any provider',
+            searchContext: SEARCH_CONTEXTS.ISBN,
+            provider: 'none',
+            responseTime: Date.now() - startTime
+        };
+
+    } catch (error) {
+        console.error(`❌ ISBN search failed for "${cleanISBN}":`, error);
+        await trackProviderMetric(env, 'all', 'error', 'isbn', Date.now() - startTime);
+
+        return {
+            kind: "books#volumes",
+            totalItems: 0,
+            items: [],
+            error: 'ISBN search failed',
+            details: error.message,
+            searchContext: SEARCH_CONTEXTS.ISBN,
+            provider: 'error',
+            responseTime: Date.now() - startTime
+        };
+    }
+}
+
+/**
  * Analytics: Track provider performance
  */
 async function trackProviderMetric(env, provider, outcome, context, duration) {

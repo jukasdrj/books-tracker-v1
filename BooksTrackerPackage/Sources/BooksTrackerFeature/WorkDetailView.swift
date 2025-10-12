@@ -4,7 +4,7 @@ import SwiftData
 /// Single Book Detail View - iOS 26 Immersive Design
 /// Features blurred cover art background with floating metadata card
 struct WorkDetailView: View {
-    let work: Work
+    @Bindable var work: Work
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.iOS26ThemeStore) private var themeStore
