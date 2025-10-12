@@ -542,9 +542,10 @@ public class CSVImportService: ObservableObject {
         print("📚 Queued \(workIDs.count) books for background enrichment")
 
         // Start processing immediately in background
+        // Use regular Task (not detached) since EnrichmentQueue is @MainActor isolated
         // Capture modelContext explicitly for Swift 6 concurrency
         let context = self.modelContext
-        Task.detached(priority: .utility) { @MainActor in
+        Task(priority: .utility) {
             await EnrichmentQueue.shared.startProcessing(in: context) { processed, total in
                 print("📖 Enrichment progress: \(processed)/\(total)")
             }
