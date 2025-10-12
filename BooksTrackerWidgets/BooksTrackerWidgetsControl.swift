@@ -10,7 +10,7 @@ import SwiftUI
 import WidgetKit
 
 struct BooksTrackerWidgetsControl: ControlWidget {
-    static let kind: String = "Z67H8Y8DW.com.oooefam.booksV26.BooksTrackerWidgets"
+    static let kind: String = "Z67H8Y8DW.com.oooefam.booksV3.BooksTrackerWidgets"
 
     var body: some ControlWidgetConfiguration {
         AppIntentControlConfiguration(

@@ -165,7 +165,7 @@ Get started with zero-hassle version and release management:
 
 **What's working**: CSV import, enrichment, widgets, accessibility - everything! 🎉
 **What's next**: Phase 2 background tasks, Phase 3 Live Activities 🎯
-**See**: `csvMoon.md` for the complete roadmap!
+**See**: `docs/archive/csvMoon-implementation-notes.md` for the complete roadmap!
 
 ## Development Notes
 

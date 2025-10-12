@@ -9,7 +9,7 @@
  * 5. NEW: Multi-context search (Author/Title/Subject) with dedicated endpoints
  */
 
-import { handleAuthorSearch, handleTitleSearch, handleSubjectSearch, handleAdvancedSearch } from './search-contexts.js';
+import { handleAuthorSearch, handleTitleSearch, handleSubjectSearch, handleAdvancedSearch, handleISBNSearch } from './search-contexts.js';
 import {
     transformWorkToGoogleFormat,
     deduplicateGoogleBooksItems,
@@ -82,6 +82,22 @@ export default {
         }
 
         const result = await handleSubjectSearch(query, { maxResults, page }, env, ctx);
+        return new Response(JSON.stringify(result), { headers });
+      }
+
+      // ISBN search - dedicated endpoint for ISBNdb lookups
+      if (path.startsWith('/search/isbn')) {
+        const query = url.searchParams.get('q');
+        const maxResults = parseInt(url.searchParams.get('maxResults') || '20');
+        const page = parseInt(url.searchParams.get('page') || '0');
+
+        if (!query) {
+          return new Response(JSON.stringify({ error: "Query parameter 'q' required" }), {
+            status: 400, headers
+          });
+        }
+
+        const result = await handleISBNSearch(query, { maxResults, page }, env, ctx);
         return new Response(JSON.stringify(result), { headers });
       }
 

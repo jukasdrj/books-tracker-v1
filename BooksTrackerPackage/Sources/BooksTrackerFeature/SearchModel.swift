@@ -560,17 +560,20 @@ public actor BookSearchAPIService {
             throw SearchError.invalidQuery
         }
 
-        // Use scoped endpoints based on search scope
+        // iOS 26 HIG: Intelligent routing based on query context
         let endpoint: String
         switch scope {
         case .all:
-            endpoint = "/search/auto"
+            // Smart detection: ISBN → Title search, otherwise use title search
+            // Title search handles ISBNs intelligently + provides best coverage
+            endpoint = "/search/title"
         case .title:
             endpoint = "/search/title"
         case .author:
             endpoint = "/search/author"
         case .isbn:
-            endpoint = "/search/auto" // ISBN search works through general endpoint
+            // Dedicated ISBN endpoint for ISBNdb lookups (7-day cache, most accurate)
+            endpoint = "/search/isbn"
         }
 
         let urlString = "\(baseURL)\(endpoint)?q=\(encodedQuery)&maxResults=\(maxResults)"

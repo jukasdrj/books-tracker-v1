@@ -445,7 +445,7 @@ GROUP BY provider, searchContext;
 - [Service Binding Architecture](../SERVICE_BINDING_ARCHITECTURE.md)
 - [Wrangler Critical Patterns](../WRANGLER_CRITICAL_PATTERNS.md)
 - [Backend README](../README.md)
-- [Cache Strategy (cache3.md)](../../cache3.md)
+- [Cache Strategy](../../docs/archive/cache3-openlibrary-migration.md)
 
 ---
 
