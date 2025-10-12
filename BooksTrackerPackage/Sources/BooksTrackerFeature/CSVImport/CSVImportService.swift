@@ -541,10 +541,12 @@ public class CSVImportService: ObservableObject {
 
         print("📚 Queued \(workIDs.count) books for background enrichment")
 
-        // Optionally start processing immediately (can be moved to background)
-        // await EnrichmentQueue.shared.startProcessing(in: modelContext) { processed, total in
-        //     print("Enrichment progress: \(processed)/\(total)")
-        // }
+        // Start processing immediately in background
+        Task.detached(priority: .utility) { @MainActor in
+            await EnrichmentQueue.shared.startProcessing(in: modelContext) { processed, total in
+                print("📖 Enrichment progress: \(processed)/\(total)")
+            }
+        }
     }
 }
 

@@ -417,7 +417,6 @@ private struct GlassSearchField: View {
 
             TextField(placeholder, text: $text)
                 .keyboardType(keyboardType)
-                .autocorrectionDisabled()
                 .textFieldStyle(.plain)
                 .padding(14)
                 .background {
