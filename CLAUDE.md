@@ -29,7 +29,17 @@ BooksTracker.xcworkspace/          # Open this in Xcode
 
 ### Essential Commands
 
-**iOS Development:**
+**🚀 MCP-Powered Workflows (Recommended):**
+```bash
+/gogo              # Complete App Store validation pipeline
+/build             # Quick build check for simulator
+/test              # Run Swift Testing suite
+/device-deploy     # Deploy to connected iPhone/iPad
+/sim               # Launch in simulator with log streaming
+```
+See **[MCP_SETUP.md](MCP_SETUP.md)** for XcodeBuildMCP configuration and autonomous workflows.
+
+**Manual iOS Development (Fallback):**
 ```javascript
 // Build and run
 build_run_sim({
@@ -745,14 +755,22 @@ Text("Page Count")
 ```
 📁 Root Directory
 ├── 📄 CLAUDE.md                      ← Main development guide (this file)
+├── 📄 MCP_SETUP.md                   ← XcodeBuildMCP configuration & workflows ⭐ NEW!
 ├── 📄 README.md                      ← Quick start & project overview
 ├── 📄 CHANGELOG.md                   ← Version history & releases
 ├── 📄 APIcall.md                     ← API endpoint migration guide
+├── 📄 REALDEVICE_FIXES.md            ← Real device debugging notes (Oct 2025)
 ├── 📄 FUTURE_ROADMAP.md             ← Aspirational features
 ├── 📁 docs/archive/
 │   ├── 📄 cache3-openlibrary-migration.md     ← Cache strategy (implemented)
 │   ├── 📄 csvMoon-implementation-notes.md     ← CSV import roadmap
 │   └── 📄 ARCHIVE_PHASE1_AUDIT_REPORT.md      ← Historical audit (resolved)
+├── 📁 .claude/commands/              ← Custom slash commands
+│   ├── 📄 gogo.md                    ← App Store validation pipeline (MCP-powered)
+│   ├── 📄 build.md                   ← Quick build check
+│   ├── 📄 test.md                    ← Swift test suite runner
+│   ├── 📄 device-deploy.md           ← Physical device deployment
+│   └── 📄 sim.md                     ← Simulator launch & debug
 └── 📁 cloudflare-workers/
     ├── 📄 README.md                  ← Backend architecture
     └── 📄 SERVICE_BINDING_ARCHITECTURE.md ← RPC technical docs
