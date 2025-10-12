@@ -332,14 +332,7 @@ private struct ErrorOverlay: View {
                 .multilineTextAlignment(.center)
                 .foregroundColor(.white)
 
-            if error != .permissionDenied {
-                Button("Retry", action: onRetry)
-                    .foregroundColor(.blue)
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 12)
-                    .background(Color.white)
-                    .cornerRadius(8)
-            } else {
+            if case .permissionDenied = error {
                 Button("Open Settings") {
                     if let settingsURL = URL(string: UIApplication.openSettingsURLString) {
                         UIApplication.shared.open(settingsURL)
@@ -350,6 +343,13 @@ private struct ErrorOverlay: View {
                 .padding(.vertical, 12)
                 .background(Color.white)
                 .cornerRadius(8)
+            } else {
+                Button("Retry", action: onRetry)
+                    .foregroundColor(.blue)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 12)
+                    .background(Color.white)
+                    .cornerRadius(8)
             }
         }
         .padding()

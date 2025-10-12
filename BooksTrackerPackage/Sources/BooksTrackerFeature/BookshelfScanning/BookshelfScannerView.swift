@@ -79,17 +79,18 @@ public struct BookshelfScannerView: View {
                     }
                 )
             }
-            .fullScreenCover(isPresented: $showCamera) {
-                BookshelfCameraView(cameraManager: cameraManager) { imageData in
-                    if let image = UIImage(data: imageData) {
-                        capturedImage = image
-                        Task {
-                            await scanModel.uploadImage(image)
-                        }
-                    }
-                    showCamera = false
-                }
-            }
+            // Camera feature temporarily disabled - Swift 6 concurrency issues with AVCaptureSession
+            // .fullScreenCover(isPresented: $showCamera) {
+            //     BookshelfCameraView(cameraManager: cameraManager) { imageData in
+            //         if let image = UIImage(data: imageData) {
+            //             capturedImage = image
+            //             Task {
+            //                 await scanModel.uploadImage(image)
+            //             }
+            //         }
+            //         showCamera = false
+            //     }
+            // }
         }
     }
 
@@ -127,41 +128,41 @@ public struct BookshelfScannerView: View {
     }
 
     // MARK: - Camera Section
+    // TODO: Re-enable when Swift 6 concurrency issues with AVCaptureSession are resolved
 
     private var cameraSection: some View {
         VStack(spacing: 16) {
-            Button(action: { showCamera = true }) {
-                VStack(spacing: 12) {
-                    Image(systemName: "camera.fill")
-                        .font(.system(size: 48))
-                        .foregroundStyle(themeStore.primaryColor.gradient)
-                        .symbolRenderingMode(.hierarchical)
+            // Camera button temporarily disabled due to Swift 6 concurrency
+            VStack(spacing: 12) {
+                Image(systemName: "camera.fill")
+                    .font(.system(size: 48))
+                    .foregroundStyle(.secondary)
+                    .symbolRenderingMode(.hierarchical)
 
-                    Text("Scan with Camera")
-                        .font(.headline)
-                        .foregroundStyle(.primary)
+                Text("Camera Scan (Coming Soon)")
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
 
-                    Text("Use your camera to scan a bookshelf")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 40)
-                .background {
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(.ultraThinMaterial)
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 16)
-                                .strokeBorder(
-                                    themeStore.primaryColor.opacity(0.3),
-                                    style: StrokeStyle(lineWidth: 2, dash: [8, 4])
-                                )
-                        }
-                }
+                Text("Camera feature temporarily disabled")
+                    .font(.subheadline)
+                    .foregroundStyle(.tertiary)
+                    .multilineTextAlignment(.center)
             }
-            .accessibilityLabel("Scan with Camera")
-            .accessibilityHint("Open the camera to scan your bookshelf")
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 40)
+            .background {
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(.ultraThinMaterial)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 16)
+                            .strokeBorder(
+                                Color.secondary.opacity(0.3),
+                                style: StrokeStyle(lineWidth: 2, dash: [8, 4])
+                            )
+                    }
+            }
+            .accessibilityLabel("Camera scan temporarily unavailable")
+            .accessibilityHint("Feature will be available in a future update")
 
             if let image = capturedImage {
                 Image(uiImage: image)
@@ -378,7 +379,13 @@ class BookshelfScanModel {
             let decodedResponse = try JSONDecoder().decode(GoogleBooksResponse.self, from: data)
 
             let detectedBooks = decodedResponse.items.map { item in
-                DetectedBook(title: item.volumeInfo.title, author: item.volumeInfo.authors?.first ?? "", confidence: 0.9)
+                DetectedBook(
+                    title: item.volumeInfo.title,
+                    author: item.volumeInfo.authors?.first ?? "",
+                    confidence: 0.9,
+                    boundingBox: .zero,  // Placeholder for mocked response
+                    rawText: item.volumeInfo.title  // Placeholder for mocked response
+                )
             }
 
             detectedCount = detectedBooks.count
