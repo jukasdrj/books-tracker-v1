@@ -15,8 +15,10 @@ public struct BookshelfScannerView: View {
     // MARK: - State Management
 
     @State private var scanModel = BookshelfScanModel()
-    @State private var selectedItems: [PhotosPickerItem] = []
     @State private var showingResults = false
+    @State private var showCamera = false
+    @State private var capturedImage: UIImage?
+    @State private var cameraManager = CameraManager()
 
     public init() {}
 
@@ -36,7 +38,7 @@ public struct BookshelfScannerView: View {
                         privacyDisclosureBanner
 
                         // Photo selection area
-                        photoSelectionSection
+                        cameraSection
 
                         // Statistics (if scanning or completed)
                         if scanModel.scanState != .idle {
@@ -77,6 +79,17 @@ public struct BookshelfScannerView: View {
                     }
                 )
             }
+            .fullScreenCover(isPresented: $showCamera) {
+                BookshelfCameraView(cameraManager: cameraManager) { imageData in
+                    if let image = UIImage(data: imageData) {
+                        capturedImage = image
+                        Task {
+                            await scanModel.uploadImage(image)
+                        }
+                    }
+                    showCamera = false
+                }
+            }
         }
     }
 
@@ -94,20 +107,10 @@ public struct BookshelfScannerView: View {
                         .font(.headline)
                         .foregroundStyle(.primary)
 
-                    Text("Analysis happens on this iPhone. Photos are not uploaded to servers.")
+                    Text("Your photo is uploaded for AI analysis and is not stored.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
-            }
-
-            Divider()
-
-            HStack(spacing: 8) {
-                Image(systemName: "network")
-                    .foregroundStyle(.orange)
-                Text("Uses network for book matches after on-device detection")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
         }
         .padding(16)
@@ -120,78 +123,56 @@ public struct BookshelfScannerView: View {
                 }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Privacy notice: Analysis happens on this iPhone. Photos are not uploaded.")
+        .accessibilityLabel("Privacy notice: Your photo is uploaded for AI analysis and is not stored.")
     }
 
-    // MARK: - Photo Selection Section
+    // MARK: - Camera Section
 
-    private var photoSelectionSection: some View {
+    private var cameraSection: some View {
         VStack(spacing: 16) {
-            // PhotosPicker
-            PhotosPicker(
-                selection: $selectedItems,
-                maxSelectionCount: 10,
-                matching: .images
-            ) {
-                photoPickerButton
-            }
-            .onChange(of: selectedItems) { oldValue, newValue in
-                scanModel.photosSelected(newValue.count)
-            }
-            .accessibilityLabel("Select bookshelf photos")
-            .accessibilityHint("Choose up to 10 photos to scan for book spines")
+            Button(action: { showCamera = true }) {
+                VStack(spacing: 12) {
+                    Image(systemName: "camera.fill")
+                        .font(.system(size: 48))
+                        .foregroundStyle(themeStore.primaryColor.gradient)
+                        .symbolRenderingMode(.hierarchical)
 
-            // Selected photos count
-            if !selectedItems.isEmpty {
-                selectedPhotosCount
+                    Text("Scan with Camera")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+
+                    Text("Use your camera to scan a bookshelf")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 40)
+                .background {
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(.ultraThinMaterial)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 16)
+                                .strokeBorder(
+                                    themeStore.primaryColor.opacity(0.3),
+                                    style: StrokeStyle(lineWidth: 2, dash: [8, 4])
+                                )
+                        }
+                }
+            }
+            .accessibilityLabel("Scan with Camera")
+            .accessibilityHint("Open the camera to scan your bookshelf")
+
+            if let image = capturedImage {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .cornerRadius(16)
+                    .frame(maxHeight: 300)
             }
         }
     }
 
-    private var photoPickerButton: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "photo.on.rectangle.angled")
-                .font(.system(size: 48))
-                .foregroundStyle(themeStore.primaryColor.gradient)
-                .symbolRenderingMode(.hierarchical)
-
-            Text("Select Bookshelf Photos")
-                .font(.headline)
-                .foregroundStyle(.primary)
-
-            Text("Choose up to 10 photos of your bookshelf")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 40)
-        .background {
-            photoPickerBackground
-        }
-    }
-
-    private var photoPickerBackground: some View {
-        RoundedRectangle(cornerRadius: 16)
-            .fill(.ultraThinMaterial)
-            .overlay {
-                RoundedRectangle(cornerRadius: 16)
-                    .strokeBorder(
-                        themeStore.primaryColor.opacity(0.3),
-                        style: StrokeStyle(lineWidth: 2, dash: [8, 4])
-                    )
-            }
-    }
-
-    private var selectedPhotosCount: some View {
-        HStack {
-            Image(systemName: "photo.stack")
-                .foregroundStyle(themeStore.primaryColor)
-            Text("\(selectedItems.count) photo\(selectedItems.count == 1 ? "" : "s") selected")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        }
-    }
 
     // MARK: - Statistics Section
 
@@ -252,15 +233,13 @@ public struct BookshelfScannerView: View {
             // Primary action button
             if scanModel.scanState == .idle {
                 Button {
-                    Task {
-                        await scanModel.startScanning(selectedItems)
-                    }
+                    // Action is now handled by the camera capture
                 } label: {
                     HStack {
                         Image(systemName: "viewfinder")
                             .font(.title3)
 
-                        Text("Analyze Photos")
+                        Text("Analyze Photo")
                             .fontWeight(.semibold)
                     }
                     .foregroundStyle(.white)
@@ -271,16 +250,14 @@ public struct BookshelfScannerView: View {
                             .fill(themeStore.primaryColor.gradient)
                     }
                 }
-                .disabled(selectedItems.isEmpty)
-                .opacity(selectedItems.isEmpty ? 0.5 : 1.0)
-                .accessibilityLabel("Analyze photos")
-                .accessibilityHint(selectedItems.isEmpty ? "Select photos first" : "Start on-device book detection")
+                .disabled(capturedImage == nil)
+                .opacity(capturedImage == nil ? 0.5 : 1.0)
 
             } else if scanModel.scanState == .processing {
                 HStack {
                     ProgressView()
                         .tint(.white)
-                    Text("Analyzing on device...")
+                    Text("Uploading and analyzing...")
                         .fontWeight(.semibold)
                 }
                 .foregroundStyle(.white)
@@ -373,52 +350,44 @@ class BookshelfScanModel {
         case error(String)
     }
 
-    func photosSelected(_ count: Int) {
-        // Reset state when new photos selected
-        if scanState != .processing {
-            scanState = .idle
-            detectedCount = 0
-            confirmedCount = 0
-            uncertainCount = 0
-            scanResult = nil
-        }
-    }
-
     #if canImport(UIKit)
-    func startScanning(_ items: [PhotosPickerItem]) async {
-        guard !items.isEmpty else { return }
+    func uploadImage(_ image: UIImage) async {
+        guard let imageData = image.jpegData(compressionQuality: 0.8) else {
+            scanState = .error("Failed to convert image to data")
+            return
+        }
 
         scanState = .processing
 
+        // URL for the Cloudflare worker
+        guard let url = URL(string: "https://books-api-proxy.your-worker-subdomain.workers.dev/api/scan-bookshelf") else {
+            scanState = .error("Invalid worker URL")
+            return
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/jpeg", forHTTPHeaderField: "Content-Type")
+        request.httpBody = imageData
+
         do {
-            // Step 1: Load images from PhotosPicker
-            var images: [UIImage] = []
-            for item in items {
-                if let data = try? await item.loadTransferable(type: Data.self),
-                   let image = UIImage(data: data) {
-                    images.append(image)
-                }
+            let (data, _) = try await URLSession.shared.data(for: request)
+
+            // For now, we'll just use the mocked response from the worker.
+            // In the future, we would decode the actual response from the AI service.
+            let decodedResponse = try JSONDecoder().decode(GoogleBooksResponse.self, from: data)
+
+            let detectedBooks = decodedResponse.items.map { item in
+                DetectedBook(title: item.volumeInfo.title, author: item.volumeInfo.authors?.first ?? "", confidence: 0.9)
             }
 
-            guard !images.isEmpty else {
-                scanState = .error("Could not load images")
-                return
-            }
-
-            // Step 2: Process with Vision framework (on-device)
-            let startTime = Date()
-            let detectedBooks = try await VisionProcessingActor.shared.detectBooks(in: images)
-            let processingTime = Date().timeIntervalSince(startTime)
-
-            // Step 3: Update statistics
             detectedCount = detectedBooks.count
-            confirmedCount = detectedBooks.filter { $0.confidence >= 0.7 }.count
-            uncertainCount = detectedBooks.filter { $0.confidence < 0.5 }.count
+            confirmedCount = detectedBooks.count
+            uncertainCount = 0
 
-            // Step 4: Store results
             scanResult = ScanResult(
                 detectedBooks: detectedBooks,
-                totalProcessingTime: processingTime
+                totalProcessingTime: 1.0 // Placeholder
             )
 
             scanState = .completed
@@ -428,6 +397,21 @@ class BookshelfScanModel {
         }
     }
     #endif
+}
+
+// MARK: - Helper structs for decoding the mocked response
+
+struct GoogleBooksResponse: Codable {
+    let items: [GoogleBookItem]
+}
+
+struct GoogleBookItem: Codable {
+    let volumeInfo: VolumeInfo
+}
+
+struct VolumeInfo: Codable {
+    let title: String
+    let authors: [String]?
 }
 
 // MARK: - Preview
