@@ -17,6 +17,7 @@ enum CameraError: LocalizedError {
     case sessionConfigurationFailed
     case torchUnavailable
     case focusUnavailable
+    case photoCaptureFailed(Error?)
 
     var errorDescription: String? {
         switch self {
@@ -30,6 +31,8 @@ enum CameraError: LocalizedError {
             return "Torch is not available on this device"
         case .focusUnavailable:
             return "Auto-focus is not available on this device"
+        case .photoCaptureFailed(let error):
+            return "Failed to capture photo: \(error?.localizedDescription ?? "Unknown error")"
         }
     }
 }
@@ -69,6 +72,7 @@ final class CameraManager: ObservableObject {
     private var videoInput: AVCaptureDeviceInput?
     private var videoOutput: AVCaptureVideoDataOutput?
     private var metadataOutput: AVCaptureMetadataOutput?
+    private var photoOutput: AVCapturePhotoOutput?
 
     private var sessionState: CameraSessionState = .idle
     private let sessionQueue = DispatchQueue(label: "camera.session.queue", qos: .userInitiated)
@@ -159,6 +163,7 @@ final class CameraManager: ObservableObject {
         videoInput = nil
         videoOutput = nil
         metadataOutput = nil
+        photoOutput = nil
 
         sessionState = .idle
 
@@ -166,6 +171,23 @@ final class CameraManager: ObservableObject {
         await MainActor.run {
             isSessionRunning = false
             isTorchOn = false
+        }
+    }
+
+    // MARK: - Photo Capture
+
+    func takePhoto() async throws -> Data {
+        guard let photoOutput = photoOutput else {
+            throw CameraError.sessionConfigurationFailed
+        }
+
+        return try await withCheckedThrowingContinuation { continuation in
+            let settings = AVCapturePhotoSettings()
+            let delegate = PhotoCaptureDelegate(continuation: continuation)
+
+            sessionQueue.async {
+                photoOutput.capturePhoto(with: settings, delegate: delegate)
+            }
         }
     }
 
@@ -367,6 +389,14 @@ final class CameraManager: ObservableObject {
             session.addOutput(metadataOutput)
             self.metadataOutput = metadataOutput
         }
+
+        // Photo output for still images
+        let photoOutput = AVCapturePhotoOutput()
+        guard session.canAddOutput(photoOutput) else {
+            throw CameraError.sessionConfigurationFailed
+        }
+        session.addOutput(photoOutput)
+        self.photoOutput = photoOutput
     }
 
     // MARK: - Lifecycle Management
@@ -492,5 +522,34 @@ extension CameraManager {
     /// Check current camera permission status
     static var cameraPermissionStatus: AVAuthorizationStatus {
         AVCaptureDevice.authorizationStatus(for: .video)
+    }
+}
+
+// MARK: - Photo Capture Delegate
+
+private class PhotoCaptureDelegate: NSObject, AVCapturePhotoCaptureDelegate {
+    private var continuation: CheckedContinuation<Data, Error>?
+
+    init(continuation: CheckedContinuation<Data, Error>) {
+        self.continuation = continuation
+    }
+
+    func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
+        guard let continuation = continuation else { return }
+
+        if let error = error {
+            continuation.resume(throwing: CameraError.photoCaptureFailed(error))
+            self.continuation = nil
+            return
+        }
+
+        guard let imageData = photo.fileDataRepresentation() else {
+            continuation.resume(throwing: CameraError.photoCaptureFailed(nil))
+            self.continuation = nil
+            return
+        }
+
+        continuation.resume(returning: imageData)
+        self.continuation = nil
     }
 }
