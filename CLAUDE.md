@@ -170,7 +170,11 @@ struct BookDetailView: View {
 - **google-books-worker**: Google Books API wrapper
 - **openlibrary-worker**: OpenLibrary API wrapper
 
-**API Endpoint:** `https://books-api-proxy.jukasdrj.workers.dev/search/auto`
+**API Endpoints:**
+- `/search/title` - Smart general search (6h cache)
+- `/search/isbn` - Dedicated ISBN lookup (7-day cache, ISBNdb-first)
+- `/search/advanced` - Multi-field filtering (title+author)
+- `/search/author` - Author bibliography
 
 **Architecture Rule:** Workers communicate via RPC service bindings - **never** direct API calls from proxy worker. Always orchestrate through specialized workers.
 
@@ -318,52 +322,13 @@ let schema = Schema([
 
 ### App Icon Generation 🎨
 
-**Script:** `Scripts/generate_app_icons.sh`
+**Usage:** `./Scripts/generate_app_icons.sh ~/path/to/icon-1024x1024.png`
 
-**Purpose:** Automate iOS app icon generation from a single 1024x1024 source image. Because nobody wants to manually resize 15 different icon variants! 😅
+**What It Does:** Generates all 15 iOS icon sizes (20px → 1024px) using macOS `sips` tool. Updates `Contents.json` for Xcode Asset Catalog.
 
-**Usage:**
-```bash
-# Basic usage (outputs to BooksTracker/Assets.xcassets/AppIcon.appiconset/)
-./Scripts/generate_app_icons.sh ~/Downloads/app-icon-1024.png
+**Requirements:** 1024x1024 PNG source image, macOS `sips` (pre-installed)
 
-# Custom output directory
-./Scripts/generate_app_icons.sh icon.png ./path/to/Assets.xcassets/AppIcon.appiconset
-```
-
-**What It Does:**
-1. ✅ Validates source image exists and is accessible
-2. ✅ Generates 15 icon sizes using macOS `sips` (20px, 29px, 40px, 60px, 76px, 83.5px, 1024px + @2x/@3x variants)
-3. ✅ Creates/updates `Contents.json` with proper Xcode Asset Catalog structure
-4. ✅ Handles iPhone, iPad, App Store, Spotlight, Settings, and Notification icons
-
-**Icon Sizes Generated:**
-| Use Case | Sizes | Notes |
-|----------|-------|-------|
-| **iPhone App** | 120px (@2x), 180px (@3x) | Main home screen icon |
-| **iPad App** | 76px, 152px (@2x), 167px (@2x) | iPad Pro uses 167px |
-| **Spotlight** | 40px, 80px (@2x), 120px (@3x) | Search results |
-| **Settings** | 29px, 58px (@2x), 87px (@3x) | Settings app |
-| **Notifications** | 20px, 40px (@2x), 60px (@3x) | Push notifications |
-| **App Store** | 1024px | Required for App Store submission |
-
-**Requirements:**
-- Source image must be 1024x1024 PNG (square, high quality)
-- macOS `sips` tool (pre-installed on macOS)
-- Xcode project with existing Asset Catalog
-
-**Pro Tips:**
-- Use transparent background if you want rounded corners (iOS adds them automatically)
-- Avoid text smaller than 44pt (won't be readable at small sizes)
-- Test on both light and dark home screen backgrounds
-- Preview generated icons: Open Xcode → Assets.xcassets → AppIcon
-
-**Example Workflow:**
-1. Designer creates 1024x1024 icon (Figma, Photoshop, Midjourney, etc.)
-2. Save as PNG to Downloads folder
-3. Run: `./Scripts/generate_app_icons.sh ~/Downloads/my-awesome-icon.png`
-4. Open Xcode → Asset Catalog shows all sizes ✨
-5. Build & run → See your icon on the simulator/device!
+**Pro Tips:** Use transparent background for rounded corners, avoid text <44pt, test on light/dark backgrounds
 
 ### Barcode Scanning Integration
 
@@ -485,242 +450,52 @@ struct ModernCameraPreview: UIViewRepresentable {
 
 ### Bookshelf Scanner (Beta)
 
-**Status:** Phase 1 Complete ✅ (October 2025)
+**Key Files:** `DetectedBook.swift`, `VisionProcessingActor.swift`, `BookshelfScannerView.swift`, `ScanResultsView.swift`
 
-**Key Files:**
-- `DetectedBook.swift` - Model for Vision framework detection results
-- `VisionProcessingActor.swift` - On-device OCR and spine detection
-- `BookshelfScannerView.swift` - PhotosPicker integration and scan UI
-- `ScanResultsView.swift` - Review and confirmation interface
-
-**Architecture:**
+**Quick Start:**
 ```swift
-// Bookshelf Scanning Flow (Phase 1 - Beta)
-PhotosPicker → VisionProcessingActor → DetectedBook[] → ScanResultsView → Library
-     ↓                  ↓                    ↓                ↓              ↓
-  Max 10 images    Spine detection     ISBN extraction   Duplicate     SwiftData
-                   OCR (Revision3)      Title/Author    detection      insertion
-```
-
-**Vision Framework Integration:**
-- **VNDetectRectanglesRequest**: Finds vertical book spines (aspect ratio < 0.5)
-- **VNRecognizeTextRequest**: iOS 26 Live Text (Revision3) for accurate OCR
-- **On-Device Processing**: Zero photo uploads, privacy-first design
-- **Metadata Parsing**: ISBN regex, title extraction, author heuristics
-
-**Features:**
-- **Duplicate Detection**: ISBN-first strategy with title+author fallback
-- **Auto-Selection**: High-confidence books (>70%) automatically selected
-- **Status Indicators**: detected, confirmed, alreadyInLibrary, uncertain
-- **Batch Add**: Bulk add confirmed books to library
-- **Privacy Banner**: HIG-compliant disclosure shown before picker
-
-**Usage:**
-```swift
-// In SettingsView - Experimental Features section
-Button {
-    showingBookshelfScanner = true
-} label: {
-    HStack {
-        Image(systemName: "books.vertical.fill")
-        VStack(alignment: .leading) {
-            HStack {
-                Text("Scan Bookshelf")
-                Image(systemName: "flask.fill")  // Beta badge
-                    .foregroundStyle(.orange)
-            }
-            Text("Detect books from photos • On-device analysis • Requires iPhone")
-        }
+// SettingsView - Experimental Features
+Button("Scan Bookshelf") { showingBookshelfScanner = true }
+    .sheet(isPresented: $showingBookshelfScanner) {
+        BookshelfScannerView()
     }
-}
-.sheet(isPresented: $showingBookshelfScanner) {
-    BookshelfScannerView()
-}
 ```
 
-**Swift 6 Concurrency:**
-- `VisionProcessingActor`: @globalActor for thread-safe Vision operations
-- `#if canImport(UIKit)`: iOS-only code properly guarded for SPM
-- Explicit continuation types for region-based isolation checker
-- MainActor isolation for SwiftData operations
+**Features:** Vision framework spine detection, OCR (Revision3), ISBN extraction, duplicate detection, batch import
 
-**Phase 2 Roadmap (Post Real-Device Validation):**
-- Move from Settings → Search toolbar Menu (alongside barcode scanner)
-- Search API integration: "Search Matches" button enrichment
-- Performance optimization for batch processing
-- Accuracy metrics and user feedback collection
+**Architecture:** PhotosPicker → `VisionProcessingActor` (@globalActor) → Duplicate check → SwiftData
 
-**Privacy Requirements:**
-Add to Xcode target Info settings (see `PRIVACY_STRINGS_REQUIRED.md`):
-```
-Key: NSPhotoLibraryUsageDescription
-Value: "BooksTrack analyzes bookshelf photos on your device to detect book titles and ISBNs. No photos are uploaded to servers."
-```
+**Privacy:** On-device processing, no photo uploads. Requires `NSPhotoLibraryUsageDescription` in Info.plist
 
-**Testing Notes:**
-- SPM build shows UIKit errors (expected - iOS-only code)
-- Xcode builds successfully for iOS targets
-- Requires real iPhone for accuracy testing (Vision hardware optimization)
-- Simulator testing limited to UI/UX validation
+**Status:** Phase 1 complete (Beta), real device testing pending. See CHANGELOG.md for implementation details.
 
 ### CSV Import & Enrichment System
 
-**Status:** Phase 1 Complete ✅ (October 2025)
+**Key Files:** `CSVParsingActor.swift`, `CSVImportService.swift`, `EnrichmentService.swift`, `EnrichmentQueue.swift`, `CSVImportFlowView.swift`
 
-**Key Files:**
-- `CSVParsingActor.swift` - Stream-based CSV parsing with smart column detection
-- `CSVImportService.swift` - Import orchestration and duplicate handling
-- `EnrichmentService.swift` - Metadata enrichment via Cloudflare Worker
-- `EnrichmentQueue.swift` - Priority queue for background enrichment
-- `CSVImportFlowView.swift` - Complete import wizard UI
-
-**Architecture:**
+**Quick Start:**
 ```swift
-// CSV Import Flow
-CSV File → CSVParsingActor → CSVImportService → SwiftData Models
-                                    ↓
-                         EnrichmentQueue (Work IDs)
-                                    ↓
-                         EnrichmentService (API Fetch)
-                                    ↓
-                         SwiftData Update (Metadata)
+// SettingsView
+Button("Import CSV Library") { showingCSVImport = true }
+    .sheet(isPresented: $showingCSVImport) { CSVImportFlowView() }
 ```
 
-**Format Support:**
-- **Goodreads:** "to-read", "currently-reading", "read"
-- **LibraryThing:** "owned", "reading", "finished"
-- **StoryGraph:** "want to read", "in progress", "completed"
-- **Smart Column Detection:** Auto-detects ISBN, Title, Author columns
+**Performance:** 100 books/min, <200MB memory (1500+ books), 95%+ duplicate detection, 90%+ enrichment success
 
-**Performance:**
-- Import Speed: ~100 books/minute
-- Memory Usage: <200MB for 1500+ books
-- Duplicate Detection: >95% accuracy (ISBN + Title/Author)
-- Enrichment Success: 90%+ (multi-provider orchestration)
+**Format Support:** Goodreads, LibraryThing, StoryGraph (auto-detects columns)
 
-**Usage:**
-```swift
-// In SettingsView
-Button("Import CSV Library") {
-    showingCSVImport = true
-}
-.sheet(isPresented: $showingCSVImport) {
-    CSVImportFlowView()
-}
-```
+**Architecture:** CSV → `CSVParsingActor` (@globalActor) → `CSVImportService` → SwiftData → `EnrichmentQueue` (@MainActor) → `EnrichmentService` → Cloudflare Worker
 
-**Enrichment API:**
-```swift
-// EnrichmentService uses existing Cloudflare Worker
-let service = EnrichmentService()
-await service.enrichWork(work, in: modelContext)
+**🎉 Enrichment Progress Banner (Build 45+):**
+- NotificationCenter-based (NO Live Activity entitlements!)
+- Real-time progress: "Enriching Metadata... 15/100 (15%)"
+- Theme-aware gradient, pulsing icon, WCAG AA compliant
+- Files: `ContentView.swift` (lines 9-12, 65-96, 272-365), `EnrichmentQueue.swift` (lines 174-179, 210-219, 235-239)
 
-// Priority Queue Management
-let queue = EnrichmentQueue()
-await queue.enqueueBatch(workIDs)
-await queue.prioritize(workID: urgentBook.persistentModelID)
-await queue.startProcessing(in: modelContext) { progress in
-    print("Enriched: \(progress.completed)/\(progress.total)")
-}
-```
-
-**Swift 6 Concurrency:**
-- `CSVParsingActor`: @globalActor for background parsing
-- `EnrichmentService`: @MainActor for SwiftData compatibility
-- `EnrichmentQueue`: @MainActor with persistent storage
-- AsyncStream for real-time progress updates
-
-**🎉 NEW: Enrichment Progress Banner (No Live Activity Required!)**
-
-**Problem:** Users need visual feedback during enrichment, but Live Activity signing is blocked.
-
-**Solution:** NotificationCenter-based enrichment banner in ContentView (Build 45+)
-
-```swift
-// Architecture: EnrichmentQueue → NotificationCenter → ContentView → Banner Overlay
-
-// EnrichmentQueue posts notifications:
-NotificationCenter.default.post(
-    name: NSNotification.Name("EnrichmentStarted"),
-    object: nil,
-    userInfo: ["totalBooks": totalCount]
-)
-
-NotificationCenter.default.post(
-    name: NSNotification.Name("EnrichmentProgress"),
-    object: nil,
-    userInfo: [
-        "completed": processedCount,
-        "total": totalCount,
-        "currentTitle": work.title
-    ]
-)
-
-NotificationCenter.default.post(
-    name: NSNotification.Name("EnrichmentCompleted"),
-    object: nil
-)
-
-// ContentView observes and displays floating banner:
-.onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("EnrichmentProgress"))) { notification in
-    if let userInfo = notification.userInfo,
-       let completed = userInfo["completed"] as? Int,
-       let total = userInfo["total"] as? Int,
-       let title = userInfo["currentTitle"] as? String {
-        enrichmentProgress = (completed, total)
-        currentBookTitle = title
-    }
-}
-```
-
-**Banner Features:**
-- ✨ Real-time progress: "Enriching Metadata... 15/100 (15%)"
-- 📖 Current book title display
-- 🎨 Theme-aware gradient progress bar
-- 💫 Pulsing sparkles icon with gradient
-- 🌊 Glass effect container (iOS 26 Liquid Glass)
-- ♿ WCAG AA compliant (system semantic colors)
-- 🚀 Smooth slide-up/slide-down animations
-- 📱 Floats above tab bar, doesn't block navigation
-- ✅ Works WITHOUT Live Activity entitlements!
-
-**Why This Pattern:**
-- NotificationCenter = zero entitlement requirements
-- Overlay pattern = works on simulator + physical devices
-- Same UX quality as Live Activity, simpler deployment
-- No App Store provisioning headaches!
-
-**Files:**
-- ContentView.swift (banner UI + observers, lines 9-12, 65-96, 272-365)
-- EnrichmentQueue.swift (notification posting, lines 174-179, 210-219, 235-239)
-
-**Enrichment Queue Self-Cleaning (Build 45+):**
-
-**Problem:** Queue persisted 768 deleted book IDs after library reset → "data missing" errors
-
-**Solutions:**
-1. **Graceful Handling:** Skip deleted works, persist cleanup immediately (lines 188-193)
-2. **Startup Validation:** Remove stale IDs on app launch (lines 129-146)
-3. **Manual Clear:** Public `clear()` method (lines 122-126)
-4. **Auto Hook:** Validation runs in ContentView.swift (lines 58-60)
-
-```swift
-// Validation on startup (ContentView.swift)
-.task {
-    await EnrichmentQueue.shared.validateQueue(in: modelContext)
-}
-
-// Graceful handling during processing (EnrichmentQueue.swift)
-guard let work = modelContext.model(for: workID) as? Work else {
-    print("⚠️ Skipping deleted work (cleaning up queue)")
-    saveQueue()  // Persist cleanup immediately
-    continue
-}
-```
-
-**Result:** Queue automatically stays clean, zero "data missing" errors! 🧹
-
-**See Also:** `docs/archive/csvMoon-implementation-notes.md` for detailed implementation roadmap
+**Queue Self-Cleaning:**
+- Startup validation removes stale persistent IDs
+- Graceful handling skips deleted works
+- See `docs/archive/csvMoon-implementation-notes.md` for details
 
 ## Debugging & Troubleshooting
 
@@ -985,362 +760,18 @@ let diversityStats = library.calculateDiversityMetrics()
 // Returns: gender distribution, regional representation, marginalized voice %
 ```
 
-## 🎨 Recent Victories
+## 🎨 Recent Development Highlights
 
-### **🧹 The Great Deprecation Cleanup (Oct 11, 2025)**
+**See CHANGELOG.md for detailed victory stories!** This section provides quick reference for current features.
 
-```
-   ╔════════════════════════════════════════════════════════╗
-   ║  🎯 FROM DEPRECATED TO DEDICATED! 🚀                  ║
-   ║                                                        ║
-   ║  ❌ Before: /search/auto (deprecated, 1h cache)      ║
-   ║  ✅ After:  Specialized endpoints + NEW ISBN!        ║
-   ║                                                        ║
-   ║  🔧 Critical Fixes:                                   ║
-   ║     ✅ Widget bundle ID (booksV26 → booksV3)          ║
-   ║     ✅ EnrichmentService → /search/advanced           ║
-   ║     ✅ SearchModel.all → /search/title                ║
-   ║     ✅ SearchModel.isbn → /search/isbn (NEW!)         ║
-   ║     ✅ Camera deadlock fix (actor initialization)     ║
-   ║     ✅ Documentation links (8 broken refs fixed)      ║
-   ║                                                        ║
-   ║  🎁 BONUS: Dedicated ISBN endpoint with ISBNdb!      ║
-   ║     📘 7-day cache (vs 1h) = 168x improvement!       ║
-   ║     📘 99%+ accuracy (ISBNdb-first strategy)         ║
-   ║     📘 Perfect for barcode scanning workflow         ║
-   ║                                                        ║
-   ║  Result: Zero deprecated code, better performance! 🎉 ║
-   ╚════════════════════════════════════════════════════════╝
-```
+**Major Milestones (October 2025):**
+- ✅ App Store Launch (v3.0.0) - Zero warnings, production-ready
+- ✅ API Migration - Specialized endpoints, 168x cache improvement
+- ✅ Accessibility - WCAG AA compliance across all themes
+- ✅ CSV Import - 1500+ books in minutes with enrichment
+- ✅ Live Activity - Lock Screen progress (deprecated - see Enrichment Banner)
 
-**The Journey:**
-
-Phase 1 kicked off with a deprecation audit that uncovered 3 uses of the legacy `/search/auto` endpoint - not great when your backend docs literally say "(DEPRECATED)" next to it! 😅
-
-**What We Fixed:**
-
-1. **Widget Bundle ID Mismatch** 🔴 CRITICAL
-   - File: `BooksTrackerWidgetsControl.swift:13`
-   - Found: `booksV26` still lurking (old bundle ID)
-   - Fixed: `booksV3` (matches parent app)
-   - Why: App Store would've rejected this immediately! 💀
-
-2. **CSV Enrichment Migration** 📊
-   - File: `EnrichmentService.swift`
-   - Before: Concatenated "title author" string → `/search/auto`
-   - After: Separated parameters → `/search/advanced?title=X&author=Y`
-   - Result: 90% → 95%+ enrichment accuracy (backend filtering FTW!)
-
-3. **Search Routing Intelligence** 🔍
-   - File: `SearchModel.swift`
-   - `.all` scope: Now uses `/search/title` (handles ISBNs smartly, 6h cache)
-   - `.isbn` scope: **NEW** `/search/isbn` endpoint (7-day cache, ISBNdb-first!)
-   - iOS 26 HIG approved: "Predictive intelligence + zero user friction"
-
-4. **Backend Enhancement** ⚡
-   - Created `handleISBNSearch()` in `search-contexts.js` (+133 lines)
-   - ISBNdb RPC binding → Google Books fallback
-   - 7-day cache TTL (ISBNs are immutable identifiers!)
-   - Cache hit rate: Expected 85%+ (vs 30-40% for generic search)
-
-5. **Camera Deadlock Fix** 📹
-   - File: `ModernBarcodeScannerView.swift:299-302`
-   - Problem: `Task { @CameraSessionActor in CameraManager() }` = circular deadlock
-   - Solution: Direct initialization (let Swift handle actors!)
-   - Result: Black screen → Camera works! 🎥
-
-6. **Documentation Spring Cleaning** 📚
-   - Fixed 8 broken links (csvMoon.md, cache3.md references)
-   - Created `APIcall.md` (7.7KB migration guide)
-   - Updated doc structure in CLAUDE.md
-
-**Performance Impact:**
-```
-┌─────────────────────┬──────────┬─────────┬──────────────┐
-│ Metric              │ Before   │ After   │ Improvement  │
-├─────────────────────┼──────────┼─────────┼──────────────┤
-│ ISBN Cache          │ 1 hour   │ 7 days  │ 168x! 🔥     │
-│ CSV Accuracy        │ 90%      │ 95%+    │ +5%          │
-│ General Search      │ 1h cache │ 6h      │ 6x better    │
-│ ISBN Accuracy       │ 80-85%   │ 99%+    │ +15-19%!     │
-└─────────────────────┴──────────┴─────────┴──────────────┘
-```
-
-**The Lesson:**
-When your iOS26 HIG designer consultant says "trust the specialized endpoints," LISTEN! The `/search/auto` was a jack-of-all-trades, master of none. Now we have:
-- Title search for smart general queries
-- Author search for bibliographies
-- **ISBN search for barcode magic** ← This one's our baby! 👶
-- Advanced search for multi-field precision
-
-**Files Touched:** 10 modified, 3 new (APIcall.md, API_MIGRATION_GUIDE.md, API_MIGRATION_TESTING.md)
-
-**Commit Message Preview:**
-```
-🧹 Fix Deprecations: Migrate to Specialized Endpoints + New ISBN API
-
-- Widget bundle ID: booksV26 → booksV3 (App Store blocker!)
-- EnrichmentService: /search/auto → /search/advanced (95%+ accuracy)
-- SearchModel: Intelligent routing (/search/title for .all scope)
-- NEW: /search/isbn endpoint (ISBNdb-first, 7-day cache!)
-- Camera deadlock fix (direct actor initialization)
-- Docs: Fixed 8 broken links, added API migration guide
-```
-
----
-
-### **🚢 The App Store Launch Prep (Oct 2025)**
-
-```
-   ╔════════════════════════════════════════════════════════╗
-   ║  🎯 FROM DEV BUILD TO APP STORE READY! 📱           ║
-   ║                                                        ║
-   ║  Bundle ID: booksV26 → booksV3 ✅                     ║
-   ║  Display Name: "Books Tracker" → "BooksTrack by oooe" ║
-   ║  Version: 1.0.0 (43) → 3.0.0 (44) 🚀                  ║
-   ║                                                        ║
-   ║  🔧 Critical Fixes:                                   ║
-   ║     ✅ Widget bundle ID prefix (booksV3.Widgets)      ║
-   ║     ✅ Version synchronization (xcconfig variables)   ║
-   ║     ✅ Production push notifications                  ║
-   ║     ✅ CloudKit container cleanup                     ║
-   ║     ✅ Removed Swift 6 compiler warnings              ║
-   ║                                                        ║
-   ║  Result: Zero warnings, zero blockers! 🎉            ║
-   ╚════════════════════════════════════════════════════════╝
-```
-
-**The Challenge:** App extensions MUST have bundle IDs prefixed with parent app, and versions must match exactly!
-
-**What We Fixed:**
-1. **Bundle Identifier Migration** - `booksV26` → `booksV3` across all targets
-2. **Widget Version Sync** - Changed from hardcoded values to `$(MARKETING_VERSION)` and `$(CURRENT_PROJECT_VERSION)` in Info.plist
-3. **Removed Unnecessary Keywords** - `await` on non-async function, `try` on non-throwing function
-4. **Production Environment** - `aps-environment` set to `production` for App Store
-5. **CloudKit Container** - Removed legacy `iCloud.userLibrary`, now uses `iCloud.$(CFBundleIdentifier)`
-
-**The Lesson:**
-```swift
-// ❌ WRONG: Hardcoded versions get out of sync!
-<key>CFBundleVersion</key>
-<string>43</string>  // Main app: 44, Widget: 43 → REJECTION!
-
-// ✅ RIGHT: Single source of truth in Config/Shared.xcconfig
-<key>CFBundleVersion</key>
-<string>$(CURRENT_PROJECT_VERSION)</string>  // Always in sync! 🎯
-```
-
-**Version Management Pattern:**
-- **ONE FILE controls versions:** `Config/Shared.xcconfig`
-- **ALL targets inherit:** Main app, widget extensions, etc.
-- **Update script syncs everything:** `./Scripts/update_version.sh patch`
-
-**New Slash Command:** `/gogo` - One-step App Store build verification! 🚀
-
----
-
-### **✨ The Accessibility Revolution (Oct 2025)**
-
-```
-╔═══════════════════════════════════════════════════════════╗
-║  🌈 FROM WCAG VIOLATIONS TO PERFECT CONTRAST! 🎯        ║
-║                                                           ║
-║  📊 Phase 1: Critical Fixes (4 files, 30 instances)     ║
-║     ✅ EditionMetadataView.swift (Book Details!)         ║
-║     ✅ iOS26AdaptiveBookCard.swift                       ║
-║     ✅ iOS26LiquidListRow.swift                          ║
-║                                                           ║
-║  📊 Phase 2: Moderate Fixes (7 files, 44 instances)     ║
-║     ✅ SearchView.swift                                  ║
-║     ✅ AdvancedSearchView.swift                          ║
-║     ✅ SettingsView.swift                                ║
-║     ✅ ContentView.swift + CloudKitHelpView + more       ║
-║                                                           ║
-║  🎯 Result: 2.1:1 contrast → 4.5:1+ WCAG AA! ✨         ║
-╚═══════════════════════════════════════════════════════════╝
-```
-
-**The Problem:** Gray text (`.secondary`) gave 2.1-2.8:1 contrast on warm themes - barely readable! 😱
-
-**The Solution:**
-- Added `accessiblePrimaryText`, `accessibleSecondaryText`, `accessibleTertiaryText` to iOS26ThemeSystem
-- Dynamic opacity based on theme warmth (85% for warm, 75% for cool)
-- Fixed 74 instances across 11 files
-
-**Lesson Learned:** When you only need to check existence, use `if userEntry != nil`, not `if let userEntry = userEntry` - Swift's being smart about unused bindings! 🧠
-
-### **🔍 The Advanced Search Awakening (Oct 2025)**
-
-```
-   ╔══════════════════════════════════════════════════════╗
-   ║  🚀 FROM CLIENT CHAOS TO BACKEND BRILLIANCE! 🎯    ║
-   ║                                                      ║
-   ║  ❌ Before: Foreign languages, book sets, chaos    ║
-   ║  ✅ After:  Clean, filtered, precise results       ║
-   ║                                                      ║
-   ║  Architecture: Pure Worker Orchestration            ║
-   ╚══════════════════════════════════════════════════════╝
-```
-
-**The Journey:**
-1. **User reports:** "Andy Weir" advanced search returning wrong languages! 😬
-2. **First attempt:** Client-side filtering (wrong approach!)
-3. **User wisdom:** "Backend has good filtering - USE IT!" 💡
-4. **The Fix:** New `/search/advanced` endpoint with proper RPC
-
-**What We Built:**
-- **Backend Endpoint:** `/search/advanced` with multi-field filtering
-- **Smart Routing:** ISBN > Author+Title > Single field searches
-- **iOS Integration:** `BookSearchAPIService.advancedSearch()` method
-- **Clean Architecture:** Zero direct API calls, pure worker orchestration
-
-**Code Pattern:**
-```javascript
-// Backend filters at the source!
-const authorResults = await handleAuthorSearch(authorName, { maxResults: 40 });
-const filtered = authorResults.filter(item =>
-    item.title.toLowerCase().includes(titleLower)
-);
-```
-
-**The Wisdom:** When you build a beautiful orchestration system, TRUST IT and USE IT! Don't bypass your own architecture! 🏗️
-
-### **📚 The CSV Import Breakthrough (Oct 2025)**
-
-```
-╔════════════════════════════════════════════════════════════╗
-║  🚀 FROM EMPTY SHELVES TO 1500+ BOOKS IN MINUTES! 📖     ║
-║                                                            ║
-║  Phase 1: High-Performance Import & Enrichment ✅         ║
-║     ✅ Stream-based CSV parsing (no memory overflow!)     ║
-║     ✅ Smart column detection (Goodreads/LibraryThing)    ║
-║     ✅ Priority queue enrichment system                   ║
-║     ✅ 95%+ duplicate detection accuracy                  ║
-║                                                            ║
-║  🎯 Result: 100 books/min @ <200MB memory! 🔥            ║
-╚════════════════════════════════════════════════════════════╝
-```
-
-**The Challenge:** Users need to import large CSV libraries (1000+ books) from Goodreads, LibraryThing, StoryGraph without crashing the app or blocking the UI.
-
-**What We Built:**
-1. **CSVParsingActor**: Stream-based parsing with `@globalActor` isolation
-2. **Smart Column Detection**: Auto-detects ISBN, Title, Author columns across formats
-3. **EnrichmentService**: MainActor-isolated metadata fetcher using Cloudflare Worker
-4. **EnrichmentQueue**: Priority queue with persistent storage and re-prioritization
-5. **Duplicate Detection**: ISBN-first strategy with Title+Author fallback (95%+ accuracy)
-
-**Architecture Pattern:**
-```swift
-// Swift 6 Concurrency Magic
-@globalActor actor CSVParsingActor {
-    func parseCSV(_ data: Data) async throws -> [ParsedBook] {
-        // Stream-based parsing, batch saves
-    }
-}
-
-@MainActor class EnrichmentService {
-    func enrichWork(_ work: Work, in context: ModelContext) async {
-        // Cloudflare Worker API call
-        // SwiftData update with cover, ISBN, metadata
-    }
-}
-
-@MainActor class EnrichmentQueue {
-    func prioritize(workID: PersistentIdentifier) {
-        // User scrolls to book → move to front of queue!
-    }
-}
-```
-
-**Performance Wins:**
-- **Import Speed:** ~100 books/minute
-- **Memory Usage:** <200MB for 1500+ books
-- **Format Support:** Goodreads, LibraryThing, StoryGraph
-- **Enrichment Success:** 90%+ (multi-provider orchestration)
-- **Test Coverage:** 90%+ with 20+ test cases
-
-**Lesson Learned:**
-- MainActor for SwiftData = no data races! 🎯
-- Stream parsing > loading entire file 💾
-- Background actors = responsive UI 🚀
-- See `docs/archive/csvMoon-implementation-notes.md` for complete implementation roadmap
-
-### **📱 The Live Activity Awakening (Oct 2025)**
-
-```
-╔════════════════════════════════════════════════════════════╗
-║  🎬 FROM BACKGROUND SILENCE TO LOCK SCREEN BRILLIANCE! ║
-║                                                            ║
-║  Phase 3: Live Activity & User Feedback ✅                ║
-║     ✅ Lock Screen compact & expanded views               ║
-║     ✅ Dynamic Island (compact/expanded/minimal)          ║
-║     ✅ iOS 26 Liquid Glass theme integration              ║
-║     ✅ WCAG AA contrast (4.5:1+) across 10 themes         ║
-║                                                            ║
-║  🎯 Result: Beautiful, theme-aware import progress! 🎨   ║
-╚════════════════════════════════════════════════════════════╝
-```
-
-**The Dream:** "I want to see my CSV import progress on my Lock Screen!"
-
-**The Challenge:** Live Activity widgets can't access `@Environment`, so how do you pass theme colors?
-
-**The Solution:**
-1. **Hex Color Serialization**: Pass theme colors through `ActivityAttributes` as hex strings
-2. **Theme-Aware UI**: All Live Activity views use dynamic theme colors
-3. **WCAG AA Compliance**: System semantic colors for text, theme colors for decorative elements
-4. **Widget Bundle Integration**: Link BooksTrackerFeature to widget extension, add entitlements
-
-**What We Built:**
-```swift
-// ImportActivityAttributes.swift - Theme serialization
-public var themePrimaryColorHex: String = "#007AFF"
-public var themeSecondaryColorHex: String = "#4DB0FF"
-
-public var themePrimaryColor: Color {
-    hexToColor(themePrimaryColorHex)
-}
-```
-
-**Lock Screen Views:**
-- **Compact:** Progress percentage + theme-colored icon
-- **Expanded:** Full progress bar with gradient, current book title, statistics badges
-
-**Dynamic Island (iPhone 14 Pro+):**
-- **Compact:** Icon + percentage on either side of camera cutout
-- **Expanded:** Circular progress, current book, detailed statistics
-- **Minimal:** Single progress indicator (multiple activities)
-
-**WCAG AA Compliance:**
-| Theme | Primary Color | Contrast Ratio | Status |
-|-------|---------------|----------------|--------|
-| Liquid Blue | `#007AFF` | 8:1+ | ✅ WCAG AAA |
-| Cosmic Purple | `#8C45F5` | 5.2:1 | ✅ WCAG AA |
-| Forest Green | `#33C759` | 4.8:1 | ✅ WCAG AA |
-| Sunset Orange | `#FF9500` | 5.1:1 | ✅ WCAG AA |
-| Moonlight Silver | `#8F8F93` | 4.9:1 | ✅ WCAG AA |
-
-**Architecture Victory:**
-- ✅ Widget extension links to BooksTrackerFeature SPM package
-- ✅ `NSSupportsLiveActivities` entitlement added
-- ✅ `CSVImportLiveActivity()` registered in widget bundle
-- ✅ Theme colors passed via ActivityAttributes fixed properties
-
-**Lesson Learned:**
-- Live Activity widgets need hex serialization for Color types
-- System semantic colors (`.primary`, `.secondary`) handle contrast automatically
-- Theme colors for decorative elements (icons, gradients, backgrounds)
-- WCAG AA requires thoughtful color usage, not just high contrast
-
-**User Experience:**
-- Import starts → Live Activity appears with theme gradient
-- Lock phone → See compact progress on Lock Screen
-- Long-press Dynamic Island → Expanded view with full details
-- Real-time updates: "150/1500 books (10%)" + current book title
-- Import completes → Final stats, auto-dismisses after 4 seconds
-
-**Result:** From invisible background task → Showcase-quality iOS 26 feature! 🏆
+**Current Focus:** Real device validation, bookshelf scanner beta testing
 
 ## Performance Optimizations
 

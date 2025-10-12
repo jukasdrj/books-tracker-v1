@@ -55,27 +55,15 @@ Execute comprehensive build validation using XcodeBuildMCP for autonomous qualit
    - Check Live Activity functionality
    - Verify CSV import progress tracking
 
-## Phase 4: Documentation & Commit
+## Phase 4: Git Workflow
 
-9. **Update Project Documentation**
-   - Update CHANGELOG.md with build notes
-   - Document any issues found/fixed
-   - Add lessons learned to CLAUDE.md
-   - Trim deprecated/duplicate info
+9. **Commit & Push**
+   - Stage all changes (code + docs)
+   - Create comprehensive commit message
+   - Push to both `main` and `ship` branches
+   - Tag release if build is App Store ready
 
-10. **Git Workflow**
-    - Stage all changes (code + docs)
-    - Create comprehensive commit message
-    - Push to both `main` and `ship` branches
-    - Tag release if build is App Store ready
-
-## Phase 5: Archive Preparation (Manual)
-
-11. **Next Steps for Xcode Archive**
-    - Open Xcode manually
-    - Product → Archive
-    - Validate archive via Organizer
-    - Upload to App Store Connect
+**Note:** Manual steps (Xcode Archive, App Store submission) handled outside automation
 
 ## Configuration
 
@@ -93,9 +81,4 @@ Execute comprehensive build validation using XcodeBuildMCP for autonomous qualit
 ✅ Versions synchronized
 ✅ Device installation successful (if device connected)
 ✅ No runtime crashes in logs
-✅ Documentation updated
 ✅ Changes committed to git
-
-## Tone
-
-Use friendly banter between old friends, emojis, maybe ASCII art. Celebrate victories, acknowledge lessons learned. Make this feel like a shared accomplishment! 🎉
