@@ -17,8 +17,6 @@ public struct BookshelfScannerView: View {
     @State private var scanModel = BookshelfScanModel()
     @State private var showingResults = false
     @State private var showCamera = false
-    @State private var capturedImage: UIImage?
-    @State private var cameraManager = CameraManager()
 
     public init() {}
 
@@ -79,18 +77,14 @@ public struct BookshelfScannerView: View {
                     }
                 )
             }
-            // Camera feature temporarily disabled - Swift 6 concurrency issues with AVCaptureSession
-            // .fullScreenCover(isPresented: $showCamera) {
-            //     BookshelfCameraView(cameraManager: cameraManager) { imageData in
-            //         if let image = UIImage(data: imageData) {
-            //             capturedImage = image
-            //             Task {
-            //                 await scanModel.uploadImage(image)
-            //             }
-            //         }
-            //         showCamera = false
-            //     }
-            // }
+            .fullScreenCover(isPresented: $showCamera) {
+                BookshelfCameraView { capturedImage in
+                    Task {
+                        await scanModel.processImage(capturedImage)
+                        showingResults = true
+                    }
+                }
+            }
         }
     }
 
@@ -128,49 +122,43 @@ public struct BookshelfScannerView: View {
     }
 
     // MARK: - Camera Section
-    // TODO: Re-enable when Swift 6 concurrency issues with AVCaptureSession are resolved
 
     private var cameraSection: some View {
         VStack(spacing: 16) {
-            // Camera button temporarily disabled due to Swift 6 concurrency
-            VStack(spacing: 12) {
-                Image(systemName: "camera.fill")
-                    .font(.system(size: 48))
-                    .foregroundStyle(.secondary)
-                    .symbolRenderingMode(.hierarchical)
+            // Camera button - Swift 6.1 compliant with global actor pattern ✅
+            Button(action: { showCamera = true }) {
+                VStack(spacing: 12) {
+                    Image(systemName: "camera.fill")
+                        .font(.system(size: 48))
+                        .foregroundStyle(themeStore.primaryColor)
+                        .symbolRenderingMode(.hierarchical)
 
-                Text("Camera Scan (Coming Soon)")
-                    .font(.headline)
-                    .foregroundStyle(.secondary)
+                    Text("Scan Bookshelf")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
 
-                Text("Camera feature temporarily disabled")
-                    .font(.subheadline)
-                    .foregroundStyle(.tertiary)
-                    .multilineTextAlignment(.center)
+                    Text("Take a photo of your bookshelf")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 40)
+                .background {
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(.ultraThinMaterial)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 16)
+                                .strokeBorder(
+                                    themeStore.primaryColor.opacity(0.3),
+                                    lineWidth: 2
+                                )
+                        }
+                }
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 40)
-            .background {
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(.ultraThinMaterial)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 16)
-                            .strokeBorder(
-                                Color.secondary.opacity(0.3),
-                                style: StrokeStyle(lineWidth: 2, dash: [8, 4])
-                            )
-                    }
-            }
-            .accessibilityLabel("Camera scan temporarily unavailable")
-            .accessibilityHint("Feature will be available in a future update")
-
-            if let image = capturedImage {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFit()
-                    .cornerRadius(16)
-                    .frame(maxHeight: 300)
-            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Tap to capture bookshelf photo")
+            .accessibilityHint("Opens camera to scan your bookshelf")
         }
     }
 
@@ -231,30 +219,8 @@ public struct BookshelfScannerView: View {
 
     private var actionButtonsSection: some View {
         VStack(spacing: 12) {
-            // Primary action button
-            if scanModel.scanState == .idle {
-                Button {
-                    // Action is now handled by the camera capture
-                } label: {
-                    HStack {
-                        Image(systemName: "viewfinder")
-                            .font(.title3)
-
-                        Text("Analyze Photo")
-                            .fontWeight(.semibold)
-                    }
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background {
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(themeStore.primaryColor.gradient)
-                    }
-                }
-                .disabled(capturedImage == nil)
-                .opacity(capturedImage == nil ? 0.5 : 1.0)
-
-            } else if scanModel.scanState == .processing {
+            // Primary action button (camera opens automatically, no manual analyze button needed)
+            if scanModel.scanState == .processing {
                 HStack {
                     ProgressView()
                         .tint(.white)
@@ -351,74 +317,35 @@ class BookshelfScanModel {
         case error(String)
     }
 
-    #if canImport(UIKit)
-    func uploadImage(_ image: UIImage) async {
-        guard let imageData = image.jpegData(compressionQuality: 0.8) else {
-            scanState = .error("Failed to convert image to data")
-            return
-        }
-
+    /// Process captured image with Cloudflare AI Worker.
+    func processImage(_ image: UIImage) async {
         scanState = .processing
-
-        // URL for the Cloudflare worker
-        guard let url = URL(string: "https://books-api-proxy.your-worker-subdomain.workers.dev/api/scan-bookshelf") else {
-            scanState = .error("Invalid worker URL")
-            return
-        }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/jpeg", forHTTPHeaderField: "Content-Type")
-        request.httpBody = imageData
+        let startTime = Date()
 
         do {
-            let (data, _) = try await URLSession.shared.data(for: request)
+            // Call BookshelfAIService to process image
+            let detectedBooks = try await BookshelfAIService.shared.processBookshelfImage(image)
 
-            // For now, we'll just use the mocked response from the worker.
-            // In the future, we would decode the actual response from the AI service.
-            let decodedResponse = try JSONDecoder().decode(GoogleBooksResponse.self, from: data)
-
-            let detectedBooks = decodedResponse.items.map { item in
-                DetectedBook(
-                    title: item.volumeInfo.title,
-                    author: item.volumeInfo.authors?.first ?? "",
-                    confidence: 0.9,
-                    boundingBox: .zero,  // Placeholder for mocked response
-                    rawText: item.volumeInfo.title  // Placeholder for mocked response
-                )
-            }
-
+            // Calculate statistics
             detectedCount = detectedBooks.count
-            confirmedCount = detectedBooks.count
-            uncertainCount = 0
+            confirmedCount = detectedBooks.filter { $0.status == .detected || $0.status == .confirmed }.count
+            uncertainCount = detectedBooks.filter { $0.status == .uncertain }.count
 
+            // Create scan result
+            let processingTime = Date().timeIntervalSince(startTime)
             scanResult = ScanResult(
                 detectedBooks: detectedBooks,
-                totalProcessingTime: 1.0 // Placeholder
+                totalProcessingTime: processingTime
             )
 
             scanState = .completed
 
+        } catch let error as BookshelfAIError {
+            scanState = .error(error.localizedDescription ?? "Unknown AI error")
         } catch {
             scanState = .error(error.localizedDescription)
         }
     }
-    #endif
-}
-
-// MARK: - Helper structs for decoding the mocked response
-
-struct GoogleBooksResponse: Codable {
-    let items: [GoogleBookItem]
-}
-
-struct GoogleBookItem: Codable {
-    let volumeInfo: VolumeInfo
-}
-
-struct VolumeInfo: Codable {
-    let title: String
-    let authors: [String]?
 }
 
 // MARK: - Preview

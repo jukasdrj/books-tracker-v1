@@ -448,26 +448,86 @@ struct ModernCameraPreview: UIViewRepresentable {
 > explicit passing, clean lifecycle. Trust Swift 6 actors for thread safety,
 > but YOU handle resource exclusivity!" 🎯
 
-### Bookshelf Scanner (Beta)
+### Bookshelf AI Camera Scanner (NEW - Build 46! 📸)
 
-**Key Files:** `DetectedBook.swift`, `VisionProcessingActor.swift`, `BookshelfScannerView.swift`, `ScanResultsView.swift`
+**Key Files:**
+- **Camera:** `BookshelfCameraSessionManager.swift`, `BookshelfCameraViewModel.swift`, `BookshelfCameraPreview.swift`, `BookshelfCameraView.swift`
+- **API:** `BookshelfAIService.swift`
+- **UI:** `BookshelfScannerView.swift`, `ScanResultsView.swift`
 
 **Quick Start:**
 ```swift
 // SettingsView - Experimental Features
-Button("Scan Bookshelf") { showingBookshelfScanner = true }
+Button("Scan Bookshelf (Beta)") { showingBookshelfScanner = true }
     .sheet(isPresented: $showingBookshelfScanner) {
-        BookshelfScannerView()
+        BookshelfScannerView()  // Now with working camera! 🎉
     }
 ```
 
-**Features:** Vision framework spine detection, OCR (Revision3), ISBN extraction, duplicate detection, batch import
+**Architecture: Swift 6.1 Global Actor Pattern** 🏆
 
-**Architecture:** PhotosPicker → `VisionProcessingActor` (@globalActor) → Duplicate check → SwiftData
+```swift
+@globalActor
+actor BookshelfCameraActor {
+    static let shared = BookshelfCameraActor()
+}
 
-**Privacy:** On-device processing, no photo uploads. Requires `NSPhotoLibraryUsageDescription` in Info.plist
+@BookshelfCameraActor
+final class BookshelfCameraSessionManager {
+    // Trust Apple's thread-safety guarantee for read-only access
+    nonisolated(unsafe) private let captureSession = AVCaptureSession()
+    nonisolated init() {}  // Cross-actor instantiation
 
-**Status:** Phase 1 complete (Beta), real device testing pending. See CHANGELOG.md for implementation details.
+    func startSession() async -> AVCaptureSession {
+        // Returns session for MainActor preview layer configuration
+    }
+
+    func capturePhoto(flashMode: FlashMode) async throws -> Data {
+        // ✅ Returns Sendable Data (not UIImage!)
+        // MainActor creates UIImage from Data
+    }
+}
+```
+
+**Critical Patterns:**
+
+1. **Global Actor (not plain actor):** Required for cross-isolation access
+2. **nonisolated(unsafe):** Trust AVCaptureSession thread-safety
+3. **@preconcurrency import:** Suppress AVFoundation Sendable warnings
+4. **Data Bridge:** Return Data from actor, create UIImage on MainActor
+5. **Task Wrapper:** `Task { @BookshelfCameraActor in ... }.value` for calls
+
+**AVFoundation Configuration Order** ⚠️ CRITICAL:
+```swift
+// ❌ WRONG: Crashes with activeFormat error
+output.maxPhotoDimensions = device.activeFormat.supportedMaxPhotoDimensions.first
+captureSession.addOutput(output)
+
+// ✅ CORRECT: Add to session FIRST
+captureSession.addOutput(output)
+output.maxPhotoDimensions = device.activeFormat.supportedMaxPhotoDimensions.first
+```
+
+**User Journey:**
+```
+Settings → Scan Bookshelf → Camera Button
+    ↓
+Camera permissions (AVCaptureDevice.requestAccess)
+    ↓
+Live preview (AVCaptureVideoPreviewLayer)
+    ↓
+Capture → Review sheet → "Use Photo"
+    ↓
+Upload to Cloudflare Worker (bookshelf-ai-worker)
+    ↓
+Gemini 2.5 Flash AI analysis
+    ↓
+ScanResultsView → Add books to SwiftData
+```
+
+**Privacy:** Camera permission required. Photos uploaded to Cloudflare AI Worker for analysis (not stored). Requires `NSCameraUsageDescription` in Info.plist.
+
+**Status:** ✅ SHIPPING (Build 46)! Swift 6.1 compliant, tested on iPhone 17 Pro (iOS 26.0.1). Zero warnings, zero data races.
 
 ### CSV Import & Enrichment System
 
