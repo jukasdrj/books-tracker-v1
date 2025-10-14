@@ -34,3 +34,8 @@ AI_MODEL = "gemini-2.5-flash-preview-05-20"
 MAX_IMAGE_SIZE_MB = "10"
 REQUEST_TIMEOUT_MS = "50000"  # Increased to 50s for large image processing
 LOG_LEVEL = "INFO"
+
+# Service binding to books-api-proxy for metadata enrichment
+[[services]]
+binding = "BOOKS_API_PROXY"
+service = "books-api-proxy"
