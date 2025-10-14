@@ -49,26 +49,37 @@ export class BookshelfAIWorker {
       // Process with Gemini AI
       const result = await processImageWithAI(imageData, apiKey);
 
+      // Enrich high-confidence detections via books-api-proxy
+      const enrichmentStartTime = Date.now();
+      const enrichedBooks = await enrichBooks(
+        result.books,
+        this.env,
+        parseFloat(this.env.CONFIDENCE_THRESHOLD) || 0.7
+      );
+      const enrichmentTime = Date.now() - enrichmentStartTime;
+
       const processingTime = Date.now() - startTime;
 
       // Track analytics
       if (this.env.AI_ANALYTICS) {
         await this.env.AI_ANALYTICS.writeDataPoint({
-          doubles: [processingTime, result.books.length],
-          blobs: ['bookshelf_scan', this.env.AI_MODEL || AI_MODEL],
+          doubles: [processingTime, enrichmentTime, enrichedBooks.length],
+          blobs: ['bookshelf_scan_with_enrichment', this.env.AI_MODEL || AI_MODEL],
           indexes: ['ai-scan-success']
         });
       }
 
-      console.log(`[BookshelfAI] Scan completed: ${result.books.length} books detected in ${processingTime}ms`);
+      console.log(`[BookshelfAI] Scan completed: ${enrichedBooks.length} books (${enrichedBooks.filter(b => b.enrichment?.status === 'success').length} enriched) in ${processingTime}ms (enrichment: ${enrichmentTime}ms)`);
 
       return {
         success: true,
-        books: result.books,
+        books: enrichedBooks,
         metadata: {
           processingTime,
-          detectedCount: result.books.length,
-          readableCount: result.books.filter(b => b.title && b.author).length,
+          enrichmentTime,
+          detectedCount: enrichedBooks.length,
+          readableCount: enrichedBooks.filter(b => b.title && b.author).length,
+          enrichedCount: enrichedBooks.filter(b => b.enrichment?.status === 'success').length,
           model: this.env.AI_MODEL || AI_MODEL,
           timestamp: new Date().toISOString()
         }
@@ -320,6 +331,125 @@ function arrayBufferToBase64(buffer) {
     binary += String.fromCharCode(bytes[i]);
   }
   return btoa(binary);
+}
+
+/**
+ * Enriches detected books by calling books-api-proxy via RPC
+ * @param {Array} books - Array of detected books with title, author, confidence
+ * @param {Object} env - Worker environment with BOOKS_API_PROXY binding
+ * @param {number} confidenceThreshold - Minimum confidence to enrich (default: 0.7)
+ * @returns {Promise<Array>} Books with enrichment data added
+ */
+async function enrichBooks(books, env, confidenceThreshold = 0.7) {
+  // Filter high-confidence books for enrichment
+  const booksToEnrich = books.filter(book =>
+    book.confidence >= confidenceThreshold &&
+    book.title &&
+    book.author
+  );
+
+  console.log(`[Enrichment] ${booksToEnrich.length}/${books.length} books meet confidence threshold (${confidenceThreshold})`);
+
+  if (booksToEnrich.length === 0) {
+    // No books to enrich, return original array
+    return books.map(book => ({
+      ...book,
+      enrichment: {
+        status: 'skipped',
+        reason: book.confidence < confidenceThreshold
+          ? 'low_confidence'
+          : 'missing_data'
+      }
+    }));
+  }
+
+  // Call books-api-proxy with batch request
+  const enrichmentStartTime = Date.now();
+  const enrichedResults = [];
+
+  // Process each book with books-api-proxy /search/advanced endpoint
+  for (const book of booksToEnrich) {
+    try {
+      // Construct search URL with title and author
+      const searchURL = new URL('https://books-api-proxy.jukasdrj.workers.dev/search/advanced');
+      searchURL.searchParams.set('title', book.title);
+      searchURL.searchParams.set('author', book.author);
+
+      // Call via service binding (RPC)
+      const response = await env.BOOKS_API_PROXY.fetch(searchURL);
+
+      if (!response.ok) {
+        console.warn(`[Enrichment] Failed for "${book.title}": ${response.status}`);
+        enrichedResults.push({
+          ...book,
+          enrichment: {
+            status: 'failed',
+            error: `API error: ${response.status}`
+          }
+        });
+        continue;
+      }
+
+      const apiData = await response.json();
+
+      // Extract first result from books-api-proxy response
+      const firstResult = apiData.results?.[0];
+      if (firstResult) {
+        enrichedResults.push({
+          ...book,
+          enrichment: {
+            status: 'success',
+            isbn: firstResult.isbn13 || firstResult.isbn,
+            coverUrl: firstResult.thumbnail,
+            publicationYear: firstResult.year,
+            publisher: firstResult.publisher,
+            pageCount: firstResult.pages,
+            subjects: firstResult.subjects || [],
+            provider: apiData.provider || 'unknown',
+            cachedResult: apiData.cached || false
+          }
+        });
+      } else {
+        // No results found
+        enrichedResults.push({
+          ...book,
+          enrichment: {
+            status: 'not_found',
+            provider: apiData.provider || 'unknown'
+          }
+        });
+      }
+
+    } catch (error) {
+      console.error(`[Enrichment] Error for "${book.title}":`, error);
+      enrichedResults.push({
+        ...book,
+        enrichment: {
+          status: 'error',
+          error: error.message
+        }
+      });
+    }
+  }
+
+  const enrichmentTime = Date.now() - enrichmentStartTime;
+  console.log(`[Enrichment] Completed in ${enrichmentTime}ms: ${enrichedResults.filter(b => b.enrichment?.status === 'success').length} successful`);
+
+  // Merge enriched results back with low-confidence books
+  const enrichmentMap = new Map(
+    enrichedResults.map(book => [book.title + '|' + book.author, book])
+  );
+
+  return books.map(book => {
+    const key = book.title + '|' + book.author;
+    return enrichmentMap.get(key) || {
+      ...book,
+      enrichment: {
+        status: 'skipped',
+        reason: 'low_confidence'
+      }
+    };
+  });
 }
 
 // HTML testing interface
