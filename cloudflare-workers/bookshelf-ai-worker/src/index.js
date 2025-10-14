@@ -187,10 +187,27 @@ For each book you identify, perform the following actions:
 1. Extract the book's title.
 2. Extract the author's name.
 3. Determine the bounding box coordinates for the book's spine.
+4. Provide a confidence score (from 0.0 to 1.0) indicating how certain you are about the extracted title and author. A score of 1.0 means absolute certainty, while a score below 0.5 indicates a guess.
 
 Return your findings as a JSON object that strictly adheres to the provided schema.
 
-If you can clearly identify a book's spine and determine its bounding box, but the text is blurred, unreadable, or obscured, you MUST still include it in the result. In such cases, set the 'title' and 'author' fields to null. Do not omit any identifiable book spine.`;
+If you can clearly identify a book's spine but the text is unreadable, you MUST still include it. In such cases, set 'title' and 'author' to null and the 'confidence' to 0.0.
+
+Here is an example of a good detection:
+{
+  "title": "The Hitchhiker's Guide to the Galaxy",
+  "author": "Douglas Adams",
+  "confidence": 0.95,
+  "boundingBox": { "x1": 0.1, "y1": 0.2, "x2": 0.15, "y2": 0.8 }
+}
+
+Here is an example of an unreadable book:
+{
+  "title": null,
+  "author": null,
+  "confidence": 0.0,
+  "boundingBox": { "x1": 0.2, "y1": 0.3, "x2": 0.25, "y2": 0.9 }
+}`;
 
   // JSON schema for structured output
   const schema = {
@@ -201,8 +218,20 @@ If you can clearly identify a book's spine and determine its bounding box, but t
         items: {
           type: "OBJECT",
           properties: {
-            title: { type: "STRING", description: "The full title of the book.", nullable: true },
-            author: { type: "STRING", description: "The full name of the author.", nullable: true },
+            title: {
+              type: "STRING",
+              description: "The full title of the book.",
+              nullable: true
+            },
+            author: {
+              type: "STRING",
+              description: "The full name of the author.",
+              nullable: true
+            },
+            confidence: {
+              type: "NUMBER",
+              description: "Confidence score (0.0-1.0) for the extracted title/author."
+            },
             boundingBox: {
               type: "OBJECT",
               description: "The normalized coordinates of the book spine in the image.",
@@ -215,7 +244,7 @@ If you can clearly identify a book's spine and determine its bounding box, but t
               required: ["x1", "y1", "x2", "y2"],
             },
           },
-          required: ["boundingBox", "title", "author"],
+          required: ["boundingBox", "title", "author", "confidence"],
         },
       },
     },
