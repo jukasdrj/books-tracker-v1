@@ -393,18 +393,24 @@ async function enrichBooks(books, env, confidenceThreshold = 0.7) {
       const apiData = await response.json();
 
       // Extract first result from books-api-proxy response
-      const firstResult = apiData.results?.[0];
-      if (firstResult) {
+      // books-api-proxy returns data in "items" array with Google Books-style structure
+      const firstResult = apiData.items?.[0];
+      if (firstResult && firstResult.volumeInfo) {
+        const volumeInfo = firstResult.volumeInfo;
+        const industryIdentifiers = volumeInfo.industryIdentifiers || [];
+        const isbn13 = industryIdentifiers.find(id => id.type === 'ISBN_13')?.identifier;
+        const isbn10 = industryIdentifiers.find(id => id.type === 'ISBN_10')?.identifier;
+
         enrichedResults.push({
           ...book,
           enrichment: {
             status: 'success',
-            isbn: firstResult.isbn13 || firstResult.isbn,
-            coverUrl: firstResult.thumbnail,
-            publicationYear: firstResult.year,
-            publisher: firstResult.publisher,
-            pageCount: firstResult.pages,
-            subjects: firstResult.subjects || [],
+            isbn: isbn13 || isbn10,
+            coverUrl: volumeInfo.imageLinks?.thumbnail || volumeInfo.imageLinks?.smallThumbnail,
+            publicationYear: volumeInfo.publishedDate,
+            publisher: volumeInfo.publisher,
+            pageCount: volumeInfo.pageCount,
+            subjects: volumeInfo.categories || [],
             provider: apiData.provider || 'unknown',
             cachedResult: apiData.cached || false
           }
