@@ -324,7 +324,7 @@ class BookshelfScanModel {
 
         do {
             // Call BookshelfAIService to process image
-            let detectedBooks = try await BookshelfAIService.shared.processBookshelfImage(image)
+            let (detectedBooks, suggestions) = try await BookshelfAIService.shared.processBookshelfImage(image)
 
             // Calculate statistics
             detectedCount = detectedBooks.count
@@ -335,7 +335,8 @@ class BookshelfScanModel {
             let processingTime = Date().timeIntervalSince(startTime)
             scanResult = ScanResult(
                 detectedBooks: detectedBooks,
-                totalProcessingTime: processingTime
+                totalProcessingTime: processingTime,
+                suggestions: suggestions
             )
 
             scanState = .completed

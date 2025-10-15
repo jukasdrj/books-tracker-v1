@@ -91,10 +91,10 @@ actor BookshelfAIService {
 
     // MARK: - Public API
 
-    /// Process bookshelf image and return detected books.
+    /// Process bookshelf image and return detected books with suggestions.
     /// - Parameter image: UIImage to process (will be compressed)
-    /// - Returns: Array of detected books with metadata
-    func processBookshelfImage(_ image: UIImage) async throws -> [DetectedBook] {
+    /// - Returns: Tuple of (detected books, suggestions for improvement)
+    func processBookshelfImage(_ image: UIImage) async throws -> ([DetectedBook], [SuggestionViewModel]) {
         // Step 1: Compress image to acceptable size
         guard let imageData = compressImage(image, maxSizeBytes: maxImageSize) else {
             throw BookshelfAIError.imageCompressionFailed
@@ -111,9 +111,15 @@ actor BookshelfAIService {
         }
 
         // Step 4: Convert AI response to DetectedBook models
-        return response.books.compactMap { aiBook in
+        let detectedBooks = response.books.compactMap { aiBook in
             convertToDetectedBook(aiBook)
         }
+
+        // Step 5: Generate suggestions (AI-first, client fallback)
+        let suggestions = SuggestionGenerator.generateSuggestions(from: response)
+
+        // Return both books and suggestions
+        return (detectedBooks, suggestions)
     }
 
     // MARK: - Private Methods
