@@ -341,7 +341,7 @@ class BookshelfScanModel {
             scanState = .completed
 
         } catch let error as BookshelfAIError {
-            scanState = .error(error.localizedDescription ?? "Unknown AI error")
+            scanState = .error(error.localizedDescription)
         } catch {
             scanState = .error(error.localizedDescription)
         }

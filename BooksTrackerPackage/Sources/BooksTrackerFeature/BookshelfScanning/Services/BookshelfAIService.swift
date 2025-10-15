@@ -39,8 +39,10 @@ struct BookshelfAIResponse: Codable, Sendable {
         let title: String?
         let author: String?
         let boundingBox: BoundingBox
-        let confidence: Confidence?
+        let confidence: Double?
+        let enrichmentStatus: String? // New field for enrichment status
         let isbn: String?
+        let coverUrl: String?
         let publisher: String?
         let publicationYear: Int?
 
@@ -49,12 +51,6 @@ struct BookshelfAIResponse: Codable, Sendable {
             let y1: Double
             let x2: Double
             let y2: Double
-        }
-
-        struct Confidence: Codable, Sendable {
-            let overall: Double
-            let title: Double?
-            let author: Double?
         }
     }
 
@@ -74,7 +70,7 @@ actor BookshelfAIService {
     // MARK: - Configuration
 
     private let endpoint = URL(string: "https://bookshelf-ai-worker.jukasdrj.workers.dev")!
-    private let timeout: TimeInterval = 60.0 // 60 seconds for AI processing (Gemini takes 25-40s)
+    private let timeout: TimeInterval = 70.0 // 70 seconds for AI processing + enrichment (Gemini: 25-40s, enrichment: 5-10s)
     private let maxImageSize: Int = 10_000_000 // 10MB max (matches worker limit)
 
     // MARK: - Singleton
@@ -190,16 +186,26 @@ actor BookshelfAIService {
             height: aiBook.boundingBox.y2 - aiBook.boundingBox.y1
         )
 
-        // Determine initial status
+        // Determine initial status from enrichment data
         let status: DetectionStatus
-        if aiBook.title == nil || aiBook.author == nil {
-            status = .uncertain
-        } else {
+        switch aiBook.enrichmentStatus?.uppercased() {
+        case "ENRICHED", "FOUND":
             status = .detected
+        case "UNCERTAIN", "NEEDS_REVIEW":
+            status = .uncertain
+        case "REJECTED":
+            status = .rejected
+        default:
+            // Fallback for nil or unknown status
+            if aiBook.title == nil || aiBook.author == nil {
+                status = .uncertain
+            } else {
+                status = .detected
+            }
         }
 
-        // Get confidence score
-        let confidence = aiBook.confidence?.overall ?? 0.5
+        // Use the direct confidence score from the API
+        let confidence = aiBook.confidence ?? 0.5
 
         // Generate raw text from available data
         let rawText = [aiBook.title, aiBook.author]

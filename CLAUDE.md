@@ -531,6 +531,38 @@ ScanResultsView → Add books to SwiftData
 
 **Status:** ✅ SHIPPING (Build 46)! Swift 6.1 compliant, tested on iPhone 17 Pro (iOS 26.0.1). Zero warnings, zero data races.
 
+**🎉 ENRICHMENT INTEGRATION (Build 49 - October 2025):**
+
+Backend enrichment system (89.7% success rate) now fully integrated with iOS app:
+
+**Response Model Updates (BookshelfAIService.swift):**
+- Added `confidence: Double?` (direct field, replacing nested struct)
+- Added `enrichmentStatus: String?` (tracks backend enrichment results)
+- Added `coverUrl: String?` (enriched book cover URLs)
+- Simplified model structure for better API alignment
+
+**Conversion Logic Enhancement:**
+- Maps enrichment status to detection states:
+  - "ENRICHED"/"FOUND" → `.detected`
+  - "UNCERTAIN"/"NEEDS_REVIEW" → `.uncertain`
+  - "REJECTED" → `.rejected`
+- Graceful fallback for missing enrichment data
+- Uses direct confidence score from Gemini AI
+
+**Timeout Optimization:**
+- Increased from 60s → 70s to accommodate AI (25-40s) + enrichment (5-10s)
+- Ensures reliable completion for full enrichment pipeline
+
+**Swift 6.1 Concurrency Validation:**
+- Actor isolation correct: `BookshelfAIService` remains `actor`
+- Response models properly `Sendable` for cross-actor safety
+- Conversion logic correctly `nonisolated` (pure function)
+- Timeout as immutable `let` property (no data races)
+
+**Architecture:** iOS app → Cloudflare Worker (Gemini 2.5 Flash) → books-api-proxy (RPC enrichment) → Single unified response with confidence scores + metadata
+
+**See Issue #16 for implementation details and iOS 26 HIG enhancement recommendations.**
+
 ### CSV Import & Enrichment System
 
 **Key Files:** `CSVParsingActor.swift`, `CSVImportService.swift`, `EnrichmentService.swift`, `EnrichmentQueue.swift`, `CSVImportFlowView.swift`
