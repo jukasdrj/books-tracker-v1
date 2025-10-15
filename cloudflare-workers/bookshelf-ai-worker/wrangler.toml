@@ -36,6 +36,11 @@ REQUEST_TIMEOUT_MS = "50000"  # Increased to 50s for large image processing
 LOG_LEVEL = "INFO"
 CONFIDENCE_THRESHOLD = "0.7"  # Minimum confidence score for enrichment
 
+# KV namespace for scan job tracking
+[[kv_namespaces]]
+binding = "SCAN_JOBS"
+id = "5d4b89403bbb4be1949b1ee30df5353e"
+
 # Service binding to books-api-proxy for metadata enrichment (RPC)
 [[services]]
 binding = "BOOKS_API_PROXY"

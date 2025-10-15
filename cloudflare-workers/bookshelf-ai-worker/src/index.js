@@ -74,6 +74,7 @@ export class BookshelfAIWorker {
       return {
         success: true,
         books: enrichedBooks,
+        suggestions: result.suggestions || [],
         metadata: {
           processingTime,
           enrichmentTime,
@@ -102,6 +103,75 @@ export class BookshelfAIWorker {
       throw error;
     }
   }
+}
+
+/**
+ * Background processing function for bookshelf scans
+ * Updates KV state at each stage transition
+ */
+async function processBookshelfScan(jobId, imageData, env) {
+  const startTime = Date.now();
+
+  try {
+    // Stage 1: Upload complete (already done)
+    await updateJobState(env, jobId, {
+      stage: 'analyzing',
+      elapsedTime: Math.floor((Date.now() - startTime) / 1000)
+    });
+
+    // Stage 2: Call Gemini AI (using existing BookshelfAIWorker)
+    const worker = new BookshelfAIWorker(env);
+    const result = await worker.scanBookshelf(imageData);
+
+    const booksDetected = result.books.length;
+
+    await updateJobState(env, jobId, {
+      stage: 'enriching',
+      booksDetected: booksDetected,
+      elapsedTime: Math.floor((Date.now() - startTime) / 1000)
+    });
+
+    // Stage 3: Complete (enrichment already done in scanBookshelf)
+    await updateJobState(env, jobId, {
+      stage: 'complete',
+      elapsedTime: Math.floor((Date.now() - startTime) / 1000),
+      result: {
+        books: result.books,
+        suggestions: result.suggestions || [],
+        metadata: result.metadata
+      }
+    });
+
+    // Explicitly delete KV entry on completion (TTL is backup)
+    setTimeout(() => env.SCAN_JOBS.delete(jobId), 60000); // Delete after 1 min
+
+  } catch (error) {
+    await updateJobState(env, jobId, {
+      stage: 'error',
+      error: error.message,
+      errorType: error.name,
+      elapsedTime: Math.floor((Date.now() - startTime) / 1000)
+    });
+
+    // Delete errored jobs after 1 minute
+    setTimeout(() => env.SCAN_JOBS.delete(jobId), 60000);
+  }
+}
+
+/**
+ * Helper function to update job state in KV
+ */
+async function updateJobState(env, jobId, updates) {
+  const current = await env.SCAN_JOBS.get(jobId);
+  if (!current) return; // Job expired or deleted
+
+  const job = JSON.parse(current);
+
+  await env.SCAN_JOBS.put(jobId, JSON.stringify({
+    ...job,
+    ...updates,
+    lastUpdated: Date.now()
+  }), { expirationTtl: 300 });
 }
 
 /**
@@ -142,11 +212,31 @@ export default {
         // Get image data
         const imageData = await request.arrayBuffer();
 
-        // Create worker instance and scan
-        const worker = new BookshelfAIWorker(env);
-        const result = await worker.scanBookshelf(imageData);
+        // Generate unique job ID
+        const jobId = crypto.randomUUID();
 
-        return Response.json(result, {
+        // Store initial job state in KV
+        await env.SCAN_JOBS.put(jobId, JSON.stringify({
+          stage: 'processing',
+          startTime: Date.now(),
+          imageSize: imageData.byteLength,
+          elapsedTime: 0
+        }), { expirationTtl: 300 }); // 5 min expiry (fallback)
+
+        // Start background processing (don't await)
+        ctx.waitUntil(processBookshelfScan(jobId, imageData, env));
+
+        // Return immediately with job metadata
+        return Response.json({
+          jobId: jobId,
+          stages: [
+            { name: 'uploading', typicalDuration: 5, progress: 0.0 },
+            { name: 'analyzing', typicalDuration: 35, progress: 0.1 },
+            { name: 'enriching', typicalDuration: 10, progress: 0.8 }
+          ],
+          estimatedRange: [40, 70]  // Time range instead of precise number
+        }, {
+          status: 202, // 202 Accepted (async processing)
           headers: {
             "Content-Type": "application/json",
             "Access-Control-Allow-Origin": "*" // Enable CORS for iOS app
@@ -168,8 +258,63 @@ export default {
       }
     }
 
+    // Get scan job status
+    if (request.method === "GET" && url.pathname.startsWith("/scan/status/")) {
+      const jobId = url.pathname.split("/").pop();
+
+      try {
+        // Fetch job state from KV
+        const jobData = await env.SCAN_JOBS.get(jobId);
+
+        if (!jobData) {
+          return Response.json({
+            error: 'Job not found or expired',
+            message: 'Scan jobs expire after 5 minutes. Please start a new scan.'
+          }, {
+            status: 404,
+            headers: {
+              "Content-Type": "application/json",
+              "Access-Control-Allow-Origin": "*"
+            }
+          });
+        }
+
+        const job = JSON.parse(jobData);
+
+        // Return current state (elapsedTime from server is source of truth)
+        return Response.json({
+          stage: job.stage,
+          elapsedTime: job.elapsedTime || 0,  // Server-side elapsed time
+          booksDetected: job.booksDetected || 0,
+          result: job.result || null,
+          error: job.error || null
+        }, {
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*"
+          }
+        });
+
+      } catch (error) {
+        console.error("[BookshelfAI] Status check error:", error);
+        return Response.json(
+          {
+            error: "Status check failed",
+            details: error.message
+          },
+          {
+            status: 500,
+            headers: {
+              "Content-Type": "application/json",
+              "Access-Control-Allow-Origin": "*"
+            }
+          }
+        );
+      }
+    }
+
     return Response.json(
-      { error: "Not Found. Use GET / for test interface or POST /scan with image." },
+      { error: "Not Found. Use GET / for test interface, POST /scan with image, or GET /scan/status/{jobId} to check progress." },
       { status: 404 }
     );
   },

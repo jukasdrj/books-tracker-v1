@@ -81,9 +81,23 @@ public struct BookshelfScannerView: View {
                 BookshelfCameraView { capturedImage in
                     Task {
                         await scanModel.processImage(capturedImage)
-                        showingResults = true
+                        if scanModel.scanState == .completed {
+                            showingResults = true
+                        }
                     }
                 }
+            }
+            .pollingProgressSheet(
+                isPresented: $scanModel.showProgressSheet,
+                tracker: scanModel.progressTracker,
+                title: "Scanning Bookshelf"
+            )
+            .alert("Scan Failed", isPresented: .constant(scanModel.isError), presenting: scanModel.errorMessage) { _ in
+                Button("OK", role: .cancel) {
+                    scanModel.scanState = .idle
+                }
+            } message: { errorMessage in
+                Text(errorMessage)
             }
         }
     }
@@ -310,6 +324,10 @@ class BookshelfScanModel {
     var uncertainCount: Int = 0
     var scanResult: ScanResult?
 
+    // Progress tracking with PollingProgressTracker
+    var progressTracker = PollingProgressTracker<BookshelfAIService.BookshelfScanJob>()
+    var showProgressSheet = false
+
     enum ScanState: Equatable {
         case idle
         case processing
@@ -317,14 +335,33 @@ class BookshelfScanModel {
         case error(String)
     }
 
-    /// Process captured image with Cloudflare AI Worker.
+    // Helper computed properties for error handling
+    var isError: Bool {
+        if case .error = scanState {
+            return true
+        }
+        return false
+    }
+
+    var errorMessage: String? {
+        if case .error(let message) = scanState {
+            return message
+        }
+        return nil
+    }
+
+    /// Process captured image with progress tracking
     func processImage(_ image: UIImage) async {
         scanState = .processing
+        showProgressSheet = true
         let startTime = Date()
 
         do {
-            // Call BookshelfAIService to process image
-            let (detectedBooks, suggestions) = try await BookshelfAIService.shared.processBookshelfImage(image)
+            // Call BookshelfAIService with progress tracking
+            let (detectedBooks, suggestions) = try await BookshelfAIService.shared.processBookshelfImageWithProgress(
+                image,
+                tracker: progressTracker
+            )
 
             // Calculate statistics
             detectedCount = detectedBooks.count
@@ -340,11 +377,17 @@ class BookshelfScanModel {
             )
 
             scanState = .completed
+            showProgressSheet = false
 
+        } catch let error as PollingError {
+            scanState = .error(error.localizedDescription)
+            showProgressSheet = false
         } catch let error as BookshelfAIError {
             scanState = .error(error.localizedDescription)
+            showProgressSheet = false
         } catch {
             scanState = .error(error.localizedDescription)
+            showProgressSheet = false
         }
     }
 }

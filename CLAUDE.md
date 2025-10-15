@@ -221,6 +221,70 @@ return AsyncStream { continuation in
 }
 ```
 
+**🎯 POLLING PATTERN (Swift 6.2 - Oct 2025):**
+
+```
+   ╔══════════════════════════════════════════════════════╗
+   ║  ⚡ THE GREAT POLLING BREAKTHROUGH OF '25 ⚡        ║
+   ║                                                      ║
+   ║  Problem: TaskGroup + Timer.publish + @MainActor    ║
+   ║           = Compiler bug that blocked us for 8hrs   ║
+   ║                                                      ║
+   ║  Solution: Task + Task.sleep = Pure 🔥 Magic 🔥     ║
+   ╚══════════════════════════════════════════════════════╝
+```
+
+**❌ DON'T: Mix isolation domains in TaskGroup**
+```swift
+// This pattern BREAKS Swift 6 region isolation checker!
+return try await withThrowingTaskGroup(of: Result?.self) { group in
+    group.addTask { @MainActor [self] in  // ← COMPILER BUG!
+        for await _ in Timer.publish(...).values {
+            let data = self.fetchData()  // Actor method
+            updateUI(data)               // MainActor callback
+        }
+    }
+}
+```
+
+**✅ DO: Use Task.detached with Task.sleep**
+```swift
+// Separation of concerns = Swift 6 happiness! 🎉
+Task.detached {
+    while !Task.isCancelled {
+        let data = await actor.fetchData()        // Background work
+        await MainActor.run { updateUI(data) }    // UI updates
+        try await Task.sleep(for: .milliseconds(100))  // ← Key!
+    }
+}
+```
+
+**🏆 Best Practice: PollingProgressTracker**
+```swift
+// Reusable component for all long-running operations
+@State private var tracker = PollingProgressTracker<MyJob>()
+
+let result = try await tracker.start(
+    job: myJob,
+    strategy: AdaptivePollingStrategy(),  // Battery-optimized!
+    timeout: 90
+)
+
+// Or use SwiftUI modifier:
+.pollingProgressSheet(
+    isPresented: $isProcessing,
+    tracker: tracker,
+    title: "Processing..."
+)
+```
+
+**Lesson Learned (Oct 2025):**
+> "Don't fight Swift 6 isolation. Let `await` boundaries handle
+> actor → MainActor transitions naturally. Timer.publish is Combine,
+> not structured concurrency. Task.sleep is your friend! 🤝"
+
+**See:** `docs/SWIFT6_COMPILER_BUG.md` for the full debugging saga 📖
+
 ### iOS 26 HIG Compliance
 
 **🚨 CRITICAL: iOS 26 Search Pattern Bug**
