@@ -8,6 +8,8 @@ This is a personal book tracking iOS app with cultural diversity insights, built
 
 ## Quick Start
 
+**Note:** Implementation plans and feature proposals now tracked in [GitHub Issues](https://github.com/users/jukasdrj/projects/2). Former docs/plans/ content migrated Oct 2025.
+
 ### Core Technologies
 - **SwiftUI** with @Observable, @Environment state management
 - **SwiftData** with CloudKit sync
@@ -752,7 +754,7 @@ Text("Page Count")
 ```
 📁 Root Directory
 ├── 📄 CLAUDE.md                      ← Main development guide (this file)
-├── 📄 MCP_SETUP.md                   ← XcodeBuildMCP configuration & workflows ⭐ NEW!
+├── 📄 MCP_SETUP.md                   ← XcodeBuildMCP configuration & workflows
 ├── 📄 README.md                      ← Quick start & project overview
 ├── 📄 CHANGELOG.md                   ← Version history & releases
 ├── 📄 APIcall.md                     ← API endpoint migration guide
@@ -778,6 +780,11 @@ Text("Page Count")
 - CHANGELOG.md: Historical achievements and version notes
 - FUTURE_ROADMAP.md: Clearly marked as aspirational
 - Keep active docs under 500 lines - move history to CHANGELOG
+
+**Implementation Plans & Future Work:**
+- **GitHub Issues**: Active tasks tracked at https://github.com/users/jukasdrj/projects/2
+- **Labels**: type/plan, type/feature, type/decision, status/backlog, status/archived
+- **Migration Note**: Former docs/plans/ content migrated to GitHub Issues (Oct 2025)
 
 ## Key Business Logic
 
