@@ -79,7 +79,7 @@ public struct BookshelfAIResponse: Codable, Sendable {
 actor BookshelfAIService {
     // MARK: - Configuration
 
-    private let endpoint = URL(string: "https://bookshelf-ai-worker.jukasdrj.workers.dev")!
+    private let endpoint = URL(string: "https://bookshelf-ai-worker.jukasdrj.workers.dev/scan")!
     private let timeout: TimeInterval = 70.0 // 70 seconds for AI processing + enrichment (Gemini: 25-40s, enrichment: 5-10s)
     private let maxImageSize: Int = 10_000_000 // 10MB max (matches worker limit)
 
