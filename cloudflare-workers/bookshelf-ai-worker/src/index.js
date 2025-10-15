@@ -199,8 +199,25 @@ For each book you identify, perform the following actions:
 2. Extract the author's name.
 3. Determine the bounding box coordinates for the book's spine.
 4. Provide a confidence score (from 0.0 to 1.0) indicating how certain you are about the extracted title and author. A score of 1.0 means absolute certainty, while a score below 0.5 indicates a guess.
+5. Return your findings as a JSON object that strictly adheres to the provided schema.
+6. Analyze image quality issues and provide actionable suggestions ONLY if problems are detected.
 
-Return your findings as a JSON object that strictly adheres to the provided schema.
+If the image has quality issues (blurry, poor lighting, bad angle, glare, too far, multiple shelves, or many unreadable books), populate a 'suggestions' array with objects identifying the specific problems.
+
+Otherwise, leave the 'suggestions' array empty or omit it entirely.
+
+Available suggestion types:
+- unreadable_books: Books detected but text unclear
+- low_confidence: Many books with confidence < 0.7
+- edge_cutoff: Books cut off at image edges
+- blurry_image: Image lacks sharpness/focus
+- glare_detected: Reflections obscuring book covers
+- distance_too_far: Camera too far from shelf
+- multiple_shelves: Multiple shelves in frame
+- lighting_issues: Insufficient or uneven lighting
+- angle_issues: Camera angle makes spines hard to read
+
+Only include suggestions when you detect issues. Perfect scans should have an empty suggestions array.
 
 If you can clearly identify a book's spine but the text is unreadable, you MUST still include it. In such cases, set 'title' and 'author' to null and the 'confidence' to 0.0.
 
@@ -218,6 +235,22 @@ Here is an example of an unreadable book:
   "author": null,
   "confidence": 0.0,
   "boundingBox": { "x1": 0.2, "y1": 0.3, "x2": 0.25, "y2": 0.9 }
+}
+
+Here is an example response with suggestions:
+{
+  "books": [
+    { "title": "Example Book", "author": "Author", "confidence": 0.95, "boundingBox": {"x1": 0.1, "y1": 0.2, "x2": 0.15, "y2": 0.8} },
+    { "title": null, "author": null, "confidence": 0.0, "boundingBox": {"x1": 0.2, "y1": 0.3, "x2": 0.25, "y2": 0.9} }
+  ],
+  "suggestions": [
+    {
+      "type": "unreadable_books",
+      "severity": "medium",
+      "message": "2 books detected but text is unreadable. Try capturing from a more direct angle or with better lighting.",
+      "affectedCount": 2
+    }
+  ]
 }`;
 
   // JSON schema for structured output
