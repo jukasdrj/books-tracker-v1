@@ -291,6 +291,44 @@ Here is an example response with suggestions:
           required: ["boundingBox", "title", "author", "confidence"],
         },
       },
+      suggestions: {
+        type: "ARRAY",
+        description: "Optional actionable suggestions for improving scan quality (only present if issues detected)",
+        items: {
+          type: "OBJECT",
+          properties: {
+            type: {
+              type: "STRING",
+              description: "Category of suggestion",
+              enum: [
+                "unreadable_books",
+                "low_confidence",
+                "edge_cutoff",
+                "blurry_image",
+                "glare_detected",
+                "distance_too_far",
+                "multiple_shelves",
+                "lighting_issues",
+                "angle_issues"
+              ]
+            },
+            severity: {
+              type: "STRING",
+              description: "Severity level",
+              enum: ["low", "medium", "high"]
+            },
+            message: {
+              type: "STRING",
+              description: "User-friendly suggestion message"
+            },
+            affectedCount: {
+              type: "NUMBER",
+              description: "Number of books affected by this issue (optional)"
+            }
+          },
+          required: ["type", "severity", "message"]
+        }
+      }
     },
     required: ["books"],
   };
