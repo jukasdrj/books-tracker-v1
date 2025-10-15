@@ -47,8 +47,16 @@ update_marketing_version() {
     local new_version="$1"
     local temp_file=$(mktemp)
 
+    # Update Shared.xcconfig
     sed "s/MARKETING_VERSION = .*/MARKETING_VERSION = $new_version/" "$CONFIG_FILE" > "$temp_file"
     mv "$temp_file" "$CONFIG_FILE"
+
+    # Update widget extension in project.pbxproj (if any hardcoded versions exist)
+    local project_file="BooksTracker.xcodeproj/project.pbxproj"
+    if [[ -f "$project_file" ]]; then
+        # Use pattern to match semantic versioning (e.g., 3.0.0)
+        sed -i '' "s/MARKETING_VERSION = [0-9]*\.[0-9]*\.[0-9]*;/MARKETING_VERSION = $new_version;/g" "$project_file"
+    fi
 
     log_success "Updated marketing version to: $new_version"
 }
@@ -58,8 +66,16 @@ update_build_version() {
     local new_build="$1"
     local temp_file=$(mktemp)
 
+    # Update Shared.xcconfig
     sed "s/CURRENT_PROJECT_VERSION = .*/CURRENT_PROJECT_VERSION = $new_build/" "$CONFIG_FILE" > "$temp_file"
     mv "$temp_file" "$CONFIG_FILE"
+
+    # Update widget extension in project.pbxproj (hardcoded versions)
+    local project_file="BooksTracker.xcodeproj/project.pbxproj"
+    if [[ -f "$project_file" ]]; then
+        sed -i '' "s/CURRENT_PROJECT_VERSION = [0-9]*;/CURRENT_PROJECT_VERSION = $new_build;/g" "$project_file"
+        log_success "Updated widget extension build version to: $new_build"
+    fi
 
     log_success "Updated build version to: $new_build"
 }
