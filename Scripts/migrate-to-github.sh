@@ -22,17 +22,18 @@ create_issue_from_md() {
   local title=$(grep -m 1 "^#" "$md_file" | sed 's/^# //')
   local body=$(cat "$md_file")
 
-  # Create issue
-  local issue_url=$(gh issue create \
+  # Create issue (capture output directly - older gh versions don't support --json)
+  gh issue create \
     --title "$title" \
     --body "$body" \
     --label "$label_type" \
     --label "$label_source" \
-    --label "status/$state" \
-    --json url \
-    --jq .url)
+    --label "status/$state" > /dev/null 2>&1
 
-  echo "✅ Created: $issue_url"
+  # Get the most recent issue URL
+  local issue_url=$(gh issue list --limit 1 --state all | awk '{print $1}' | head -n 1)
+
+  echo "✅ Created: Issue #$issue_url"
   return 0
 }
 
@@ -73,21 +74,22 @@ ARCHIVE_MIGRATED=0
 for archive_file in docs/archive/*.md; do
   if [ -f "$archive_file" ] && [[ "$archive_file" != *"serena-memories"* ]]; then
     # Extract title for issue creation
-    local title=$(grep -m 1 "^#" "$archive_file" | sed 's/^# //')
-    local body=$(cat "$archive_file")
+    title=$(grep -m 1 "^#" "$archive_file" | sed 's/^# //')
+    body=$(cat "$archive_file")
 
     # Create as open first (gh issue create doesn't support --state)
-    local issue_number=$(gh issue create \
+    gh issue create \
       --title "$title" \
       --body "$body" \
       --label "type/decision" \
       --label "source/docs-archive" \
-      --label "status/archived" \
-      --json number \
-      --jq .number)
+      --label "status/archived" > /dev/null 2>&1
+
+    # Get the issue number
+    issue_number=$(gh issue list --limit 1 --state all | awk '{print $1}' | head -n 1)
 
     # Immediately close it
-    gh issue close "$issue_number" --comment "Archived historical decision record"
+    gh issue close "$issue_number" --comment "Archived historical decision record" > /dev/null 2>&1
 
     echo "✅ Archived: #$issue_number"
     ARCHIVE_MIGRATED=$((ARCHIVE_MIGRATED + 1))
@@ -112,21 +114,22 @@ WORKERS_MIGRATED=0
 for worker_file in "${WORKER_DOCS[@]}"; do
   if [ -f "$worker_file" ]; then
     # Extract title and body
-    local title=$(grep -m 1 "^#" "$worker_file" | sed 's/^# //')
-    local body=$(cat "$worker_file")
+    title=$(grep -m 1 "^#" "$worker_file" | sed 's/^# //')
+    body=$(cat "$worker_file")
 
     # Create issue as open first
-    local issue_number=$(gh issue create \
+    gh issue create \
       --title "$title" \
       --body "$body" \
       --label "type/decision" \
       --label "source/cloudflare-workers" \
-      --label "status/archived" \
-      --json number \
-      --jq .number)
+      --label "status/archived" > /dev/null 2>&1
+
+    # Get the issue number
+    issue_number=$(gh issue list --limit 1 --state all | awk '{print $1}' | head -n 1)
 
     # Close immediately (these are completed work)
-    gh issue close "$issue_number" --comment "Historical record migrated from cloudflare-workers/"
+    gh issue close "$issue_number" --comment "Historical record migrated from cloudflare-workers/" > /dev/null 2>&1
 
     echo "✅ Archived: #$issue_number ($worker_file)"
     WORKERS_MIGRATED=$((WORKERS_MIGRATED + 1))
