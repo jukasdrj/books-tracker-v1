@@ -33,6 +33,7 @@ enum BookshelfAIError: Error, LocalizedError {
 
 struct BookshelfAIResponse: Codable, Sendable {
     let books: [AIDetectedBook]
+    let suggestions: [Suggestion]? // Optional for backward compatibility
     let metadata: ImageMetadata?
 
     struct AIDetectedBook: Codable, Sendable {
@@ -52,6 +53,15 @@ struct BookshelfAIResponse: Codable, Sendable {
             let x2: Double
             let y2: Double
         }
+    }
+
+    struct Suggestion: Codable, Sendable, Identifiable {
+        let type: String
+        let severity: String
+        let message: String
+        let affectedCount: Int?
+
+        var id: String { type } // Identifiable for ForEach
     }
 
     struct ImageMetadata: Codable, Sendable {
