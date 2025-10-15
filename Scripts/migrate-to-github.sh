@@ -50,3 +50,104 @@ done
 echo ""
 echo "✅ Migrated $PLANS_MIGRATED implementation plans"
 echo ""
+
+echo "Phase 2: Migrating future roadmap (docs/future/)"
+echo "==========================================="
+
+FUTURE_MIGRATED=0
+for future_file in docs/future/*.md; do
+  if [ -f "$future_file" ]; then
+    create_issue_from_md "$future_file" "type/feature" "source/docs-future" "backlog"
+    FUTURE_MIGRATED=$((FUTURE_MIGRATED + 1))
+  fi
+done
+
+echo ""
+echo "✅ Migrated $FUTURE_MIGRATED feature proposals"
+echo ""
+
+echo "Phase 3: Migrating archived decisions (docs/archive/)"
+echo "==========================================="
+
+ARCHIVE_MIGRATED=0
+for archive_file in docs/archive/*.md; do
+  if [ -f "$archive_file" ] && [[ "$archive_file" != *"serena-memories"* ]]; then
+    # Extract title for issue creation
+    local title=$(grep -m 1 "^#" "$archive_file" | sed 's/^# //')
+    local body=$(cat "$archive_file")
+
+    # Create as open first (gh issue create doesn't support --state)
+    local issue_number=$(gh issue create \
+      --title "$title" \
+      --body "$body" \
+      --label "type/decision" \
+      --label "source/docs-archive" \
+      --label "status/archived" \
+      --json number \
+      --jq .number)
+
+    # Immediately close it
+    gh issue close "$issue_number" --comment "Archived historical decision record"
+
+    echo "✅ Archived: #$issue_number"
+    ARCHIVE_MIGRATED=$((ARCHIVE_MIGRATED + 1))
+  fi
+done
+
+echo ""
+echo "✅ Migrated $ARCHIVE_MIGRATED archived decisions"
+echo ""
+
+echo "Phase 4: Migrating Cloudflare Workers docs"
+echo "==========================================="
+
+# Only migrate status/planning docs, not technical reference
+WORKER_DOCS=(
+  "cloudflare-workers/AItodo.md"
+  "cloudflare-workers/BOOKSHELF_SCANNING_EXECUTIVE_SUMMARY.md"
+  "cloudflare-workers/DEPLOYMENT_SUCCESS_REPORT.md"
+)
+
+WORKERS_MIGRATED=0
+for worker_file in "${WORKER_DOCS[@]}"; do
+  if [ -f "$worker_file" ]; then
+    # Extract title and body
+    local title=$(grep -m 1 "^#" "$worker_file" | sed 's/^# //')
+    local body=$(cat "$worker_file")
+
+    # Create issue as open first
+    local issue_number=$(gh issue create \
+      --title "$title" \
+      --body "$body" \
+      --label "type/decision" \
+      --label "source/cloudflare-workers" \
+      --label "status/archived" \
+      --json number \
+      --jq .number)
+
+    # Close immediately (these are completed work)
+    gh issue close "$issue_number" --comment "Historical record migrated from cloudflare-workers/"
+
+    echo "✅ Archived: #$issue_number ($worker_file)"
+    WORKERS_MIGRATED=$((WORKERS_MIGRATED + 1))
+  fi
+done
+
+echo ""
+echo "✅ Migrated $WORKERS_MIGRATED worker documentation files"
+echo ""
+
+echo "==========================================="
+echo "🎉 Migration Complete!"
+echo "==========================================="
+echo "Plans migrated:    $PLANS_MIGRATED"
+echo "Features migrated: $FUTURE_MIGRATED"
+echo "Archives migrated: $ARCHIVE_MIGRATED"
+echo "Workers migrated:  $WORKERS_MIGRATED"
+echo ""
+echo "Total issues created: $((PLANS_MIGRATED + FUTURE_MIGRATED + ARCHIVE_MIGRATED + WORKERS_MIGRATED))"
+echo ""
+echo "Next steps:"
+echo "1. Review issues: gh issue list"
+echo "2. Add issues to project: See Task 5"
+echo "3. Delete migrated files: See Task 6"
