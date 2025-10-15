@@ -528,6 +528,7 @@ class ScanResultsModel {
         isAdding = true
 
         let confirmedBooks = detectedBooks.filter { $0.status == .confirmed }
+        var addedWorkIDs: [PersistentIdentifier] = []
 
         for detectedBook in confirmedBooks {
             // Create Work and Edition from detected metadata
@@ -540,6 +541,7 @@ class ScanResultsModel {
             )
 
             modelContext.insert(work)
+            addedWorkIDs.append(work.persistentModelID)
 
             // Create edition if ISBN available
             if let isbn = detectedBook.isbn {
@@ -571,6 +573,20 @@ class ScanResultsModel {
         // Save context
         do {
             try modelContext.save()
+
+            // Enqueue works for background enrichment
+            if !addedWorkIDs.isEmpty {
+                EnrichmentQueue.shared.enqueueBatch(addedWorkIDs)
+                print("📚 Queued \(addedWorkIDs.count) books from scan for background enrichment")
+
+                // Start processing immediately in background (no-op progress handler)
+                Task(priority: .utility) {
+                    await EnrichmentQueue.shared.startProcessing(in: modelContext) { _, _, _ in
+                        // Silent background processing - progress shown via EnrichmentProgressBanner
+                    }
+                }
+            }
+
         } catch {
             print("Failed to save books: \(error)")
         }

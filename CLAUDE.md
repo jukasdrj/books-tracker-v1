@@ -563,6 +563,12 @@ Backend enrichment system (89.7% success rate) now fully integrated with iOS app
 
 **Architecture:** iOS app → Cloudflare Worker (Gemini 2.5 Flash) → books-api-proxy (RPC enrichment) → Single unified response with confidence scores + metadata
 
+**Background Enrichment Queue:**
+- All scanned books automatically queued for additional metadata enrichment
+- Uses shared `EnrichmentQueue.shared` (same system as CSV import)
+- Silent background processing with progress shown via `EnrichmentProgressBanner`
+- See `ScanResultsView.addAllToLibrary()` lines 577-588 for implementation
+
 **See Issue #16 for implementation details and iOS 26 HIG enhancement recommendations.**
 
 **Suggestions Banner (Build 45+):**
