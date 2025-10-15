@@ -125,19 +125,26 @@ async function processMicroBatch(env, maxAuthors = 25) {
 
   for (const author of authorsToProcess) {
     try {
-      // ✅ CORRECT: Use OpenLibrary worker for author bibliography
-      const result = await env.OPENLIBRARY_WORKER.getAuthorWorks(author);
+      // Use books-api-proxy HTTP endpoint for author bibliography
+      const searchURL = new URL(`https://books-api-proxy.jukasdrj.workers.dev/author/${encodeURIComponent(author)}`);
+      const response = await env.BOOKS_API_PROXY.fetch(searchURL);
+
+      if (!response.ok) {
+        console.error(`Failed to get bibliography for ${author}: HTTP ${response.status}`);
+        continue;
+      }
+
+      const result = await response.json();
 
       if (result.success && result.works) {
-        // Transform OpenLibrary works to proxy cache format
-        const transformedResult = transformOpenLibraryToProxyFormat(result, author);
-        await storeNormalizedCache(env, author, transformedResult);
-        console.log(`✅ Cached ${result.works.length} works for ${author} via OpenLibrary RPC`);
+        // Cache the result in normalized format
+        await storeNormalizedCache(env, author, result);
+        console.log(`✅ Cached ${result.works.length} works for ${author} via books-api-proxy`);
       } else {
         console.error(`Failed to get bibliography for ${author}: ${result.error || 'No works found'}`);
       }
     } catch (error) {
-      console.error(`Error processing author ${author} via OpenLibrary RPC:`, error);
+      console.error(`Error processing author ${author} via books-api-proxy:`, error);
     }
   }
 
@@ -147,54 +154,8 @@ async function processMicroBatch(env, maxAuthors = 25) {
   console.log(`Micro-batch finished. Next run will start from index ${endIndex}.`);
 }
 
-/**
- * Transform OpenLibrary author works response to books-api-proxy cache format
- */
-function transformOpenLibraryToProxyFormat(openLibraryResult, authorName) {
-  const works = openLibraryResult.works || [];
-
-  // Transform each OpenLibrary work to Google Books API compatible format
-  const transformedItems = works.map(work => ({
-    kind: "books#volume",
-    id: work.openLibraryWorkKey || `ol-${work.title?.replace(/\s+/g, '-').toLowerCase()}`,
-    volumeInfo: {
-      title: work.title || 'Unknown Title',
-      subtitle: work.subtitle || "",
-      authors: [authorName], // Use the searched author name for consistency
-      publishedDate: work.firstPublicationYear?.toString() || "",
-      description: work.description || "",
-      industryIdentifiers: [],
-      pageCount: 0,
-      categories: work.subjects || [],
-      imageLinks: work.coverImageURL ? {
-        thumbnail: work.coverImageURL,
-        smallThumbnail: work.coverImageURL
-      } : undefined,
-
-      // Enhanced cross-reference identifiers from our OpenLibrary worker
-      crossReferenceIds: {
-        openLibraryWorkId: work.openLibraryWorkKey,
-        openLibraryEditionId: null,
-        goodreadsWorkIds: [],
-        amazonASINs: [],
-        googleBooksVolumeIds: [],
-        librarythingIds: [],
-        isbndbIds: []
-      }
-    }
-  }));
-
-  // Return in books-api-proxy response format
-  return {
-    kind: "books#volumes",
-    totalItems: transformedItems.length,
-    items: transformedItems,
-    format: "enhanced_work_edition_v1",
-    provider: "openlibrary-cache-warmer",
-    cached: true,
-    responseTime: 0
-  };
-}
+// Removed: transformOpenLibraryToProxyFormat()
+// books-api-proxy now returns the correct format directly
 
 /**
  * Stores the normalized data in the format expected by the books-api-proxy.

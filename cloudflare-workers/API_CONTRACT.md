@@ -595,9 +595,107 @@ Content-Type: multipart/form-data
 
 ---
 
-## 5. Common Response Patterns
+## 5. Service Binding Architecture
 
-### 5.1 Success Response Structure
+### 5.1 Inter-Worker Communication Patterns
+
+**Current Architecture (October 2025):**
+```
+iOS App
+    ↓ HTTPS
+bookshelf-ai-worker
+    ↓ Service Binding (HTTP fetch)
+books-api-proxy
+    ↓ Service Binding (RPC)
+external-apis-worker
+    ↓ HTTPS
+External APIs (Google Books, OpenLibrary, ISBNdb)
+```
+
+### 5.2 Service Binding Types
+
+**HTTP Fetch Pattern (bookshelf-ai-worker → books-api-proxy):**
+```javascript
+// bookshelf-ai-worker/src/index.js
+const searchURL = new URL(
+  `https://books-api-proxy.jukasdrj.workers.dev/search/auto?q=${encodeURIComponent(query)}`
+);
+const response = await env.BOOKS_API_PROXY.fetch(searchURL);
+const data = await response.json();
+```
+
+**Configuration:**
+```toml
+# bookshelf-ai-worker/wrangler.toml
+[[services]]
+binding = "BOOKS_API_PROXY"
+service = "books-api-proxy"
+# No entrypoint = HTTP fetch only (not RPC)
+```
+
+**RPC Method Call Pattern (books-api-proxy → external-apis-worker):**
+```javascript
+// books-api-proxy/src/index.js
+const results = await env.EXTERNAL_APIS_WORKER.searchGoogleBooks(
+  "Neil Gaiman",
+  20
+);
+```
+
+**Configuration:**
+```toml
+# books-api-proxy/wrangler.toml
+[[services]]
+binding = "EXTERNAL_APIS_WORKER"
+service = "external-apis-worker"
+entrypoint = "ExternalAPIsWorker"  # ← Enables RPC method calls
+```
+
+### 5.3 When to Use Each Pattern
+
+**Use HTTP Fetch When:**
+- Worker doesn't expose RPC entrypoint
+- Need to call specific HTTP endpoints
+- Want standard HTTP response handling
+- Example: bookshelf-ai-worker → books-api-proxy
+
+**Use RPC Methods When:**
+- Worker extends `WorkerEntrypoint` class
+- Need type-safe method calls
+- Want direct JavaScript function invocation
+- Example: books-api-proxy → external-apis-worker
+
+### 5.4 Legacy Pattern (Deprecated)
+
+**❌ REMOVED: Direct ISBNdb/OpenLibrary Worker Bindings**
+
+Previously, cache-warmer had direct bindings to non-existent workers:
+```toml
+# ❌ REMOVED (October 2025)
+[[services]]
+binding = "ISBNDB_WORKER"
+service = "isbndb-biography-worker-production"
+entrypoint = "ISBNdbWorker"
+
+[[services]]
+binding = "OPENLIBRARY_WORKER"
+service = "openlibrary-search-worker"
+entrypoint = "OpenLibraryWorker"
+```
+
+**✅ CURRENT: All workers use books-api-proxy**
+```toml
+# ✅ CORRECT (October 2025)
+[[services]]
+binding = "BOOKS_API_PROXY"
+service = "books-api-proxy"
+```
+
+---
+
+## 6. Common Response Patterns
+
+### 6.1 Success Response Structure
 
 All successful responses follow this pattern:
 
@@ -614,7 +712,7 @@ All successful responses follow this pattern:
 }
 ```
 
-### 5.2 Error Response Structure
+### 6.2 Error Response Structure
 
 All error responses follow this pattern:
 
@@ -631,7 +729,7 @@ All error responses follow this pattern:
 }
 ```
 
-### 5.3 Standard Error Codes
+### 6.3 Standard Error Codes
 
 | HTTP Status | Error Code | Description |
 |-------------|------------|-------------|
@@ -647,9 +745,9 @@ All error responses follow this pattern:
 
 ---
 
-## 6. Rate Limiting
+## 7. Rate Limiting
 
-### 6.1 Rate Limit Headers
+### 7.1 Rate Limit Headers
 
 All responses include rate limit headers:
 
@@ -659,7 +757,7 @@ X-RateLimit-Remaining: 87
 X-RateLimit-Reset: 1697385600
 ```
 
-### 6.2 Rate Limit Policies
+### 7.2 Rate Limit Policies
 
 | Worker | Limit | Window | Scope |
 |--------|-------|--------|-------|
@@ -669,9 +767,9 @@ X-RateLimit-Reset: 1697385600
 
 ---
 
-## 7. Versioning & Deprecation
+## 8. Versioning & Deprecation
 
-### 7.1 Version Format
+### 8.1 Version Format
 
 API versions follow semantic versioning: `MAJOR.MINOR.PATCH`
 
@@ -679,7 +777,7 @@ API versions follow semantic versioning: `MAJOR.MINOR.PATCH`
 - **MINOR**: New features, backward compatible
 - **PATCH**: Bug fixes, backward compatible
 
-### 7.2 Current Versions
+### 8.2 Current Versions
 
 | Worker | Version | Status |
 |--------|---------|--------|
@@ -688,7 +786,7 @@ API versions follow semantic versioning: `MAJOR.MINOR.PATCH`
 | external-apis-worker | 1.0.0 | Stable |
 | cache-warmer | 1.0.0 | Stable |
 
-### 7.3 Deprecation Policy
+### 8.3 Deprecation Policy
 
 **Deprecation Timeline:**
 1. **T+0 days**: Add deprecation notice to response headers
@@ -705,7 +803,7 @@ Link: <https://docs.bookstrack.com/api/migration>; rel="deprecation"
 
 ---
 
-## 8. Change Log
+## 9. Change Log
 
 ### Version 1.0.0 (October 15, 2025)
 
@@ -728,9 +826,9 @@ Link: <https://docs.bookstrack.com/api/migration>; rel="deprecation"
 
 ---
 
-## 9. Developer Guidelines
+## 10. Developer Guidelines
 
-### 9.1 Making API Changes
+### 10.1 Making API Changes
 
 **Before changing any endpoint:**
 
@@ -741,7 +839,7 @@ Link: <https://docs.bookstrack.com/api/migration>; rel="deprecation"
 5. ✅ Update CLAUDE.md with changes
 6. ✅ Commit with semantic commit message
 
-### 9.2 Testing Changes
+### 10.2 Testing Changes
 
 ```bash
 # Test books-api-proxy
@@ -756,7 +854,7 @@ curl -X POST https://bookshelf-ai-worker.jukasdrj.workers.dev/scan \
 wrangler tail books-api-proxy --format pretty
 ```
 
-### 9.3 Contract Validation
+### 10.3 Contract Validation
 
 Before deploying changes:
 
@@ -768,7 +866,7 @@ Before deploying changes:
 
 ---
 
-## 10. Support & Contact
+## 11. Support & Contact
 
 **Documentation:** See `/cloudflare-workers/README.md`
 **GitHub Issues:** https://github.com/jukasdrj/books-tracker-v1/issues

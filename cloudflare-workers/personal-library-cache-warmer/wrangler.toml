@@ -20,24 +20,9 @@ enabled = true
 binding = "PERFORMANCE_METRICS"
 dataset = "cache_warmer_performance"
 
-[[secrets_store_secrets]]
-binding = "ISBNDB_API_KEY"
-store_id = "b0562ac16fde468c8af12717a6c88400"
-secret_name = "ISBNDB_API_KEY"
-
 [[services]]
 binding = "BOOKS_API_PROXY"
 service = "books-api-proxy"
-
-[[services]]
-binding = "ISBNDB_WORKER"
-service = "isbndb-biography-worker-production"
-entrypoint = "ISBNdbWorker"
-
-[[services]]
-binding = "OPENLIBRARY_WORKER"
-service = "openlibrary-search-worker"
-entrypoint = "OpenLibraryWorker"
 
 [[kv_namespaces]]
 binding = "CACHE"
