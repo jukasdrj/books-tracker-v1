@@ -70,6 +70,27 @@ Features a modern **workspace + SPM package** architecture with **CSV import wiz
 
 **Bottom line**: From manual entry hell to bulk import heaven in one release! 🚀
 
+## Features
+
+- **Bulk CSV Import**: Import your entire Goodreads, LibraryThing, or StoryGraph library in minutes
+- **Smart Duplicate Detection**: 95%+ accuracy with ISBN-first strategy
+- **Auto-Enrichment**: Priority queue fetches covers, ISBNs, and metadata automatically
+- **iOS 26 Liquid Glass Design**: WCAG AA accessible with 5 beautiful themes
+- **Advanced Search**: Multi-field backend filtering with barcode scanning
+- **Cultural Diversity Analytics**: Track representation by gender, region, and marginalized voices
+- **CloudKit Sync**: Keep your library in sync across all your devices
+- **Swift 6 Concurrency**: Modern architecture with actors and async/await
+
+## GitHub Issues & Project Management
+
+We use **GitHub Issues** for bug tracking, feature requests, and project planning:
+
+- **Report Bugs**: [Create a new issue](https://github.com/jukasdrj/books-tracker-v1/issues/new)
+- **Request Features**: Share your ideas in the [Issues tab](https://github.com/jukasdrj/books-tracker-v1/issues)
+- **Track Progress**: View our [Project Board](https://github.com/users/jukasdrj/projects/2) for current roadmap
+
+**Contributing**: Found a bug or have a feature idea? We'd love to hear from you! Please check existing issues first to avoid duplicates.
+
 ## AI Assistant Rules Files
 
 This template includes **opinionated rules files** for popular AI coding assistants. These files establish coding standards, architectural patterns, and best practices for modern iOS development using the latest APIs and Swift features.
