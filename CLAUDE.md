@@ -565,6 +565,24 @@ Backend enrichment system (89.7% success rate) now fully integrated with iOS app
 
 **See Issue #16 for implementation details and iOS 26 HIG enhancement recommendations.**
 
+**Suggestions Banner (Build 45+):**
+- AI-generated or client-fallback actionable guidance
+- 9 suggestion types: unreadable_books, low_confidence, edge_cutoff, blurry_image, glare_detected, distance_too_far, multiple_shelves, lighting_issues, angle_issues
+- Unified banner UI with Liquid Glass + severity indicators
+- Individual "Got it" dismissal pattern
+- Templated messages for consistency and localization
+- Hybrid approach: AI-first, client-side fallback for reliability
+
+**Key Files:**
+- `SuggestionGenerator.swift` - Client-side fallback logic
+- `SuggestionViewModel.swift` - Display logic and templated messages
+- `ScanResultsView.swift:suggestionsBanner()` - Banner UI component
+
+**Testing Suggestions Banner:**
+- Test image with issues: `docs/testImages/IMG_0014.jpeg` (2 unreadable books)
+- Should trigger "unreadable_books" suggestion
+- Test image quality: Clear image → no suggestions
+
 ### CSV Import & Enrichment System
 
 **Key Files:** `CSVParsingActor.swift`, `CSVImportService.swift`, `EnrichmentService.swift`, `EnrichmentQueue.swift`, `CSVImportFlowView.swift`
