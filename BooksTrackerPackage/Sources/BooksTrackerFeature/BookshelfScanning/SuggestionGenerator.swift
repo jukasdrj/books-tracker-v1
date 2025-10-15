@@ -64,7 +64,7 @@ public struct SuggestionGenerator {
 }
 
 /// View model for suggestions with display logic
-public struct SuggestionViewModel: Identifiable {
+public struct SuggestionViewModel: Identifiable, Sendable {
     public let type: String
     public let severity: String
     public let affectedCount: Int?

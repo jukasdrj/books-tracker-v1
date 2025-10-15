@@ -88,10 +88,12 @@ public struct ScanResult: Sendable {
     public let scanDate = Date()
     public var detectedBooks: [DetectedBook]
     public var totalProcessingTime: TimeInterval
+    public var suggestions: [SuggestionViewModel]
 
-    public init(detectedBooks: [DetectedBook], totalProcessingTime: TimeInterval) {
+    public init(detectedBooks: [DetectedBook], totalProcessingTime: TimeInterval, suggestions: [SuggestionViewModel] = []) {
         self.detectedBooks = detectedBooks
         self.totalProcessingTime = totalProcessingTime
+        self.suggestions = suggestions
     }
 
     /// Statistics for user feedback
