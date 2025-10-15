@@ -31,44 +31,44 @@ enum BookshelfAIError: Error, LocalizedError {
 
 // MARK: - AI Response Models
 
-struct BookshelfAIResponse: Codable, Sendable {
-    let books: [AIDetectedBook]
-    let suggestions: [Suggestion]? // Optional for backward compatibility
-    let metadata: ImageMetadata?
+public struct BookshelfAIResponse: Codable, Sendable {
+    public let books: [AIDetectedBook]
+    public let suggestions: [Suggestion]? // Optional for backward compatibility
+    public let metadata: ImageMetadata?
 
-    struct AIDetectedBook: Codable, Sendable {
-        let title: String?
-        let author: String?
-        let boundingBox: BoundingBox
-        let confidence: Double?
-        let enrichmentStatus: String? // New field for enrichment status
-        let isbn: String?
-        let coverUrl: String?
-        let publisher: String?
-        let publicationYear: Int?
+    public struct AIDetectedBook: Codable, Sendable {
+        public let title: String?
+        public let author: String?
+        public let boundingBox: BoundingBox
+        public let confidence: Double?
+        public let enrichmentStatus: String? // New field for enrichment status
+        public let isbn: String?
+        public let coverUrl: String?
+        public let publisher: String?
+        public let publicationYear: Int?
 
-        struct BoundingBox: Codable, Sendable {
-            let x1: Double
-            let y1: Double
-            let x2: Double
-            let y2: Double
+        public struct BoundingBox: Codable, Sendable {
+            public let x1: Double
+            public let y1: Double
+            public let x2: Double
+            public let y2: Double
         }
     }
 
-    struct Suggestion: Codable, Sendable, Identifiable {
-        let type: String
-        let severity: String
-        let message: String
-        let affectedCount: Int?
+    public struct Suggestion: Codable, Sendable, Identifiable {
+        public let type: String
+        public let severity: String
+        public let message: String
+        public let affectedCount: Int?
 
-        var id: String { type } // Identifiable for ForEach
+        public var id: String { type } // Identifiable for ForEach
     }
 
-    struct ImageMetadata: Codable, Sendable {
-        let imageQuality: String?
-        let lighting: String?
-        let sharpness: String?
-        let readableCount: Int?
+    public struct ImageMetadata: Codable, Sendable {
+        public let imageQuality: String?
+        public let lighting: String?
+        public let sharpness: String?
+        public let readableCount: Int?
     }
 }
 
