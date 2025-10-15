@@ -12,6 +12,7 @@ public struct ScanResultsView: View {
 
     @Environment(\.iOS26ThemeStore) private var themeStore
     @State private var resultsModel: ScanResultsModel
+    @State private var dismissedSuggestionTypes: Set<String> = []
 
     public init(
         scanResult: ScanResult?,
@@ -22,6 +23,12 @@ public struct ScanResultsView: View {
         self.modelContext = modelContext
         self.onDismiss = onDismiss
         self._resultsModel = State(initialValue: ScanResultsModel(scanResult: scanResult))
+    }
+
+    private var activeSuggestions: [SuggestionViewModel] {
+        (scanResult?.suggestions ?? []).filter { suggestion in
+            !dismissedSuggestionTypes.contains(suggestion.type)
+        }
     }
 
     public var body: some View {
@@ -35,6 +42,9 @@ public struct ScanResultsView: View {
                         VStack(spacing: 20) {
                             // Summary card
                             summaryCard(result: result)
+
+                            // Suggestions banner (NEW - between summary and books)
+                            suggestionsBanner()
 
                             // Detected books list
                             detectedBooksList
@@ -132,6 +142,90 @@ public struct ScanResultsView: View {
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - Suggestions Banner
+
+    @ViewBuilder
+    private func suggestionsBanner() -> some View {
+        if !activeSuggestions.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                // Header
+                HStack {
+                    Image(systemName: "lightbulb.fill")
+                        .foregroundStyle(themeStore.primaryColor)
+                    Text("Suggestions")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                    Spacer()
+                }
+
+                // Suggestion rows
+                ForEach(Array(activeSuggestions.enumerated()), id: \.element.id) { index, suggestion in
+                    if index > 0 {
+                        Divider()
+                            .padding(.leading, 36)
+                    }
+                    suggestionRow(suggestion)
+                }
+            }
+            .padding(16)
+            .background {
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(.ultraThinMaterial)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 16)
+                            .strokeBorder(themeStore.primaryColor.opacity(0.3), lineWidth: 1)
+                    }
+            }
+        }
+    }
+
+    private func suggestionRow(_ suggestion: SuggestionViewModel) -> some View {
+        HStack(spacing: 12) {
+            // Severity icon
+            Image(systemName: suggestion.iconName)
+                .font(.body)
+                .foregroundStyle(colorForSeverity(suggestion.severity))
+                .frame(width: 24)
+
+            // Message
+            VStack(alignment: .leading, spacing: 2) {
+                Text(suggestion.message)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+
+                if let count = suggestion.affectedCount {
+                    Text("\(count) book\(count == 1 ? "" : "s")")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+
+            Spacer()
+
+            // Dismiss button ("Got it" pattern)
+            Button {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    _ = dismissedSuggestionTypes.insert(suggestion.type)
+                }
+            } label: {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(themeStore.primaryColor.opacity(0.6))
+                    .font(.title3)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Mark \(suggestion.type.replacingOccurrences(of: "_", with: " ")) as understood")
+        }
+        .padding(.vertical, 8)
+    }
+
+    private func colorForSeverity(_ severity: String) -> Color {
+        switch severity {
+        case "high": return .red
+        case "medium": return .orange
+        default: return themeStore.primaryColor
+        }
     }
 
     // MARK: - Detected Books List
