@@ -180,6 +180,8 @@ struct BookDetailView: View {
 
 **Architecture Rule:** Workers communicate via RPC service bindings - **never** direct API calls from proxy worker. Always orchestrate through specialized workers.
 
+**API Documentation:** See [GitHub Issue #33](https://github.com/jukasdrj/books-tracker-v1/issues/33) for complete API contracts, RPC methods, and endpoint specifications.
+
 ## Development Standards
 
 ### Swift 6 Concurrency
