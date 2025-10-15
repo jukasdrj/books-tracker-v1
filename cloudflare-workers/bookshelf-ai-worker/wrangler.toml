@@ -36,7 +36,8 @@ REQUEST_TIMEOUT_MS = "50000"  # Increased to 50s for large image processing
 LOG_LEVEL = "INFO"
 CONFIDENCE_THRESHOLD = "0.7"  # Minimum confidence score for enrichment
 
-# Service binding to books-api-proxy for metadata enrichment
+# Service binding to books-api-proxy for metadata enrichment (RPC)
 [[services]]
 binding = "BOOKS_API_PROXY"
 service = "books-api-proxy"
+entrypoint = "BooksAPIProxyWorker"

@@ -23,6 +23,7 @@ dataset = "cache_warmer_performance"
 [[services]]
 binding = "BOOKS_API_PROXY"
 service = "books-api-proxy"
+entrypoint = "BooksAPIProxyWorker"
 
 [[kv_namespaces]]
 binding = "CACHE"

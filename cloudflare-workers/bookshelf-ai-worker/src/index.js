@@ -367,30 +367,16 @@ async function enrichBooks(books, env, confidenceThreshold = 0.7) {
   const enrichmentStartTime = Date.now();
   const enrichedResults = [];
 
-  // Process each book with books-api-proxy /search/advanced endpoint
+  // Process each book with books-api-proxy RPC method
   for (const book of booksToEnrich) {
     try {
-      // Construct search URL with title and author
-      const searchURL = new URL('https://books-api-proxy.jukasdrj.workers.dev/search/advanced');
-      searchURL.searchParams.set('title', book.title);
-      searchURL.searchParams.set('author', book.author);
+      console.log(`[Enrichment] Searching for: "${book.title}" by ${book.author}`);
 
-      // Call via service binding (RPC)
-      const response = await env.BOOKS_API_PROXY.fetch(searchURL);
-
-      if (!response.ok) {
-        console.warn(`[Enrichment] Failed for "${book.title}": ${response.status}`);
-        enrichedResults.push({
-          ...book,
-          enrichment: {
-            status: 'failed',
-            error: `API error: ${response.status}`
-          }
-        });
-        continue;
-      }
-
-      const apiData = await response.json();
+      // Use RPC method call (advanced search)
+      const apiData = await env.BOOKS_API_PROXY.advancedSearch({
+        bookTitle: book.title,
+        authorName: book.author
+      }, { maxResults: 1 });
 
       // Extract first result from books-api-proxy response
       // books-api-proxy returns data in "items" array with Google Books-style structure

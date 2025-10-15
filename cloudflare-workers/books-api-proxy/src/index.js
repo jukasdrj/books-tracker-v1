@@ -1,7 +1,64 @@
+import { WorkerEntrypoint } from 'cloudflare:workers';
 import { handleGeneralSearch, handleAuthorSearch, handleTitleSearch, handleSubjectSearch, handleAdvancedSearch, handleISBNSearch } from './search-handlers.js';
 
-export default {
-  async fetch(request, env, ctx) {
+/**
+ * Books API Proxy - RPC-enabled worker
+ * Exposes both HTTP endpoints (for external clients) and RPC methods (for other workers)
+ */
+export class BooksAPIProxyWorker extends WorkerEntrypoint {
+  /**
+   * RPC Method: Search for books by general query
+   * @param {string} query - Search query
+   * @param {Object} options - Search options {maxResults, page}
+   * @returns {Promise<Object>} Search results
+   */
+  async searchBooks(query, options = {}) {
+    const { maxResults = 20, page = 0 } = options;
+    return await handleGeneralSearch(
+      { url: `?q=${encodeURIComponent(query)}&maxResults=${maxResults}&page=${page}` },
+      this.env,
+      this.ctx,
+      {}
+    );
+  }
+
+  /**
+   * RPC Method: Search for books by author
+   * @param {string} authorName - Author name
+   * @param {Object} options - Search options
+   * @returns {Promise<Object>} Author bibliography
+   */
+  async searchByAuthor(authorName, options = {}) {
+    const { maxResults = 20, page = 0 } = options;
+    return await handleAuthorSearch(authorName, { maxResults, page }, this.env, this.ctx);
+  }
+
+  /**
+   * RPC Method: Search for books by ISBN
+   * @param {string} isbn - ISBN-10 or ISBN-13
+   * @param {Object} options - Search options
+   * @returns {Promise<Object>} Book details
+   */
+  async searchByISBN(isbn, options = {}) {
+    const { maxResults = 1, page = 0 } = options;
+    return await handleISBNSearch(isbn, { maxResults, page }, this.env, this.ctx);
+  }
+
+  /**
+   * RPC Method: Advanced search with multiple criteria
+   * @param {Object} criteria - {authorName, bookTitle, isbn}
+   * @param {Object} options - Search options
+   * @returns {Promise<Object>} Search results
+   */
+  async advancedSearch(criteria, options = {}) {
+    const { maxResults = 20, page = 0 } = options;
+    return await handleAdvancedSearch(criteria, { maxResults, page }, this.env, this.ctx);
+  }
+
+  /**
+   * HTTP fetch handler (for external requests)
+   */
+  async fetch(request) {
     const url = new URL(request.url);
     const path = url.pathname;
 
@@ -84,7 +141,9 @@ export default {
       return new Response(JSON.stringify({ error: 'Internal Server Error', details: error.message }), { status: 500, headers });
     }
   }
-};
+}
+
+export default BooksAPIProxyWorker;
 
 /**
  * Handles bookshelf image scanning.

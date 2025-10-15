@@ -125,16 +125,8 @@ async function processMicroBatch(env, maxAuthors = 25) {
 
   for (const author of authorsToProcess) {
     try {
-      // Use books-api-proxy HTTP endpoint for author bibliography
-      const searchURL = new URL(`https://books-api-proxy.jukasdrj.workers.dev/author/${encodeURIComponent(author)}`);
-      const response = await env.BOOKS_API_PROXY.fetch(searchURL);
-
-      if (!response.ok) {
-        console.error(`Failed to get bibliography for ${author}: HTTP ${response.status}`);
-        continue;
-      }
-
-      const result = await response.json();
+      // Use books-api-proxy RPC method for author bibliography
+      const result = await env.BOOKS_API_PROXY.searchByAuthor(author, { maxResults: 100 });
 
       if (result.success && result.works) {
         // Cache the result in normalized format

@@ -4,6 +4,9 @@ main = "src/index.js"
 compatibility_date = "2024-09-17"
 compatibility_flags = ["nodejs_compat"]
 
+# RPC entrypoint for service binding
+entrypoint = "BooksAPIProxyWorker"
+
 # Enable Workers AI
 [ai]
 binding = "AI"

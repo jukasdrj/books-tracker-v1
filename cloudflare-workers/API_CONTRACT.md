@@ -599,12 +599,12 @@ Content-Type: multipart/form-data
 
 ### 5.1 Inter-Worker Communication Patterns
 
-**Current Architecture (October 2025):**
+**Current Architecture (October 2025 - RPC Only):**
 ```
 iOS App
     ↓ HTTPS
 bookshelf-ai-worker
-    ↓ Service Binding (HTTP fetch)
+    ↓ Service Binding (RPC)
 books-api-proxy
     ↓ Service Binding (RPC)
 external-apis-worker
@@ -612,16 +612,17 @@ external-apis-worker
 External APIs (Google Books, OpenLibrary, ISBNdb)
 ```
 
-### 5.2 Service Binding Types
+**All inter-worker communication uses RPC methods, not HTTP fetch.**
 
-**HTTP Fetch Pattern (bookshelf-ai-worker → books-api-proxy):**
+### 5.2 RPC Method Pattern (All Inter-Worker Communication)
+
+**Pattern 1: bookshelf-ai-worker → books-api-proxy**
 ```javascript
-// bookshelf-ai-worker/src/index.js
-const searchURL = new URL(
-  `https://books-api-proxy.jukasdrj.workers.dev/search/auto?q=${encodeURIComponent(query)}`
-);
-const response = await env.BOOKS_API_PROXY.fetch(searchURL);
-const data = await response.json();
+// bookshelf-ai-worker/src/index.js (enrichBooks function)
+const result = await env.BOOKS_API_PROXY.advancedSearch({
+  bookTitle: "The Martian",
+  authorName: "Andy Weir"
+}, { maxResults: 1 });
 ```
 
 **Configuration:**
@@ -630,10 +631,10 @@ const data = await response.json();
 [[services]]
 binding = "BOOKS_API_PROXY"
 service = "books-api-proxy"
-# No entrypoint = HTTP fetch only (not RPC)
+entrypoint = "BooksAPIProxyWorker"  # ← RPC enabled
 ```
 
-**RPC Method Call Pattern (books-api-proxy → external-apis-worker):**
+**Pattern 2: books-api-proxy → external-apis-worker**
 ```javascript
 // books-api-proxy/src/index.js
 const results = await env.EXTERNAL_APIS_WORKER.searchGoogleBooks(
@@ -648,47 +649,88 @@ const results = await env.EXTERNAL_APIS_WORKER.searchGoogleBooks(
 [[services]]
 binding = "EXTERNAL_APIS_WORKER"
 service = "external-apis-worker"
-entrypoint = "ExternalAPIsWorker"  # ← Enables RPC method calls
+entrypoint = "ExternalAPIsWorker"  # ← RPC enabled
 ```
 
-### 5.3 When to Use Each Pattern
+**Pattern 3: cache-warmer → books-api-proxy**
+```javascript
+// personal-library-cache-warmer/src/index.js
+const result = await env.BOOKS_API_PROXY.searchByAuthor("Stephen King", { maxResults: 100 });
+```
 
-**Use HTTP Fetch When:**
-- Worker doesn't expose RPC entrypoint
-- Need to call specific HTTP endpoints
-- Want standard HTTP response handling
-- Example: bookshelf-ai-worker → books-api-proxy
-
-**Use RPC Methods When:**
-- Worker extends `WorkerEntrypoint` class
-- Need type-safe method calls
-- Want direct JavaScript function invocation
-- Example: books-api-proxy → external-apis-worker
-
-### 5.4 Legacy Pattern (Deprecated)
-
-**❌ REMOVED: Direct ISBNdb/OpenLibrary Worker Bindings**
-
-Previously, cache-warmer had direct bindings to non-existent workers:
+**Configuration:**
 ```toml
-# ❌ REMOVED (October 2025)
+# personal-library-cache-warmer/wrangler.toml
+[[services]]
+binding = "BOOKS_API_PROXY"
+service = "books-api-proxy"
+entrypoint = "BooksAPIProxyWorker"  # ← RPC enabled
+```
+
+### 5.3 RPC Method Requirements
+
+**All inter-worker calls MUST use RPC methods:**
+- Worker must extend `WorkerEntrypoint` class
+- Worker must expose `entrypoint` in wrangler.toml
+- Consumer must reference the entrypoint in service binding
+- Direct JavaScript method invocation (type-safe)
+- No HTTP overhead between workers
+
+### 5.4 Books API Proxy RPC Methods
+
+**Available RPC Methods (BooksAPIProxyWorker):**
+
+```javascript
+// General search
+async searchBooks(query, options = {maxResults, page})
+
+// Author bibliography
+async searchByAuthor(authorName, options = {maxResults, page})
+
+// ISBN lookup
+async searchByISBN(isbn, options = {maxResults, page})
+
+// Advanced search
+async advancedSearch(criteria = {authorName, bookTitle, isbn}, options = {maxResults, page})
+```
+
+**Example Usage:**
+```javascript
+// From bookshelf-ai-worker
+const books = await env.BOOKS_API_PROXY.searchBooks("Neil Gaiman", { maxResults: 20 });
+
+// From cache-warmer
+const author = await env.BOOKS_API_PROXY.searchByAuthor("Stephen King", { maxResults: 100 });
+
+// From bookshelf-ai-worker (enrichment)
+const book = await env.BOOKS_API_PROXY.advancedSearch({
+  bookTitle: "American Gods",
+  authorName: "Neil Gaiman"
+}, { maxResults: 1 });
+```
+
+### 5.5 Legacy Patterns (Deprecated)
+
+**❌ HTTP Fetch Between Workers (Removed October 2025)**
+```javascript
+// ❌ OLD (Wrong - HTTP overhead)
+const response = await env.BOOKS_API_PROXY.fetch(searchURL);
+const data = await response.json();
+
+// ✅ NEW (Correct - Direct RPC)
+const data = await env.BOOKS_API_PROXY.searchBooks(query);
+```
+
+**❌ Direct ISBNdb/OpenLibrary Worker Bindings (Never Existed)**
+```toml
+# ❌ REMOVED (October 2025) - These workers were never deployed
 [[services]]
 binding = "ISBNDB_WORKER"
 service = "isbndb-biography-worker-production"
-entrypoint = "ISBNdbWorker"
 
 [[services]]
 binding = "OPENLIBRARY_WORKER"
 service = "openlibrary-search-worker"
-entrypoint = "OpenLibraryWorker"
-```
-
-**✅ CURRENT: All workers use books-api-proxy**
-```toml
-# ✅ CORRECT (October 2025)
-[[services]]
-binding = "BOOKS_API_PROXY"
-service = "books-api-proxy"
 ```
 
 ---
