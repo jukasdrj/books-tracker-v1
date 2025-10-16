@@ -45,6 +45,8 @@ public struct iOS26LiquidLibraryView: View {
     @State private var selectedLayout: LibraryLayout = .floatingGrid
     @State private var searchText = ""
     @State private var showingDiversityInsights = false
+    @State private var pendingEnrichmentCount = 0
+    @State private var isEnriching = false
 
     // ✅ FIX 3: Performance optimizations
     @State private var cachedFilteredWorks: [Work] = []
@@ -54,6 +56,7 @@ public struct iOS26LiquidLibraryView: View {
     @Namespace private var layoutTransition
     @State private var scrollPosition = ScrollPosition()
     @Environment(\.iOS26ThemeStore) private var themeStore
+    @Environment(\.modelContext) private var modelContext
 
     public init() {}
 
@@ -68,6 +71,14 @@ public struct iOS26LiquidLibraryView: View {
             }
             .onAppear {
                 updateFilteredWorks()
+                pendingEnrichmentCount = EnrichmentQueue.shared.count()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("EnrichmentStarted"))) { _ in
+                isEnriching = true
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("EnrichmentCompleted"))) { _ in
+                isEnriching = false
+                pendingEnrichmentCount = 0
             }
             .navigationTitle("My Library")
             .navigationBarTitleDisplayMode(.large)
@@ -126,6 +137,11 @@ public struct iOS26LiquidLibraryView: View {
 
             ScrollView {
                 LazyVStack(spacing: 0) {
+                    if pendingEnrichmentCount > 0 {
+                        enrichmentStatusView
+                            .padding(.horizontal)
+                            .padding(.bottom, 20)
+                    }
                     // Cultural insights header
                     if !cachedFilteredWorks.isEmpty {
                         culturalInsightsHeader
@@ -222,6 +238,40 @@ public struct iOS26LiquidLibraryView: View {
             .padding()
         }
         .glassEffect(.regular, tint: .blue.opacity(0.3))
+    }
+
+    private var enrichmentStatusView: some View {
+        GlassEffectContainer {
+            HStack(spacing: 12) {
+                Image(systemName: "sparkles.square.filled.on.square")
+                    .font(.title2)
+                    .foregroundStyle(.purple)
+                    .symbolEffect(.pulse)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Library Enhancement")
+                        .font(.headline)
+                    Text("\(pendingEnrichmentCount) books pending metadata")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+                if !isEnriching {
+                    Button("Start") {
+                        EnrichmentQueue.shared.startProcessing(in: modelContext) { completed, total, bookTitle in
+                            // This closure is for progress updates, but ContentView is already handling it
+                            // via notifications. We can leave it empty or log to console for debugging.
+                            print("Enriching from library view: \(completed)/\(total) - \(bookTitle)")
+                        }
+                    }
+                    .buttonStyle(GlassProminentButtonStyle())
+                    .foregroundStyle(.purple)
+                }
+            }
+            .padding()
+        }
+        .glassEffect(.regular, tint: .purple.opacity(0.2))
     }
 
     private var culturalDiversityIndicator: some View {
