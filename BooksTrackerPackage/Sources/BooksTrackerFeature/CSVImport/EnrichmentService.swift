@@ -78,7 +78,7 @@ public final class EnrichmentService {
 
     // MARK: - Private Methods
 
-    private func searchAPI(title: String, author: String?) async throws -> EnrichmentSearchResponse {
+    private func searchAPI(title: String, author: String?) async throws -> EnrichmentSearchResponseFlat {
         // Use advanced search endpoint for CSV enrichment (precise backend filtering)
         // This leverages the /search/advanced endpoint's multi-field filtering capability
         var urlComponents = URLComponents(string: "\(baseURL)/search/advanced")!
@@ -113,7 +113,18 @@ public final class EnrichmentService {
         #endif
 
         let decoder = JSONDecoder()
-        return try decoder.decode(EnrichmentSearchResponse.self, from: data)
+        let apiResponse = try decoder.decode(EnrichmentSearchResponse.self, from: data)
+
+        // Transform VolumeItems to flat EnrichmentSearchResults
+        let transformedResults = apiResponse.items.map { volumeItem in
+            EnrichmentSearchResult(from: volumeItem.volumeInfo, volumeId: volumeItem.id)
+        }
+
+        // Create a response with transformed results for compatibility
+        return EnrichmentSearchResponseFlat(
+            items: transformedResults,
+            totalItems: apiResponse.totalItems
+        )
     }
 
     private func findBestMatch(
@@ -264,19 +275,56 @@ public struct EnrichmentStatistics: Sendable {
     }
 }
 
-// MARK: - EnrichmentSearchResponse (Simplified)
-// NOTE: Full SearchResponse is in SearchModel.swift
-// This is a minimal version for enrichment purposes only
+// MARK: - EnrichmentSearchResponse (Google Books Format)
+// Matches the nested volumeInfo structure from books-api-proxy worker
 
 private struct EnrichmentSearchResponse: Codable {
-    let items: [EnrichmentSearchResult]  // Changed from "results" to match API
-    let totalItems: Int                   // Changed from "totalResults" to match API
-    let query: String
-    let provider: String?                 // Optional provider field from API
-    let cached: Bool?                     // Optional cached field from API
+    let items: [VolumeItem]
+    let totalItems: Int
+    let query: String?
+    let provider: String?
+    let cached: Bool?
 }
 
-private struct EnrichmentSearchResult: Codable {
+private struct VolumeItem: Codable {
+    let kind: String?
+    let id: String?
+    let volumeInfo: VolumeInfo
+}
+
+private struct VolumeInfo: Codable {
+    let title: String
+    let subtitle: String?
+    let authors: [String]?
+    let publisher: String?
+    let publishedDate: String?
+    let description: String?
+    let industryIdentifiers: [IndustryIdentifier]?
+    let pageCount: Int?
+    let categories: [String]?
+    let imageLinks: ImageLinks?
+    let crossReferenceIds: CrossReferenceIds?
+}
+
+private struct ImageLinks: Codable {
+    let thumbnail: String?
+    let smallThumbnail: String?
+}
+
+private struct CrossReferenceIds: Codable {
+    let openLibraryWorkId: String?
+    let openLibraryEditionId: String?
+    let googleBooksVolumeId: String?
+}
+
+private struct IndustryIdentifier: Codable {
+    let type: String
+    let identifier: String
+}
+
+// MARK: - Transformation to Flat Model
+
+private struct EnrichmentSearchResult {
     let title: String
     let author: String
     let isbn: String?
@@ -288,16 +336,37 @@ private struct EnrichmentSearchResult: Codable {
     let openLibraryWorkID: String?
     let googleBooksVolumeID: String?
 
-    enum CodingKeys: String, CodingKey {
-        case title
-        case author
-        case isbn
-        case coverImage
-        case publicationYear
-        case publicationDate
-        case publisher
-        case pageCount
-        case openLibraryWorkID = "openLibraryWorkId"
-        case googleBooksVolumeID = "googleBooksVolumeId"
+    init(from volumeInfo: VolumeInfo, volumeId: String?) {
+        self.title = volumeInfo.title
+        self.author = volumeInfo.authors?.first ?? "Unknown Author"
+
+        // Extract ISBN from industryIdentifiers
+        if let identifiers = volumeInfo.industryIdentifiers {
+            self.isbn = identifiers.first(where: { $0.type.contains("ISBN") })?.identifier
+        } else {
+            self.isbn = nil
+        }
+
+        self.coverImage = volumeInfo.imageLinks?.thumbnail
+
+        // Parse year from publishedDate string (e.g., "2022" or "2022-01-15")
+        if let dateString = volumeInfo.publishedDate {
+            self.publicationYear = Int(dateString.prefix(4))
+        } else {
+            self.publicationYear = nil
+        }
+
+        self.publicationDate = volumeInfo.publishedDate
+        self.publisher = volumeInfo.publisher
+        self.pageCount = volumeInfo.pageCount
+        self.openLibraryWorkID = volumeInfo.crossReferenceIds?.openLibraryWorkId
+        self.googleBooksVolumeID = volumeInfo.crossReferenceIds?.googleBooksVolumeId ?? volumeId
     }
+}
+
+// MARK: - Flat Response (for internal use)
+
+private struct EnrichmentSearchResponseFlat {
+    let items: [EnrichmentSearchResult]
+    let totalItems: Int
 }
