@@ -17,7 +17,7 @@ Execute comprehensive build validation using XcodeBuildMCP for autonomous qualit
    - Build Release configuration for BooksTracker.xcworkspace
    - Target: Generic iOS Device (App Store)
    - Automatically parse and report build errors
-   - Verify zero warnings/errors
+   - **FATAL:** Build fails if any warnings are present (including Swift 6 concurrency)
 
 3. **Bundle Identifier Verification**
    - Main app: `Z67H8Y8DW.com.oooefam.booksV3`

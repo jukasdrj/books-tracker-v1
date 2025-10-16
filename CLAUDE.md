@@ -339,6 +339,18 @@ let result = try await tracker.start(
 - **Existence Checks**: Use `if value != nil`, not `if let _ = value`
 - **Value Types**: Use `struct` for models, `class` only for reference semantics
 
+**Zero Warnings Policy:**
+- All PRs must build with zero warnings.
+- All warnings, including Swift 6 concurrency warnings, are treated as errors.
+- This is enforced at the build configuration level (`-Werror`).
+
+**PR Checklist Example:**
+```markdown
+- [ ] Build succeeds with zero warnings
+- [ ] Zero Swift 6 concurrency warnings
+- [ ] Zero deprecated API warnings
+```
+
 **Swift Testing:**
 ```swift
 @Test func userCanAddBookToLibrary() async throws {
