@@ -10,6 +10,7 @@
 // AI model configuration
 const AI_MODEL = "gemini-2.5-flash-preview-05-20";
 const USER_AGENT = 'BooksTracker/3.0.0 (nerd@ooheynerds.com) BookshelfAIWorker/1.0.0';
+let geminiApiKey;
 
 /**
  * RPC-compatible class for service binding integration
@@ -29,25 +30,19 @@ export class BookshelfAIWorker {
     const startTime = Date.now();
 
     try {
-      console.log(`[BookshelfAI] Starting scan, image size: ${imageData.byteLength} bytes`);
-
       // Validate image size
       const maxSizeBytes = (this.env.MAX_IMAGE_SIZE_MB || 10) * 1024 * 1024;
       if (imageData.byteLength > maxSizeBytes) {
         throw new Error(`Image too large. Max ${this.env.MAX_IMAGE_SIZE_MB || 10}MB`);
       }
 
-      // Get API key from secrets store
-      console.log('[DEBUG] env.GEMINI_API_KEY type:', typeof this.env.GEMINI_API_KEY);
-      console.log('[DEBUG] env keys:', Object.keys(this.env));
-
-      const apiKey = await this.env.GEMINI_API_KEY.get();
-      if (!apiKey) {
+      // Get API key from global variable
+      if (!geminiApiKey) {
         throw new Error("GEMINI_API_KEY not configured in secrets store");
       }
 
       // Process with Gemini AI
-      const result = await processImageWithAI(imageData, apiKey);
+      const result = await processImageWithAI(imageData, geminiApiKey);
 
       // Enrich high-confidence detections via books-api-proxy
       const enrichmentStartTime = Date.now();
@@ -61,16 +56,6 @@ export class BookshelfAIWorker {
       const processingTime = Date.now() - startTime;
 
       // Track analytics
-      if (this.env.AI_ANALYTICS) {
-        await this.env.AI_ANALYTICS.writeDataPoint({
-          doubles: [processingTime, enrichmentTime, enrichedBooks.length],
-          blobs: ['bookshelf_scan_with_enrichment', this.env.AI_MODEL || AI_MODEL],
-          indexes: ['ai-scan-success']
-        });
-      }
-
-      console.log(`[BookshelfAI] Scan completed: ${enrichedBooks.length} books (${enrichedBooks.filter(b => b.enrichment?.status === 'success').length} enriched) in ${processingTime}ms (enrichment: ${enrichmentTime}ms)`);
-
       return {
         success: true,
         books: enrichedBooks,
@@ -179,6 +164,9 @@ async function updateJobState(env, jobId, updates) {
  */
 export default {
   async fetch(request, env, ctx) {
+    if (!geminiApiKey) {
+      geminiApiKey = await env.GEMINI_API_KEY.get();
+    }
     const url = new URL(request.url);
 
     // Serve HTML testing interface on GET requests
@@ -327,9 +315,6 @@ export default {
  * @returns {Promise<object>} The parsed JSON result from the AI model
  */
 async function processImageWithAI(image_data, apiKey) {
-  if (!apiKey) {
-    throw new Error("GEMINI_API_KEY not configured");
-  }
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${AI_MODEL}:generateContent?key=${apiKey}`;
 
@@ -564,8 +549,6 @@ async function enrichBooks(books, env, confidenceThreshold = 0.7) {
     book.author
   );
 
-  console.log(`[Enrichment] ${booksToEnrich.length}/${books.length} books meet confidence threshold (${confidenceThreshold})`);
-
   if (booksToEnrich.length === 0) {
     // No books to enrich, return original array
     return books.map(book => ({
@@ -641,7 +624,6 @@ async function enrichBooks(books, env, confidenceThreshold = 0.7) {
   }
 
   const enrichmentTime = Date.now() - enrichmentStartTime;
-  console.log(`[Enrichment] Completed in ${enrichmentTime}ms: ${enrichedResults.filter(b => b.enrichment?.status === 'success').length} successful`);
 
   // Merge enriched results back with low-confidence books
   const enrichmentMap = new Map(
