@@ -490,7 +490,8 @@ public class CSVImportService: ObservableObject {
         // Create or find author
         let author = findOrCreateAuthor(name: row.author)
 
-        // Create work
+        // Store original title from CSV for display and user library
+        // Normalized title (row.normalizedTitle) is used only during enrichment search
         let work = Work(
             title: row.title,
             authors: [author],
