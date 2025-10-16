@@ -360,14 +360,17 @@ class BookshelfScanModel {
         return nil
     }
 
-    /// Process captured image
+    /// Process captured image with progress tracking
     func processImage(_ image: UIImage) async {
         scanState = .processing
         let startTime = Date()
 
         do {
-            // Call BookshelfAIService without progress tracking for stability
-            let (detectedBooks, suggestions) = try await BookshelfAIService.shared.processBookshelfImage(image)
+            // Call BookshelfAIService with progress tracking (Swift 6.2 compliant!)
+            let (detectedBooks, suggestions) = try await BookshelfAIService.shared.processBookshelfImageWithProgress(image) { progress, stage in
+                // Progress handler runs on MainActor - safe for UI updates
+                print("📸 Bookshelf scan progress: \(Int(progress * 100))% - \(stage)")
+            }
 
             // Calculate statistics
             detectedCount = detectedBooks.count

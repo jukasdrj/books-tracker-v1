@@ -123,7 +123,7 @@ public class CSVImportService: ObservableObject {
 
         do {
             // Parse CSV
-            let (headers, rows) = try await CSVParsingActor.shared.parseCSV(content)
+            let (_, rows) = try await CSVParsingActor.shared.parseCSV(content)
 
             // Process in batches
             for (index, row) in rows.enumerated() {

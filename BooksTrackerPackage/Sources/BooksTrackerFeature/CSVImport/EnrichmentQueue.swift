@@ -178,7 +178,7 @@ public final class EnrichmentQueue {
             userInfo: ["totalBooks": totalCount]
         )
 
-        currentTask = Task {
+        currentTask = Task { @MainActor in
             var processedCount = 0
 
             while !queue.isEmpty {
@@ -193,13 +193,12 @@ public final class EnrichmentQueue {
 
                 // Fetch work from context - handle deleted works gracefully
                 guard let work = modelContext.model(for: workID) as? Work else {
-                    // Work was deleted - remove from persisted queue
                     print("⚠️ Skipping deleted work (cleaning up queue)")
-                    saveQueue()  // Persist cleanup immediately
+                    saveQueue()
                     continue
                 }
 
-                // Enrich the work
+                // Enrich the work (EnrichmentService needs to be called from MainActor)
                 let result = await EnrichmentService.shared.enrichWork(work, in: modelContext)
 
                 processedCount += 1

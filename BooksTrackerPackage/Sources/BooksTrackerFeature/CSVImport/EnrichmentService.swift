@@ -51,7 +51,7 @@ public final class EnrichmentService {
             // Find best match from results
             guard let bestMatch = findBestMatch(
                 for: work,
-                in: response.results
+                in: response.items
             ) else {
                 return .failure(.noMatchFound)
             }
@@ -105,6 +105,12 @@ public final class EnrichmentService {
         guard httpResponse.statusCode == 200 else {
             throw EnrichmentError.httpError(httpResponse.statusCode)
         }
+
+        #if DEBUG
+        if let jsonString = String(data: data, encoding: .utf8) {
+            print("📡 Enrichment API Response: \(jsonString.prefix(500))")
+        }
+        #endif
 
         let decoder = JSONDecoder()
         return try decoder.decode(EnrichmentSearchResponse.self, from: data)
@@ -263,9 +269,11 @@ public struct EnrichmentStatistics: Sendable {
 // This is a minimal version for enrichment purposes only
 
 private struct EnrichmentSearchResponse: Codable {
-    let results: [EnrichmentSearchResult]
-    let totalResults: Int
+    let items: [EnrichmentSearchResult]  // Changed from "results" to match API
+    let totalItems: Int                   // Changed from "totalResults" to match API
     let query: String
+    let provider: String?                 // Optional provider field from API
+    let cached: Bool?                     // Optional cached field from API
 }
 
 private struct EnrichmentSearchResult: Codable {

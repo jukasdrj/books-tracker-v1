@@ -99,17 +99,21 @@ public struct EstimatedTimeRemaining: View {
     public var body: some View {
         Text(timeRemaining)
             .font(.caption)
-            .onAppear(perform: setupTimer)
+            .task {
+                await updateTimeRemaining()
+            }
     }
 
-    private func setupTimer() {
-        Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { timer in
+    @MainActor
+    private func updateTimeRemaining() async {
+        while !Task.isCancelled {
             let remaining = completionDate.timeIntervalSince(Date())
             if remaining > 0 {
                 timeRemaining = format(timeInterval: remaining)
+                try? await Task.sleep(for: .seconds(1))
             } else {
                 timeRemaining = "Done"
-                timer.invalidate()
+                break
             }
         }
     }
