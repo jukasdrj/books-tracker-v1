@@ -65,7 +65,7 @@ public final class SearchModel {
         }
 
         Task {
-            loadTrendingBooks()
+            await loadTrendingBooks()
             generateSearchSuggestions(for: "")
         }
     }
@@ -142,8 +142,8 @@ public final class SearchModel {
         // Cancel previous search
         searchTask?.cancel()
 
-        // Update search text immediately for UI responsiveness
-        searchText = query
+        // DO NOT update searchText here. The view's @State is the source of truth.
+        // This was causing a feedback loop that broke the spacebar.
         currentScope = scope
 
         // Determine debounce delay based on query length and type
@@ -481,16 +481,14 @@ public final class SearchModel {
         currentScope = nil
     }
 
-    private func loadTrendingBooks() {
+    private func loadTrendingBooks() async {
         // Load trending books for initial state
-        Task {
-            do {
-                let response = try await apiService.getTrendingBooks()
-                trendingBooks = response.results
-            } catch {
-                // Silently fail for trending books - not critical
-                print("Failed to load trending books: \(error)")
-            }
+        do {
+            let response = try await apiService.getTrendingBooks()
+            self.trendingBooks = response.results
+        } catch {
+            // Silently fail for trending books - not critical
+            print("Failed to load trending books: \(error)")
         }
     }
 }
