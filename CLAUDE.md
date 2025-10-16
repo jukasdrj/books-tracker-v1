@@ -837,6 +837,72 @@ var body: some View {
 }
 ```
 
+### Progress UI Components
+
+A suite of reusable progress indicators built with the iOS 26 Liquid Glass design system. These components are designed for tracking long-running operations like AI scanning, CSV imports, and network requests.
+
+**Key Files:** `BooksTrackerPackage/Sources/BooksTrackerFeature/ProgressViews/ProgressComponents.swift`
+
+**Components:**
+
+**1. ProgressBanner**
+
+A dismissible banner for showing ongoing progress.
+
+**Usage:**
+```swift
+@State private var isBannerShowing = true
+
+var body: some View {
+    if isBannerShowing {
+        ProgressBanner(
+            isShowing: $isBannerShowing,
+            title: "Enriching Metadata",
+            message: "Processing 24 of 100 books..."
+        )
+    }
+}
+```
+
+**2. StagedProgressView**
+
+A multi-stage progress bar for multi-step operations.
+
+**Usage:**
+```swift
+@State private var currentStage = 1
+@State private var currentProgress = 0.75
+let stages = ["Scanning", "Enriching", "Uploading"]
+
+var body: some View {
+    StagedProgressView(
+        stages: stages,
+        currentStageIndex: $currentStage,
+        progress: $currentProgress
+    )
+}
+```
+
+**3. PollingIndicator**
+
+An animated spinner with a label for indeterminate tasks.
+
+**Usage:**
+```swift
+PollingIndicator(stageName: "Waiting for server response...")
+```
+
+**4. EstimatedTimeRemaining**
+
+A text view that counts down to a future completion date.
+
+**Usage:**
+```swift
+let estimatedCompletion = Date().addingTimeInterval(300) // 5 minutes from now
+
+EstimatedTimeRemaining(completionDate: estimatedCompletion)
+```
+
 **🎨 CRITICAL: Text Contrast & Accessibility**
 
 ```
