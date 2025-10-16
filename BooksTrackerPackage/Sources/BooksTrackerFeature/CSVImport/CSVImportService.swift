@@ -3,11 +3,13 @@ import SwiftData
 import SwiftUI
 
 // MARK: - CSV Import Service
-/// Main service for orchestrating CSV imports with duplicate detection and batch processing
+/// Dual-mode service supporting both legacy ObservableObject pattern and new Result-based API
+/// - Legacy: @Published state for existing views (backward compatibility)
+/// - Modern: Result-based API for SyncCoordinator integration
 @MainActor
 public class CSVImportService: ObservableObject {
 
-    // MARK: - Published State
+    // MARK: - Legacy Published State (kept for backward compatibility)
 
     @Published public var importState: ImportState = .idle
     @Published public var progress: ImportProgress = ImportProgress()
@@ -101,7 +103,125 @@ public class CSVImportService: ObservableObject {
         self.modelContext = modelContext
     }
 
-    // MARK: - File Processing
+    // MARK: - Stateless Result-Based API (for SyncCoordinator)
+
+    /// Import CSV with progress callbacks (stateless - no @Published state)
+    /// This is the new API that SyncCoordinator should use
+    public func importCSV(
+        content: String,
+        mappings: [CSVParsingActor.ColumnMapping],
+        strategy: DuplicateStrategy,
+        progressUpdate: @escaping (Int, String) -> Void
+    ) async -> Result<ImportResult, Error> {
+
+        let startTime = Date()
+        var importedWorks: [Work] = []
+        var successCount = 0
+        var duplicateCount = 0
+        var errorCount = 0
+        var errors: [ImportError] = []
+
+        do {
+            // Parse CSV
+            let (headers, rows) = try await CSVParsingActor.shared.parseCSV(content)
+
+            // Process in batches
+            for (index, row) in rows.enumerated() {
+                progressUpdate(index + 1, "Processing row \(index + 1) of \(rows.count)")
+
+                // Parse row
+                guard let parsedRow = await CSVParsingActor.shared.processRow(
+                    values: row,
+                    mappings: mappings
+                ) else {
+                    errorCount += 1
+                    errors.append(ImportError(
+                        row: index + 2, // +2 for header and 0-based index
+                        title: row.first ?? "Unknown",
+                        message: "Missing required fields"
+                    ))
+                    continue
+                }
+
+                // Check for duplicates
+                if let existingWork = await findExistingWork(parsedRow) {
+                    switch strategy {
+                    case .skip:
+                        duplicateCount += 1
+                        continue
+
+                    case .update:
+                        await updateExistingWork(existingWork, with: parsedRow)
+                        successCount += 1
+                        importedWorks.append(existingWork)
+
+                    case .addNew:
+                        if let newWork = await createNewWork(from: parsedRow) {
+                            successCount += 1
+                            importedWorks.append(newWork)
+                        } else {
+                            errorCount += 1
+                        }
+
+                    case .smart:
+                        if parsedRow.isbn != nil {
+                            // ISBN match - skip duplicate
+                            duplicateCount += 1
+                        } else {
+                            // Title+Author match - update
+                            await updateExistingWork(existingWork, with: parsedRow)
+                            successCount += 1
+                            importedWorks.append(existingWork)
+                        }
+                    }
+                } else {
+                    // Create new work
+                    if let newWork = await createNewWork(from: parsedRow) {
+                        successCount += 1
+                        importedWorks.append(newWork)
+                    } else {
+                        errorCount += 1
+                        errors.append(ImportError(
+                            row: index + 2,
+                            title: parsedRow.title,
+                            message: "Failed to create work"
+                        ))
+                    }
+                }
+
+                // Save periodically
+                if (index + 1) % 50 == 0 {
+                    try modelContext.save()
+                }
+            }
+
+            // Final save
+            try modelContext.save()
+
+            let duration = Date().timeIntervalSince(startTime)
+            let result = ImportResult(
+                successCount: successCount,
+                duplicateCount: duplicateCount,
+                errorCount: errorCount,
+                importedWorks: importedWorks,
+                errors: errors,
+                duration: duration
+            )
+
+            return .success(result)
+
+        } catch {
+            return .failure(error)
+        }
+    }
+
+    /// Get total row count from CSV (for progress tracking)
+    public func getRowCount(from csvContent: String) async -> Int {
+        let parsedData = try? await CSVParsingActor.shared.parseCSV(csvContent)
+        return parsedData?.rows.count ?? 0
+    }
+
+    // MARK: - File Processing (Legacy)
 
     public func loadFile(at url: URL) async {
         importState = .analyzingFile
