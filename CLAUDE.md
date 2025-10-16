@@ -696,6 +696,43 @@ Button("Import CSV Library") { showingCSVImport = true }
 
 **Architecture:** CSV → `CSVParsingActor` (@globalActor) → `CSVImportService` → SwiftData → `EnrichmentQueue` (@MainActor) → `EnrichmentService` → Cloudflare Worker
 
+**🆕 SyncCoordinator Pattern (Build 46+):**
+- Centralized job orchestration for multi-step background operations
+- Type-safe progress tracking with `JobModels` (JobIdentifier, JobStatus, JobProgress)
+- Services provide stateless Result-based APIs
+- UI observes coordinator state via `@Published` job status
+- Supports CSV import and enrichment job tracking
+- **Key Files:** `SyncCoordinator.swift`, `JobModels.swift`, `SyncCoordinatorTests.swift`
+- **Documentation:** [SyncCoordinator Architecture](docs/architecture/SyncCoordinator-Architecture.md)
+- **Usage:**
+  ```swift
+  @StateObject private var coordinator = SyncCoordinator.shared
+
+  // Start CSV import
+  let jobId = await coordinator.startCSVImport(
+      csvContent: content,
+      mappings: mappings,
+      strategy: .smart,
+      modelContext: modelContext
+  )
+
+  // Monitor progress
+  if let status = coordinator.getJobStatus(for: jobId) {
+      switch status {
+      case .active(let progress):
+          ProgressView(value: progress.fractionCompleted)
+          Text(progress.currentStatus)
+      case .completed(let log):
+          ForEach(log, id: \.self) { Text($0) }
+      case .failed(let error):
+          Text("Error: \(error)")
+      default:
+          ProgressView()
+      }
+  }
+  ```
+- **Migration Status:** CSVImportService maintains backward compatibility with legacy @Published API while new code can use coordinator
+
 **🎉 Enrichment Progress Banner (Build 45+):**
 - NotificationCenter-based (NO Live Activity entitlements!)
 - Real-time progress: "Enriching Metadata... 15/100 (15%)"

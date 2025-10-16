@@ -1,3 +1,4 @@
+#if canImport(UIKit)
 import SwiftUI
 
 // MARK: - Accessibility Support for CSV Import
@@ -369,4 +370,5 @@ struct AccessibleImportProgressExample: View {
         ])
     }
 }
+#endif
 #endif
