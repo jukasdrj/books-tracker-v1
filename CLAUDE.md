@@ -1008,15 +1008,27 @@ Text("Page Count")
 ├── 📄 MCP_SETUP.md                   ← XcodeBuildMCP configuration & workflows
 ├── 📄 README.md                      ← Quick start & project overview
 ├── 📄 CHANGELOG.md                   ← Version history & releases
-├── 📄 APIcall.md                     ← API endpoint migration guide
-├── 📄 REALDEVICE_FIXES.md            ← Real device debugging notes (Oct 2025)
 ├── 📄 FUTURE_ROADMAP.md             ← Aspirational features
-├── 📁 docs/archive/
-│   ├── 📄 cache3-openlibrary-migration.md     ← Cache strategy (implemented)
-│   ├── 📄 csvMoon-implementation-notes.md     ← CSV import roadmap
-│   └── 📄 ARCHIVE_PHASE1_AUDIT_REPORT.md      ← Historical audit (resolved)
+├── 📁 docs/
+│   ├── 📄 CONCURRENCY_GUIDE.md      ← Swift 6 concurrency patterns
+│   ├── 📄 SWIFT6_COMPILER_BUG.md    ← Compiler bug debugging saga (Oct 2025)
+│   ├── 📄 GITHUB_WORKFLOW.md        ← GitHub Issues workflow
+│   ├── 📄 MIGRATION_RECORD.md       ← Historical migration notes
+│   ├── 📁 architecture/
+│   │   └── 📄 SyncCoordinator-Architecture.md  ← Current coordinator pattern
+│   ├── 📁 plans/
+│   │   ├── 📄 2025-10-16-issue-audit-report.md
+│   │   └── 📄 2025-10-16-project-cleanup.md
+│   └── 📁 archive/
+│       ├── 📄 BOOKSHELF_SCANNER_DESIGN_PLAN.md (Build 46 shipped)
+│       ├── 📄 SUGGESTIONS_WORKER_TEST_RESULTS.md (production)
+│       ├── 📄 testing-results.md (historical)
+│       ├── 📄 cache3-openlibrary-migration.md (implemented)
+│       ├── 📄 csvMoon-implementation-notes.md (CSV import roadmap)
+│       ├── 📄 ARCHIVE_PHASE1_AUDIT_REPORT.md (resolved)
+│       └── 📁 serena-memories/ (legacy context)
 ├── 📁 .claude/commands/              ← Custom slash commands
-│   ├── 📄 gogo.md                    ← App Store validation pipeline (MCP-powered)
+│   ├── 📄 gogo.md                    ← App Store validation pipeline
 │   ├── 📄 build.md                   ← Quick build check
 │   ├── 📄 test.md                    ← Swift test suite runner
 │   ├── 📄 device-deploy.md           ← Physical device deployment
@@ -1027,15 +1039,16 @@ Text("Page Count")
 ```
 
 **Documentation Philosophy:**
-- CLAUDE.md: Current development standards and patterns
+- CLAUDE.md: Current development standards and patterns (keep under 1200 lines)
 - CHANGELOG.md: Historical achievements and version notes
 - FUTURE_ROADMAP.md: Clearly marked as aspirational
-- Keep active docs under 500 lines - move history to CHANGELOG
+- docs/archive/: Completed plans and historical references
+- GitHub Issues: Active tasks and implementation plans
 
 **Implementation Plans & Future Work:**
 - **GitHub Issues**: Active tasks tracked at https://github.com/users/jukasdrj/projects/2
-- **Labels**: type/plan, type/feature, type/decision, status/backlog, status/archived
-- **Migration Note**: Former docs/plans/ content migrated to GitHub Issues (Oct 2025)
+- **Labels**: type/plan, type/feature, type/decision, status/backlog, priority/high/medium/low
+- **Active Issues**: ~12-15 (down from 42 after Oct 2025 cleanup)
 
 ## Key Business Logic
 
