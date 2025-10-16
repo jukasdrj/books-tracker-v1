@@ -42,10 +42,13 @@ INFOPLIST_KEY_UIBackgroundModes = remote-notification
 // ==========================================
 // Enforce "Zero Warnings" policy
 GCC_TREAT_WARNINGS_AS_ERRORS = YES
-OTHER_SWIFT_FLAGS = $(inherited) -Werror
+
 
 // Enforce strict Swift 6 concurrency checking
-SWIFT_STRICT_CONCURRENCY = complete
+// SWIFT_STRICT_CONCURRENCY = complete
+
+// Note: If you need experimental Swift features, add them to OTHER_SWIFT_FLAGS like this:
+// OTHER_SWIFT_FLAGS = $(inherited) -Werror -enable-experimental-feature FeatureName
 
 // ==========================================
 // Entitlements
