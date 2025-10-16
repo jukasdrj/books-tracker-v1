@@ -1017,7 +1017,8 @@ Text("Page Count")
 │   ├── 📄 GITHUB_WORKFLOW.md        ← GitHub Issues workflow
 │   ├── 📄 MIGRATION_RECORD.md       ← Historical migration notes
 │   ├── 📁 architecture/
-│   │   └── 📄 SyncCoordinator-Architecture.md  ← Current coordinator pattern
+│   │   ├── 📄 SyncCoordinator-Architecture.md  ← Current coordinator pattern
+│   │   └── 📄 2025-10-16-csv-coordinator-refactor-plan.md  ← CSV refactor plan (active)
 │   ├── 📁 plans/
 │   │   ├── 📄 2025-10-16-issue-audit-report.md
 │   │   └── 📄 2025-10-16-project-cleanup.md
