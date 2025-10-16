@@ -767,14 +767,16 @@ public struct SearchView: View {
 
     /// HIG: Scope-aware search execution
     private func performScopedSearch(query: String, scope: SearchScope) {
-        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedQuery.isEmpty else {
+        // Do not trim whitespace here; let the model handle it.
+        // This resolves the iOS 18 spacebar bug where trimming interferes
+        // with the @State -> @Observable update cycle.
+        guard !query.isEmpty else {
             searchModel.clearSearch()
             return
         }
 
         // Pass scope to search model for filtering
-        searchModel.search(query: trimmedQuery, scope: scope)
+        searchModel.search(query: query, scope: scope)
 
         #if DEBUG
         updatePerformanceText()
