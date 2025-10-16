@@ -397,3 +397,250 @@ func addAllToLibrary(modelContext: ModelContext) async {
 - Ready for Phase 2 functional testing
 
 ---
+
+## Task 3: Phase 2.1 - Happy Path Functional Test
+
+**Date:** 2025-10-16
+**Test Image:** docs/testImages/IMG_0014.jpeg
+**Status:** 🔄 IN PROGRESS
+
+### Step 1: Build and Launch App ✅ COMPLETE
+- **Simulator:** iPhone 17 Pro Max (E561B156-AFC2-4BBF-8B15-4E794BACDF13) [Booted]
+- **Build Status:** Success - Zero warnings, zero errors
+- **App Running:** Z67H8Y8DW.com.oooefam.booksV3 launched successfully
+- **Worker Logs:** Monitoring started in background
+
+### Step 2: Navigate to Bookshelf Scanner ⏸️ MANUAL STEP REQUIRED
+
+**USER ACTION NEEDED:**
+Please perform the following steps in the simulator:
+
+1. **Tap "Settings" tab** (bottom navigation bar)
+2. **Scroll down** to "Experimental Features" section
+3. **Tap "Scan Bookshelf (Beta)"** button
+
+**Expected Outcome:**
+- `BookshelfScannerView` should present as a full-screen sheet
+- You should see the main scanner interface with options:
+  - "Scan Bookshelf" button (camera icon) - for live camera
+  - "Select Test Image" button (DEBUG only) - for testing
+
+**What I Need From You:**
+✅ Confirm when you've navigated to the BookshelfScannerView successfully
+
+---
+
+### Step 3: Select Test Image (DEBUG mode) ⏸️ AWAITING USER CONFIRMATION
+
+**Once you confirm Step 2 is complete, perform these actions:**
+
+1. **Tap "Select Test Image"** button (DEBUG mode only)
+2. **In PhotosPicker:**
+   - The test image is located at: `/Users/justingardner/Downloads/xcode/books-tracker-v1/docs/testImages/IMG_0014.jpeg`
+   - You may need to use "Add Photos" or access the file via Files app
+   - The image shows a bookshelf with approximately 8-12 visible book spines
+
+**Expected Outcome:**
+- PhotosPicker should present
+- After selecting the image:
+  - `scanModel.processImage(image)` triggers automatically
+  - Progress sheet appears with title "Scanning Bookshelf"
+  - Progress bar and status messages display
+
+**What to Watch For:**
+- Progress sheet appears within 1-2 seconds of image selection
+- No crashes or errors
+- Sheet shows animated progress indicator
+
+---
+
+### Step 4: Observe Progress Tracking ⏸️ AWAITING USER CONFIRMATION
+
+**During Processing (watch for these stages):**
+
+**Progress Sheet Should Display:**
+- **Header:** "Scanning Bookshelf" with animated icon
+- **Progress Bar:** Animated from 0% → 100%
+- **Stage Updates:**
+  1. "Uploading..." (first 5-10 seconds)
+  2. "AI Analysis..." (next 25-40 seconds)
+  3. "Enrichment..." (final 5-10 seconds)
+  4. "Complete!" (brief before dismissal)
+- **Books Counter:** "X books detected" (updates as processing progresses)
+
+**Expected Timeline:**
+- **Total Duration:** 30-50 seconds (typical)
+- **Timeout:** 70 seconds max (if exceeded, error should appear)
+- **Sheet Dismissal:** Automatic when complete
+
+**What to Watch For:**
+- ✅ Progress bar animates smoothly (not frozen)
+- ✅ Stage text updates (not stuck on "Uploading")
+- ✅ No error alerts during processing
+- ✅ Sheet dismisses automatically on completion
+- ✅ `scanState` transitions to `.completed`
+
+**If Processing Fails:**
+- Document the error message shown
+- Check Xcode console for logs
+- Note at which stage it failed
+
+---
+
+### Step 5: Review Results in ScanResultsView ⏸️ AWAITING USER CONFIRMATION
+
+**After Progress Sheet Dismisses:**
+
+**Summary Card (Top of Screen):**
+- **Title:** "Scan Complete" with checkmark icon
+- **Processing Time:** "Completed in X seconds"
+- **Statistics:**
+  - "X Detected" (total books found)
+  - "Y With ISBN" (books with ISBN numbers)
+  - "Z Uncertain" (low-confidence detections)
+
+**Detected Books List:**
+- Each book card should show:
+  - **Title** (bold, primary color)
+  - **Author** (gray text)
+  - **ISBN** (if available, shown in badge)
+  - **Confidence Percentage** (e.g., "85%" in green/orange)
+  - **Status Indicator:**
+    - Green checkmark = Auto-selected (high confidence ≥70%)
+    - Empty circle = Not selected
+    - Orange badge = Uncertain (confidence <70%)
+
+**Expected Results for IMG_0014.jpeg:**
+- **Books Detected:** 8-12 books (based on visible spines in image)
+- **Auto-Selected:** 4-8 books (high confidence with metadata)
+- **Uncertain:** 0-4 books (partial reads or poor lighting)
+
+**What to Document:**
+- Actual count: "X Detected", "Y With ISBN", "Z Uncertain"
+- Number of auto-selected books (green checkmarks)
+- Any books marked as duplicates (should be 0 for fresh library)
+- Screenshot recommended (if possible)
+
+---
+
+### Step 6: Add Books to Library ⏸️ AWAITING USER CONFIRMATION
+
+**Action Required:**
+
+1. **Tap "Add X to Library"** button at bottom of screen
+   - X = number of confirmed/auto-selected books
+2. **Wait for Save Operation** (should be instant, <1 second)
+3. **Tap "Done"** to dismiss ScanResultsView
+
+**Expected Outcome:**
+- Books inserted into SwiftData successfully
+- No error alerts during save
+- `EnrichmentQueue` enqueues books for metadata enhancement
+- ScanResultsView dismisses
+- Returns to Settings screen
+
+**Console Logs to Watch For:**
+```
+📚 Queued X books from scan for background enrichment
+Enrichment started for: [Book Title]
+```
+
+---
+
+### Step 7: Verify Books in Library ⏸️ AWAITING USER CONFIRMATION
+
+**Navigation:**
+1. Return to main app (dismiss Settings if needed)
+2. **Tap "My Library" tab** (bottom navigation)
+
+**What to Check:**
+- **Added books appear in list** with:
+  - Title (from scan)
+  - Author name (from scan)
+  - ISBN badge visible (if ISBN was detected)
+  - Book cover: May be placeholder initially (enrichment in progress)
+  - Status: "To Read" or "Wishlist" (depending on ISBN availability)
+
+**EnrichmentProgressBanner (if enabled):**
+- Should appear at top of ContentView
+- Text: "Enriching Metadata... X/Y (Z%)"
+- Pulsing icon animation
+- Theme-aware styling (Liquid Glass design)
+
+**Expected:**
+- All confirmed books present in library (count matches Step 6)
+- Books have basic metadata from scan
+- Background enrichment started (banner visible)
+
+---
+
+### Step 8: Monitor Cloudflare Worker Logs 🔍 AUTOMATED
+
+**Worker logs are being captured in background.**
+
+I'll check the logs for:
+- `POST /scan` request received
+- `202 Accepted` response with jobId
+- Stage transitions: upload → analysis → enrichment → complete
+- `200 OK` final response with detected books
+- Any errors or timeouts
+
+**Expected Log Pattern:**
+```
+POST /scan
+202 Accepted { jobId: "xxx-yyy-zzz" }
+Stage: uploading
+Stage: analyzing
+Stage: enriching
+200 OK { books: [...], suggestions: [...] }
+```
+
+---
+
+### Current Status: ⏸️ PAUSED AT STEP 2
+
+**What I've Done:**
+✅ Built and launched app successfully
+✅ Started Cloudflare Worker log monitoring
+✅ Prepared test image (IMG_0014.jpeg verified)
+✅ Documented all manual testing steps (Steps 2-7)
+
+**What You Need to Do:**
+1. **Navigate to Settings → Scan Bookshelf (Beta)** (Step 2)
+2. **Confirm when you see the BookshelfScannerView**
+3. **Proceed with Step 3** (select test image)
+4. **Document observations at each checkpoint** (Steps 4-7)
+
+**When You Complete a Step:**
+Please reply with:
+- Step number completed
+- Actual results observed
+- Any unexpected behavior
+- Screenshots (if helpful)
+
+I'll update the test results and proceed to Step 8 (worker log analysis) once you've completed Steps 2-7.
+
+---
+
+## Session Break - 2025-10-16
+
+**Tasks Completed:**
+- ✅ Task 1: Setup Test Environment
+- ✅ Task 1.5: Debug Worker Endpoint
+- ✅ Task 2: Phase 1 Code-Level Verification (8 steps, all passed)
+- ✅ Task 3.1: Fixed UIGraphics deprecation warnings (replaced with UIGraphicsImageRenderer)
+- 🔄 Task 3: Phase 2.1 Happy Path Test - IN PROGRESS (app launched, awaiting manual testing completion)
+
+**Tasks Remaining:**
+- Task 3 Steps 3-10 (finish manual functional test)
+- Task 4-14 (Phase 2.2 through Phase 3.4)
+- Task 15 (Final test report)
+
+**Status:** Paused for break. App is running in simulator, ready to resume testing.
+
+**Notes:**
+- Build verified clean (zero deprecation warnings after UIGraphics fix)
+- Simulator errors (FigCapture, LaunchServices) documented as safe to ignore
+- Worker logs monitoring active in background
+
+---

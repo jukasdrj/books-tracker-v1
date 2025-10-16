@@ -57,7 +57,7 @@ public struct ContentView: View {
         // }
         .task {
             // Validate enrichment queue on app startup - remove stale persistent IDs
-            await EnrichmentQueue.shared.validateQueue(in: modelContext)
+            EnrichmentQueue.shared.validateQueue(in: modelContext)
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SwitchToLibraryTab"))) { _ in
             selectedTab = .library

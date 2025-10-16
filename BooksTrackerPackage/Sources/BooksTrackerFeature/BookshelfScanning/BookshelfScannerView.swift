@@ -17,6 +17,7 @@ public struct BookshelfScannerView: View {
     @State private var scanModel = BookshelfScanModel()
     @State private var showingResults = false
     @State private var showCamera = false
+    @State private var photosPickerItem: PhotosPickerItem?
 
     public init() {}
 
@@ -173,6 +174,23 @@ public struct BookshelfScannerView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Tap to capture bookshelf photo")
             .accessibilityHint("Opens camera to scan your bookshelf")
+
+            #if DEBUG
+            PhotosPicker(selection: $photosPickerItem, matching: .images) {
+                Text("Select Test Image")
+            }
+            .onChange(of: photosPickerItem) {
+                Task {
+                    if let data = try? await photosPickerItem?.loadTransferable(type: Data.self),
+                       let image = UIImage(data: data) {
+                        await scanModel.processImage(image)
+                        if scanModel.scanState == .completed {
+                            showingResults = true
+                        }
+                    }
+                }
+            }
+            #endif
         }
     }
 

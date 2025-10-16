@@ -581,7 +581,7 @@ class ScanResultsModel {
 
                 // Start processing immediately in background (no-op progress handler)
                 Task(priority: .utility) {
-                    await EnrichmentQueue.shared.startProcessing(in: modelContext) { _, _, _ in
+                    EnrichmentQueue.shared.startProcessing(in: modelContext) { _, _, _ in
                         // Silent background processing - progress shown via EnrichmentProgressBanner
                     }
                 }
