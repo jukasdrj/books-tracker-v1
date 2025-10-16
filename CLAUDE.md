@@ -1,6 +1,6 @@
 # 📚 BooksTrack by oooe - Claude Code Guide
 
-**Version 3.0.0 (Build 45)** | **iOS 26.0+** | **Swift 6.1+** | **Updated: October 12, 2025**
+**Version 3.0.0 (Build 46+)** | **iOS 26.0+** | **Swift 6.1+** | **Updated: October 16, 2025**
 
 This is a personal book tracking iOS app with cultural diversity insights, built with SwiftUI, SwiftData, and a Cloudflare Workers backend.
 
@@ -1102,7 +1102,7 @@ let diversityStats = library.calculateDiversityMetrics()
 - ✅ CSV Import - 1500+ books in minutes with enrichment
 - ✅ Live Activity - Lock Screen progress (deprecated - see Enrichment Banner)
 
-**Current Focus:** Real device validation, bookshelf scanner beta testing
+**Current Focus:** Bookshelf scanner production deployment (Build 46+), reusable component extraction, API documentation
 
 ## Performance Optimizations
 
