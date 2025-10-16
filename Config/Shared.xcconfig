@@ -38,6 +38,16 @@ INFOPLIST_KEY_NSSupportsLiveActivities = YES
 INFOPLIST_KEY_UIBackgroundModes = remote-notification
 
 // ==========================================
+// Code Quality & Swift 6 Compliance
+// ==========================================
+// Enforce "Zero Warnings" policy
+GCC_TREAT_WARNINGS_AS_ERRORS = YES
+OTHER_SWIFT_FLAGS = $(inherited) -Werror
+
+// Enforce strict Swift 6 concurrency checking
+SWIFT_STRICT_CONCURRENCY = complete
+
+// ==========================================
 // Entitlements
 // ==========================================
 // AI agents can modify Config/BooksTracker.entitlements to add capabilities
