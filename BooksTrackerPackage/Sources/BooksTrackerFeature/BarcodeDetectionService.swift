@@ -80,6 +80,12 @@ final class BarcodeDetectionService {
     /// Start barcode detection stream
     /// Returns an AsyncStream of barcode detections
     func startDetection(cameraManager: CameraManager) -> AsyncStream<BarcodeDetection> {
+        // This AsyncStream uses the "delegate bridging" pattern, which is ideal for
+        // event-driven systems like AVFoundation's camera output. It does not use
+        // a `while !Task.isCancelled` loop because data is pushed from the delegate
+        // callbacks, not pulled via polling.
+        //
+        // See `docs/CONCURRENCY_GUIDE.md` for more details on this pattern.
         AsyncStream<BarcodeDetection> { continuation in
             self.detectionContinuation = continuation
 
