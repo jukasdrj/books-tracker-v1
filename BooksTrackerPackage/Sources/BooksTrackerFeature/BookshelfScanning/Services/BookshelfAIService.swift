@@ -1,5 +1,7 @@
 import Foundation
+#if canImport(UIKit)
 import UIKit
+#endif
 
 // MARK: - AI Service Errors
 
@@ -159,7 +161,7 @@ actor BookshelfAIService {
                 return .inProgress(progress: progress, metadata: status.stage)
             },
             progressHandler: { progress, stage in
-                await progressHandler(progress, stage)
+                progressHandler(progress, stage)
             },
             interval: .seconds(2),
             timeout: .seconds(90)

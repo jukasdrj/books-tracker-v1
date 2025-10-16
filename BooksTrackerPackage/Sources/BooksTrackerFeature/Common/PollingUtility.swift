@@ -28,9 +28,9 @@ enum Utility {
     ///     Defaults to 90 seconds.
     /// - Returns: The success value from the `.complete` status.
     /// - Throws: A `TimeoutError` if the timeout is reached, or any error from the `.error` status.
-    nonisolated static func pollForCompletion<Success, Metadata>(
-        check: @escaping () async throws -> PollStatus<Success, Metadata>,
-        progressHandler: @MainActor @escaping (Double, Metadata) -> Void,
+    nonisolated static func pollForCompletion<Success: Sendable, Metadata: Sendable>(
+        check: @escaping @Sendable () async throws -> PollStatus<Success, Metadata>,
+        progressHandler: @MainActor @escaping @Sendable (Double, Metadata) -> Void,
         interval: Duration = .milliseconds(100),
         timeout: Duration = .seconds(90)
     ) async throws -> Success {
@@ -38,33 +38,32 @@ enum Utility {
         let timeoutSeconds = timeout.inSeconds
 
         return try await withTaskCancellationHandler {
-            try await Task<Success, Error> {
-                while !Task.isCancelled {
-                    let elapsed = Date().timeIntervalSince(startTime)
+            // Execute directly in current task context (not detached)
+            while !Task.isCancelled {
+                let elapsed = Date().timeIntervalSince(startTime)
 
-                    // Check for timeout
-                    if elapsed > timeoutSeconds {
-                        throw TimeoutError()
-                    }
-
-                    // Perform the check
-                    switch try await check() {
-                    case .inProgress(let progress, let metadata):
-                        await MainActor.run {
-                            progressHandler(progress, metadata)
-                        }
-                    case .complete(let result):
-                        return result
-                    case .error(let error):
-                        throw error
-                    }
-
-                    // Wait for the next interval
-                    try await Task.sleep(for: interval)
+                // Check for timeout
+                if elapsed > timeoutSeconds {
+                    throw TimeoutError()
                 }
 
-                throw CancellationError()
-            }.value
+                // Perform the check
+                switch try await check() {
+                case .inProgress(let progress, let metadata):
+                    await MainActor.run {
+                        progressHandler(progress, metadata)
+                    }
+                case .complete(let result):
+                    return result
+                case .error(let error):
+                    throw error
+                }
+
+                // Wait for the next interval
+                try await Task.sleep(for: interval)
+            }
+
+            throw CancellationError()
         } onCancel: {
             // The task will check isCancelled and exit cleanly.
         }

@@ -1,7 +1,9 @@
 @preconcurrency import AVFoundation
 import Vision
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 /// Actor-based camera session manager for barcode scanning
 /// Provides Swift 6 compliant concurrency and session lifecycle management
