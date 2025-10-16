@@ -1,6 +1,8 @@
 import SwiftUI
 @preconcurrency import AVFoundation
+#if canImport(UIKit)
 import UIKit
+#endif
 
 /// Modern SwiftUI camera preview component with proper error handling
 /// Designed for Swift 6 concurrency and clean separation of concerns

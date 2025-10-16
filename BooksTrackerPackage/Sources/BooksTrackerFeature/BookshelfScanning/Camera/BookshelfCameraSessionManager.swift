@@ -1,5 +1,7 @@
 @preconcurrency import AVFoundation
+#if canImport(UIKit)
 import UIKit
+#endif
 
 // MARK: - Camera Errors
 
