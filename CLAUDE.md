@@ -696,6 +696,43 @@ Button("Import CSV Library") { showingCSVImport = true }
 
 **Architecture:** CSV → `CSVParsingActor` (@globalActor) → `CSVImportService` → SwiftData → `EnrichmentQueue` (@MainActor) → `EnrichmentService` → Cloudflare Worker
 
+**🎯 Title Normalization for Better Enrichment (October 2025):**
+
+**Problem:** CSV exports (especially from Goodreads) contain titles with series markers like `(Series, #1)`, subtitles after colons, and edition details that cause zero-result API searches. This reduced enrichment success to ~70%.
+
+**Solution:** Two-tier title storage pattern:
+1. **Original Title** (`work.title`): Stored in SwiftData for display and user library
+2. **Normalized Title** (`title.normalizedTitleForSearch`): Used for API searches only
+
+**Implementation:**
+- **String Extension** (`String+TitleNormalization.swift`): 5-step normalization
+  1. Remove series markers: `(Harry Potter, #1)` → removed
+  2. Remove edition markers: `[Special Edition]` → removed
+  3. Strip subtitles: `Title: Subtitle` → `Title` (for titles > 10 chars)
+  4. Clean abbreviations: `Dept.` → `Dept`
+  5. Normalize whitespace: multiple spaces → single space
+
+- **CSVParsingActor**: Populates both `title` and `normalizedTitle` fields in `ParsedRow`
+- **CSVImportService**: Stores original title in Work objects
+- **EnrichmentService**:
+  - `enrichWork()`: Uses normalized title for API searches
+  - `findBestMatch()`: Prioritizes normalized title matching (100/50 points) with raw title fallback (30/15 points)
+
+**Examples:**
+```
+"Harry Potter and the Sorcerer's Stone (Harry Potter, #1)"
+  → Stored: "Harry Potter and the Sorcerer's Stone (Harry Potter, #1)"
+  → Searched: "Harry Potter and the Sorcerer's Stone"
+
+"The da Vinci Code: The Young Adult Adaptation"
+  → Stored: "The da Vinci Code: The Young Adult Adaptation"
+  → Searched: "The da Vinci Code"
+```
+
+**Key Files:** `String+TitleNormalization.swift`, `StringTitleNormalizationTests.swift` (13 test cases), `CSVParsingActor.swift` (lines 49-51, 286-294), `EnrichmentService.swift` (lines 35-77, 138-167)
+
+**Expected Impact:** Enrichment success rate 70% → 90%+
+
 **🆕 SyncCoordinator Pattern (Build 46+):**
 - Centralized job orchestration for multi-step background operations
 - Type-safe progress tracking with `JobModels` (JobIdentifier, JobStatus, JobProgress)
