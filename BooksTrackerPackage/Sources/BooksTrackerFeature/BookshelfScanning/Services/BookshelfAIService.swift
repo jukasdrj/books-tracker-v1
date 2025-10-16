@@ -122,15 +122,15 @@ actor BookshelfAIService {
         return (detectedBooks, suggestions)
     }
 
-    // MARK: - Progress Tracking (Using PollingProgressTracker)
+    // MARK: - Progress Tracking
 
-    /// Process bookshelf image with progress tracking using PollingProgressTracker
+    /// Process bookshelf image with progress tracking.
     /// - Parameter image: UIImage to process
+    /// - Parameter progressHandler: A closure to handle progress updates.
     /// - Returns: Tuple of detected books and suggestions
-    @MainActor
     func processBookshelfImageWithProgress(
         _ image: UIImage,
-        tracker: PollingProgressTracker<BookshelfScanJob>
+        progressHandler: @MainActor @escaping (Double, String) -> Void
     ) async throws -> ([DetectedBook], [SuggestionViewModel]) {
         // Step 1: Compress image to acceptable size
         guard let imageData = compressImage(image, maxSizeBytes: maxImageSize) else {
@@ -139,19 +139,30 @@ actor BookshelfAIService {
 
         // Step 2: Start async scan job
         let jobResponse = try await startScanJob(imageData)
+        let stages = jobResponse.stages
 
-        // Step 3: Create pollable job and track with PollingProgressTracker
-        let job = BookshelfScanJob(
-            jobId: jobResponse.jobId,
-            stages: jobResponse.stages,
-            service: self
-        )
+        // Step 3: Poll for completion using the enhanced generic utility
+        let response = try await Utility.pollForCompletion(
+            check: {
+                let status = try await self.pollJobStatus(jobId: jobResponse.jobId)
 
-        // Use adaptive polling strategy for battery optimization
-        let response = try await tracker.start(
-            job: job,
-            strategy: AdaptivePollingStrategy(initialInterval: 0.5, maxInterval: 2.0),
-            timeout: 90
+                if status.stage == "complete", let result = status.result {
+                    return .complete(result)
+                }
+
+                if status.stage == "error" {
+                    let error = BookshelfAIError.serverError(500, status.error ?? "Unknown error during scan")
+                    return .error(error)
+                }
+
+                let progress = self.calculateExpectedProgress(elapsed: status.elapsedTime, stages: stages)
+                return .inProgress(progress: progress, metadata: status.stage)
+            },
+            progressHandler: { progress, stage in
+                await progressHandler(progress, stage)
+            },
+            interval: .seconds(2),
+            timeout: .seconds(90)
         )
 
         // Step 4: Convert to detected books and suggestions
@@ -162,57 +173,6 @@ actor BookshelfAIService {
         let suggestions = SuggestionGenerator.generateSuggestions(from: response)
 
         return (detectedBooks, suggestions)
-    }
-
-    // MARK: - PollableJob Implementation
-
-    /// Concrete PollableJob for bookshelf scanning
-    struct BookshelfScanJob: PollableJob {
-        typealias Success = BookshelfAIResponse
-        typealias Metadata = BookshelfScanMetadata
-
-        let jobId: String
-        let stages: [ScanJobResponse.StageMetadata]
-        let service: BookshelfAIService
-
-        func poll() async throws -> PollStatus<BookshelfAIResponse, BookshelfScanMetadata> {
-            let status = try await service.pollJobStatus(jobId: jobId)
-
-            // Check for completion
-            if status.stage == "complete", let result = status.result {
-                return .complete(result)
-            }
-
-            // Check for error
-            if status.stage == "error" {
-                throw BookshelfAIError.serverError(
-                    500,
-                    status.error ?? "Unknown error during scan"
-                )
-            }
-
-            // Calculate expected progress based on stages
-            let expectedProgress = service.calculateExpectedProgress(
-                elapsed: status.elapsedTime,
-                stages: stages
-            )
-
-            let metadata = BookshelfScanMetadata(
-                booksDetected: status.booksDetected,
-                serverElapsedTime: status.elapsedTime
-            )
-
-            return .inProgress(
-                stage: status.stage,
-                progress: expectedProgress,
-                metadata: metadata
-            )
-        }
-
-        func cancel() async {
-            // Could notify server to cancel job (not implemented in backend yet)
-            print("Bookshelf scan job \(jobId) cancelled")
-        }
     }
 
     // MARK: - Private Methods
@@ -352,95 +312,6 @@ actor BookshelfAIService {
         return try JSONDecoder().decode(ScanJobResponse.self, from: data)
     }
 
-    nonisolated private func animateProgressWithPolling(
-        jobId: String,
-        stages: [ScanJobResponse.StageMetadata],
-        progressHandler: @MainActor @escaping @Sendable (Double, String, Int, Int) -> Void
-    ) async throws -> BookshelfAIResponse {
-
-        let startTime = Date()
-        let maxWaitTime: TimeInterval = 90
-
-        // Swift 6.2 Pattern: Use Task with Task.sleep instead of TaskGroup with Timer.publish
-        // This avoids the @MainActor [self] capture list bug in TaskGroup
-        return try await withTaskCancellationHandler {
-            try await Task<BookshelfAIResponse, Error> {
-                var currentStageIndex = 0
-                var lastPollTime: TimeInterval = 0
-                var booksDetected = 0
-
-                while !Task.isCancelled {
-                    let elapsed = Date().timeIntervalSince(startTime)
-
-                    // Calculate expected progress (nonisolated method, safe to call)
-                    let expectedProgress = calculateExpectedProgress(
-                        elapsed: Int(elapsed),
-                        stages: stages,
-                        currentStageIndex: &currentStageIndex
-                    )
-
-                    // Update UI on MainActor with computed values
-                    await progressHandler(
-                        expectedProgress,
-                        stages[currentStageIndex].name,
-                        Int(elapsed),
-                        booksDetected
-                    )
-
-                    // Strategic polling at transitions
-                    if shouldPollNow(elapsed: Int(elapsed), lastPoll: Int(lastPollTime)) {
-                        lastPollTime = elapsed
-
-                        // Poll job status (actor method, safe to await)
-                        do {
-                            let status = try await pollJobStatus(jobId: jobId)
-
-                            // Update books detected count
-                            booksDetected = status.booksDetected
-
-                            // Update UI with server data
-                            await progressHandler(
-                                expectedProgress,
-                                status.stage,
-                                status.elapsedTime,
-                                status.booksDetected
-                            )
-
-                            // Adjust stage if backend ahead/behind
-                            if let stageIndex = stages.firstIndex(where: { $0.name == status.stage }) {
-                                currentStageIndex = stageIndex
-                            }
-
-                            // Check completion
-                            if status.stage == "complete", let result = status.result {
-                                return result
-                            }
-
-                            // Check error
-                            if status.stage == "error" {
-                                throw BookshelfAIError.serverError(500, status.error ?? "Unknown error")
-                            }
-                        } catch {
-                            // Continue polling on transient errors
-                        }
-                    }
-
-                    // Timeout check
-                    if elapsed > maxWaitTime {
-                        throw BookshelfAIError.serverError(408, "Processing timeout exceeded")
-                    }
-
-                    // Wait 100ms before next iteration (replaces Timer.publish)
-                    try await Task.sleep(for: .milliseconds(100))
-                }
-
-                throw CancellationError()
-            }.value
-        } onCancel: {
-            // Task will check isCancelled and exit cleanly
-        }
-    }
-
     /// Calculate expected progress based on elapsed time and stages
     nonisolated func calculateExpectedProgress(
         elapsed: Int,
@@ -463,44 +334,6 @@ actor BookshelfAIService {
         }
 
         return stages.last?.progress ?? 1.0
-    }
-
-    // Legacy version with inout for old animateProgressWithPolling
-    nonisolated private func calculateExpectedProgress(
-        elapsed: Int,
-        stages: [ScanJobResponse.StageMetadata],
-        currentStageIndex: inout Int
-    ) -> Double {
-        var cumulativeTime = 0
-
-        for (index, stage) in stages.enumerated() {
-            cumulativeTime += stage.typicalDuration
-
-            if elapsed < cumulativeTime {
-                currentStageIndex = index
-                let stageElapsed = elapsed - (cumulativeTime - stage.typicalDuration)
-                let stageProgress = Double(stageElapsed) / Double(stage.typicalDuration)
-
-                let previousProgress = index > 0 ? stages[index - 1].progress : 0.0
-                let currentStageRange = stage.progress - previousProgress
-
-                return min(1.0, previousProgress + (stageProgress * currentStageRange))
-            }
-        }
-
-        return stages.last?.progress ?? 1.0
-    }
-
-    nonisolated private func shouldPollNow(elapsed: Int, lastPoll: Int) -> Bool {
-        // Poll at: 5s (after upload), 40s (after analysis), 50s (final)
-        let pollTimes = [5, 40, 50]
-
-        for pollTime in pollTimes {
-            if elapsed >= pollTime && lastPoll < pollTime {
-                return true
-            }
-        }
-        return false
     }
 
     /// Poll job status from server (used by BookshelfScanJob)
