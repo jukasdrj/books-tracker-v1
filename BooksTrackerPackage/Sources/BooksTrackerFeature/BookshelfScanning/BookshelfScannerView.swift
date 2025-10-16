@@ -17,7 +17,6 @@ public struct BookshelfScannerView: View {
     @State private var scanModel = BookshelfScanModel()
     @State private var showingResults = false
     @State private var showCamera = false
-    @State private var showProgressSheet = false
     @State private var photosPickerItem: PhotosPickerItem?
 
     public init() {}
@@ -81,27 +80,13 @@ public struct BookshelfScannerView: View {
             }
             .fullScreenCover(isPresented: $showCamera) {
                 BookshelfCameraView { capturedImage in
-                    showProgressSheet = true
                     Task {
                         await scanModel.processImage(capturedImage)
-                        showProgressSheet = false
                         if scanModel.scanState == .completed {
                             showingResults = true
                         }
                     }
                 }
-            }
-            .sheet(isPresented: $showProgressSheet) {
-                VStack(spacing: 20) {
-                    Text(scanModel.progressStage)
-                        .font(.headline)
-                    ProgressView(value: scanModel.progressValue)
-                        .progressViewStyle(.linear)
-                    Text("\(Int(scanModel.progressValue * 100))%")
-                        .font(.caption)
-                }
-                .padding(40)
-                .presentationDetents([.height(150)])
             }
             .alert("Scan Failed", isPresented: .constant(scanModel.isError), presenting: scanModel.errorMessage) { _ in
                 Button("OK", role: .cancel) {
@@ -351,8 +336,6 @@ class BookshelfScanModel {
     var confirmedCount: Int = 0
     var uncertainCount: Int = 0
     var scanResult: ScanResult?
-    var progressValue: Double = 0.0
-    var progressStage: String = "Starting..."
 
     enum ScanState: Equatable {
         case idle
@@ -383,10 +366,7 @@ class BookshelfScanModel {
 
         do {
             // Call BookshelfAIService with progress tracking
-            let (detectedBooks, suggestions) = try await BookshelfAIService.shared.processBookshelfImageWithProgress(image) { progress, stage in
-                self.progressValue = progress
-                self.progressStage = stage.capitalized
-            }
+            let (detectedBooks, suggestions) = try await BookshelfAIService.shared.processBookshelfImage(image)
 
             // Calculate statistics
             detectedCount = detectedBooks.count
