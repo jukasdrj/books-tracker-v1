@@ -111,6 +111,26 @@ public struct SettingsView: View {
                     }
                 }
 
+                Button {
+                    enrichAllBooks()
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "sparkles")
+                            .foregroundStyle(themeStore.primaryColor)
+                            .frame(width: 28)
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Enrich Library Metadata")
+                                .font(.body)
+
+                            Text("Update covers, ISBNs, and details for all books")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .disabled(EnrichmentQueue.shared.isProcessing())
+
                 Button(role: .destructive) {
                     showingResetConfirmation = true
                 } label: {
@@ -125,7 +145,7 @@ public struct SettingsView: View {
             } header: {
                 Text("Library Management")
             } footer: {
-                Text("Import books from CSV or reset your entire library. Resetting is permanent and cannot be undone.")
+                Text("Import books from CSV, enrich metadata, or reset your entire library. Resetting is permanent and cannot be undone.")
             }
 
             // MARK: - Experimental Features Section
@@ -365,6 +385,47 @@ public struct SettingsView: View {
                 cloudKitStatus = .available
             } catch {
                 cloudKitStatus = .unavailable
+            }
+        }
+    }
+
+    private func enrichAllBooks() {
+        Task {
+            // Fetch all works in the library
+            let fetchDescriptor = FetchDescriptor<Work>()
+
+            do {
+                let allWorks = try modelContext.fetch(fetchDescriptor)
+
+                guard !allWorks.isEmpty else {
+                    print("📚 No books in library to enrich")
+                    return
+                }
+
+                print("📚 Queueing \(allWorks.count) books for enrichment")
+
+                // Queue all works for enrichment
+                let workIDs = allWorks.map { $0.persistentModelID }
+                EnrichmentQueue.shared.enqueueBatch(workIDs)
+
+                // Start processing with progress handler
+                EnrichmentQueue.shared.startProcessing(in: modelContext) { completed, total, currentTitle in
+                    // Progress is automatically shown via EnrichmentBanner in ContentView
+                    print("📊 Progress: \(completed)/\(total) - \(currentTitle)")
+                }
+
+                // Haptic feedback
+                let generator = UINotificationFeedbackGenerator()
+                generator.notificationOccurred(.success)
+
+                print("✅ Enrichment started for \(allWorks.count) books")
+
+            } catch {
+                print("❌ Failed to fetch works for enrichment: \(error)")
+
+                // Error haptic
+                let generator = UINotificationFeedbackGenerator()
+                generator.notificationOccurred(.error)
             }
         }
     }
