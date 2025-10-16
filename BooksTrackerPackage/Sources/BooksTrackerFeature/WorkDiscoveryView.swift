@@ -404,11 +404,11 @@ public struct WorkDiscoveryView: View {
             // Trigger auto-enrichment for manually added books
             let workID = work.persistentModelID
             Task { @MainActor in
-                await EnrichmentQueue.shared.enqueue(workID: workID, priority: 100)
+                EnrichmentQueue.shared.enqueue(workID: workID, priority: 100)
 
-                let isCurrentlyProcessing = await EnrichmentQueue.shared.isProcessing()
+                let isCurrentlyProcessing = EnrichmentQueue.shared.isProcessing()
                 if !isCurrentlyProcessing {
-                    await EnrichmentQueue.shared.startProcessing(in: modelContext) { completed, total, currentTitle in
+                    EnrichmentQueue.shared.startProcessing(in: modelContext) { completed, total, currentTitle in
                         print("📚 Enrichment Progress: \(completed)/\(total) - \(currentTitle)")
                     }
                 }

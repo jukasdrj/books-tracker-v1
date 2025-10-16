@@ -221,12 +221,13 @@ actor BookshelfAIService {
         if image.size.width > targetWidth {
             let scale = targetWidth / image.size.width
             let targetHeight = image.size.height * scale
-            let targetSize = CGSize(width: targetWidth, height: targetHeight)
+            let targetSize = CGSize(width: max(1, targetWidth), height: max(1, targetHeight))
 
-            UIGraphicsBeginImageContextWithOptions(targetSize, false, 1.0)
-            image.draw(in: CGRect(origin: .zero, size: targetSize))
-            resizedImage = UIGraphicsGetImageFromCurrentImageContext() ?? image
-            UIGraphicsEndImageContext()
+            // Use UIGraphicsImageRenderer instead of deprecated UIGraphicsBeginImageContext
+            let renderer = UIGraphicsImageRenderer(size: targetSize)
+            resizedImage = renderer.image { _ in
+                image.draw(in: CGRect(origin: .zero, size: targetSize))
+            }
         } else {
             resizedImage = image
         }
@@ -299,7 +300,7 @@ actor BookshelfAIService {
         request.httpMethod = "POST"
         request.setValue("image/jpeg", forHTTPHeaderField: "Content-Type")
         request.httpBody = imageData
-        request.timeoutInterval = 5.0 // Quick response expected
+        request.timeoutInterval = timeout // Use same timeout as uploadImage (70s for AI + enrichment)
 
         let (data, response) = try await URLSession.shared.data(for: request)
 

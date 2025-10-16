@@ -221,6 +221,13 @@ return AsyncStream { continuation in
 }
 ```
 
+**🚨 BAN `Timer.publish` in Actors (Swift 6.2+):**
+
+- **Rule:** Never use `Timer.publish` for polling or delays inside an `actor`.
+- **Reason:** `Timer.publish` is a Combine framework feature that does not integrate well with Swift 6's strict actor isolation, leading to compiler errors and unpredictable behavior. It is not `Sendable` and can cause data races.
+- **Solution:** Always use `await Task.sleep(for:)` for delays and polling loops within any actor. This is the modern, concurrency-safe approach.
+- **For SwiftUI Views:** `Timer.publish` may still be used in `@MainActor`-isolated views if absolutely necessary, but `Task.sleep` is still preferred.
+
 **🎯 POLLING PATTERN (Swift 6.2 - Oct 2025):**
 
 ```
@@ -347,6 +354,13 @@ let result = try await tracker.start(
     #expect(entry.readingStatus == .wishlist)
 }
 ```
+
+**Pull Request Checklist:**
+- [ ] **Swift 6 Concurrency:** All new `actor` and `@MainActor` code adheres to isolation rules.
+- [ ] **No `Timer.publish` in actors:** `Task.sleep` is used for all polling and delays in actor contexts.
+- [ ] **SwiftData Reactivity:** `@Bindable` is used for all SwiftData models passed to child views.
+- [ ] **WCAG AA Compliance:** All new UI components have a contrast ratio of 4.5:1 or higher.
+- [ ] **Real Device Testing:** All UI changes have been tested on a physical device.
 
 ## Common Tasks
 

@@ -527,7 +527,7 @@ extension CameraManager {
 
 // MARK: - Photo Capture Delegate
 
-private class PhotoCaptureDelegate: NSObject, AVCapturePhotoCaptureDelegate {
+private final class PhotoCaptureDelegate: NSObject, AVCapturePhotoCaptureDelegate, @unchecked Sendable {
     private var continuation: CheckedContinuation<Data, Error>?
 
     init(continuation: CheckedContinuation<Data, Error>) {

@@ -544,7 +544,7 @@ public class CSVImportService: ObservableObject {
         // Capture modelContext explicitly for Swift 6 concurrency
         let context = self.modelContext
         Task(priority: .utility) {
-            await EnrichmentQueue.shared.startProcessing(in: context) { processed, total, currentTitle in
+            EnrichmentQueue.shared.startProcessing(in: context) { processed, total, currentTitle in
                 // Console logging
                 print("📖 Enrichment progress: \(processed)/\(total)")
 
