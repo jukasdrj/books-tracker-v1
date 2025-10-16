@@ -1010,6 +1010,8 @@ Text("Page Count")
 ├── 📄 CHANGELOG.md                   ← Version history & releases
 ├── 📄 FUTURE_ROADMAP.md             ← Aspirational features
 ├── 📁 docs/
+│   ├── 📄 API.md                     ← Comprehensive API contract & RPC docs
+│   ├── 📄 CLOUDFLARE_DEBUGGING.md   ← Worker debugging & monitoring guide
 │   ├── 📄 CONCURRENCY_GUIDE.md      ← Swift 6 concurrency patterns
 │   ├── 📄 SWIFT6_COMPILER_BUG.md    ← Compiler bug debugging saga (Oct 2025)
 │   ├── 📄 GITHUB_WORKFLOW.md        ← GitHub Issues workflow
@@ -1042,6 +1044,8 @@ Text("Page Count")
 - CLAUDE.md: Current development standards and patterns (keep under 1200 lines)
 - CHANGELOG.md: Historical achievements and version notes
 - FUTURE_ROADMAP.md: Clearly marked as aspirational
+- docs/API.md: Comprehensive API contracts and RPC bindings
+- docs/CLOUDFLARE_DEBUGGING.md: Operational debugging guide
 - docs/archive/: Completed plans and historical references
 - GitHub Issues: Active tasks and implementation plans
 
