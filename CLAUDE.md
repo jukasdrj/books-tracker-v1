@@ -1,6 +1,6 @@
 # 📚 BooksTrack by oooe - Claude Code Guide
 
-**Version 3.0.0 (Build 46+)** | **iOS 26.0+** | **Swift 6.1+** | **Updated: October 16, 2025**
+**Version 3.0.0 (Build 47+)** | **iOS 26.0+** | **Swift 6.1+** | **Updated: October 17, 2025**
 
 This is a personal book tracking iOS app with cultural diversity insights, built with SwiftUI, SwiftData, and a Cloudflare Workers backend.
 
@@ -416,7 +416,7 @@ ToolbarItem(placement: .topBarTrailing) {
 
 ### Bookshelf AI Camera Scanner
 
-**Status:** ✅ SHIPPING (Build 46+)
+**Status:** ✅ SHIPPING (Build 47+ with WebSocket Real-Time Progress)
 
 **Quick Start:**
 ```swift
@@ -429,10 +429,19 @@ Button("Scan Bookshelf (Beta)") { showingBookshelfScanner = true }
 
 **Key Features:**
 - Gemini 2.5 Flash AI vision analysis (25-40s)
+- **WebSocket real-time progress tracking** (8ms latency, 250x faster than polling!)
 - Backend enrichment integration (89.7% success rate, 5-10s)
 - Suggestions banner (9 types: blurry, glare, cutoff, etc.)
 - Background metadata enrichment via `EnrichmentQueue.shared`
 - Swift 6.1 compliant with @BookshelfCameraActor global actor
+
+**Progress Tracking (Build 47+):**
+- 4 real-time progress stages via WebSocket
+- "Analyzing image quality..." → 10%
+- "Processing with Gemini AI..." → 30%
+- "Enriching N books..." → 70%
+- "Complete!" → 100%
+- 95% fewer network requests vs polling (22+ polls → 4 events)
 
 **Architecture Highlights:**
 - **Global Actor Pattern:** `@BookshelfCameraActor` for cross-isolation access
