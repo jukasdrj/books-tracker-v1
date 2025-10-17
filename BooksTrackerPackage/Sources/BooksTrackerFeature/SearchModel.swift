@@ -666,28 +666,42 @@ public actor BookSearchAPIService {
 
     /// Advanced search with multiple criteria (author, title, ISBN)
     /// Backend performs filtering to return clean results
+    /// Optimization: When only author is provided, uses dedicated /search/author endpoint
     func advancedSearch(
         author: String?,
         title: String?,
         isbn: String?
     ) async throws -> SearchResponse {
-        // Build query parameters
-        var urlComponents = URLComponents(string: "\(baseURL)/search/advanced")!
+        // Detect author-only search for optimization
+        let isAuthorOnlySearch = !(author?.isEmpty ?? true) && (title?.isEmpty ?? true) && (isbn?.isEmpty ?? true)
+
+        var urlComponents: URLComponents
         var queryItems: [URLQueryItem] = []
-        
-        if let author = author, !author.isEmpty {
-            queryItems.append(URLQueryItem(name: "author", value: author))
+
+        if isAuthorOnlySearch, let authorName = author {
+            // Use dedicated author endpoint (better caching, optimized for author bibliography)
+            urlComponents = URLComponents(string: "\(baseURL)/search/author")!
+            queryItems.append(URLQueryItem(name: "q", value: authorName))
+            queryItems.append(URLQueryItem(name: "maxResults", value: "20"))
+        } else {
+            // Use advanced search endpoint for multi-criteria queries
+            urlComponents = URLComponents(string: "\(baseURL)/search/advanced")!
+
+            if let author = author, !author.isEmpty {
+                queryItems.append(URLQueryItem(name: "author", value: author))
+            }
+            if let title = title, !title.isEmpty {
+                queryItems.append(URLQueryItem(name: "title", value: title))
+            }
+            if let isbn = isbn, !isbn.isEmpty {
+                queryItems.append(URLQueryItem(name: "isbn", value: isbn))
+            }
+
+            queryItems.append(URLQueryItem(name: "maxResults", value: "20"))
         }
-        if let title = title, !title.isEmpty {
-            queryItems.append(URLQueryItem(name: "title", value: title))
-        }
-        if let isbn = isbn, !isbn.isEmpty {
-            queryItems.append(URLQueryItem(name: "isbn", value: isbn))
-        }
-        
-        queryItems.append(URLQueryItem(name: "maxResults", value: "20"))
+
         urlComponents.queryItems = queryItems
-        
+
         guard let url = urlComponents.url else {
             throw SearchError.invalidURL
         }

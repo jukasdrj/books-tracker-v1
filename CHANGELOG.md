@@ -4,6 +4,92 @@ All notable changes, achievements, and debugging victories for this project.
 
 ---
 
+## [Build 50] - October 17, 2025 🔍✨
+
+### **Author Search Optimization + UI Fixes**
+
+**"Fixing author search from metadata view + enhancing enrichment banner visibility"** 🎯🎨
+
+#### Author Search Endpoint Optimization
+
+**Issue #107:** Author search magnifying glass in metadata view wasn't working optimally.
+
+**Root Cause:** When clicking author name in `WorkDetailView`, the app called `advancedSearch()` with only author parameter, which routed to `/search/advanced?author=X`. This works, but misses the benefits of the dedicated author endpoint.
+
+**Solution:** Smart endpoint routing in `SearchModel.swift`:
+
+```swift
+// Detect author-only search
+let isAuthorOnlySearch = !(author?.isEmpty ?? true) &&
+                         (title?.isEmpty ?? true) &&
+                         (isbn?.isEmpty ?? true)
+
+if isAuthorOnlySearch, let authorName = author {
+    // Use dedicated author endpoint
+    urlComponents = URLComponents(string: "\(baseURL)/search/author")!
+    queryItems.append(URLQueryItem(name: "q", value: authorName))
+} else {
+    // Use advanced search for multi-criteria
+    urlComponents = URLComponents(string: "\(baseURL)/search/advanced")!
+    // ... multi-field query params
+}
+```
+
+**Benefits:**
+- **Better Caching:** `/search/author` has pre-warmed cache for popular authors
+- **Optimized Results:** Dedicated endpoint returns author bibliography
+- **Backward Compatible:** Multi-criteria searches still use `/search/advanced`
+
+**User Flow Now Working:**
+1. User views book metadata (`WorkDetailView`)
+2. Clicks author name with magnifying glass icon
+3. `AuthorSearchResultsView` opens
+4. Calls `advancedSearch(author: "Author Name", title: nil, isbn: nil)`
+5. **NEW:** Routes to `/search/author?q=Author+Name` (previously `/search/advanced?author=...`)
+6. Results display in enhanced format (`enhanced_work_edition_v1`)
+
+**Files Changed:**
+- `SearchModel.swift`: Added author-only detection in `advancedSearch()` (lines 675-701)
+
+**API Compatibility Verified:**
+- Both `/search/author` and `/search/advanced` return `enhanced_work_edition_v1` format
+- Existing UI code handles both endpoints identically
+- No UI changes required!
+
+#### Enrichment Banner Visibility Fix
+
+**Issue:** Enrichment progress banner was illegible - transparent text floating over content.
+
+**Root Cause:** `GlassEffectContainer` used `.ultraThinMaterial` at 10% opacity = invisible background.
+
+**Solution:**
+- Moved `EnrichmentBanner` to `BackgroundImportBanner.swift`
+- Replaced invisible background with `.regularMaterial` for proper frosted glass effect
+- Updated `ContentView` overlay with proper hit-testing to prevent touch blocking
+
+```swift
+// Before: Invisible background
+.background {
+    GlassEffectContainer {
+        Rectangle().fill(.clear)
+    }
+}
+
+// After: Visible frosted glass
+.background {
+    RoundedRectangle(cornerRadius: 12)
+        .fill(.regularMaterial)
+}
+```
+
+**Files Changed:**
+- `CSVImport/BackgroundImportBanner.swift`: Enhanced `EnrichmentBanner` (lines 377-472)
+- `ContentView.swift`: Fixed overlay hit-testing, removed old banner definition
+
+**Result:** Banner now has proper contrast and doesn't block library scrolling. ✅
+
+---
+
 ## [Build 49] - October 17, 2025 🐛🔧
 
 ### **🚨 CRITICAL BUG FIXES: CSV Enrichment 100% Failure → 90%+ Success**
