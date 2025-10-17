@@ -67,6 +67,12 @@ binding = "EXTERNAL_APIS_WORKER"
 service = "external-apis-worker"
 entrypoint = "ExternalAPIsWorker"
 
+# Durable Object binding for WebSocket progress tracking
+[[durable_objects.bindings]]
+name = "PROGRESS_WEBSOCKET_DO"
+class_name = "ProgressWebSocketDO"
+script_name = "progress-websocket-durable-object"
+
 # KV Cache for API responses - primary cache layer
 [[kv_namespaces]]
 binding = "CACHE"

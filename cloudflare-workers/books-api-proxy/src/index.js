@@ -56,6 +56,59 @@ export class BooksAPIProxyWorker extends WorkerEntrypoint {
   }
 
   /**
+   * RPC Method: Push progress update for a job
+   * Called by enrichment/import workers
+   * @param {string} jobId - Job identifier
+   * @param {Object} progressData - Progress update data
+   * @returns {Promise<Object>} Success status
+   */
+  async pushJobProgress(jobId, progressData) {
+    const doId = this.env.PROGRESS_WEBSOCKET_DO.idFromName(jobId);
+    const stub = this.env.PROGRESS_WEBSOCKET_DO.get(doId);
+    return await stub.pushProgress(progressData);
+  }
+
+  /**
+   * RPC Method: Close WebSocket connection for a job
+   * @param {string} jobId - Job identifier
+   * @param {string} reason - Closure reason
+   * @returns {Promise<Object>} Success status
+   */
+  async closeJobConnection(jobId, reason) {
+    const doId = this.env.PROGRESS_WEBSOCKET_DO.idFromName(jobId);
+    const stub = this.env.PROGRESS_WEBSOCKET_DO.get(doId);
+    return await stub.closeConnection(reason);
+  }
+
+  /**
+   * Handle WebSocket upgrade request
+   * Delegates to Durable Object for connection management
+   * @param {Request} request - WebSocket upgrade request
+   * @returns {Promise<Response>} WebSocket response or error
+   */
+  async handleWebSocketUpgrade(request) {
+    const url = new URL(request.url);
+    const jobId = url.searchParams.get('jobId');
+
+    if (!jobId) {
+      return new Response('Missing jobId parameter', {
+        status: 400,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Content-Type': 'text/plain'
+        }
+      });
+    }
+
+    // Get Durable Object stub for this jobId
+    const doId = this.env.PROGRESS_WEBSOCKET_DO.idFromName(jobId);
+    const stub = this.env.PROGRESS_WEBSOCKET_DO.get(doId);
+
+    // Forward upgrade request to Durable Object
+    return await stub.fetch(request);
+  }
+
+  /**
    * HTTP fetch handler (for external requests)
    */
   async fetch(request) {
@@ -78,6 +131,11 @@ export class BooksAPIProxyWorker extends WorkerEntrypoint {
     };
 
     try {
+      // WebSocket progress endpoint
+      if (path === '/ws/progress') {
+        return this.handleWebSocketUpgrade(request);
+      }
+
       // Bookshelf image scanning endpoint (from ship branch)
       if (path.startsWith('/api/scan-bookshelf')) {
         if (request.method !== 'POST') {
