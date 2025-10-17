@@ -67,6 +67,11 @@ binding = "EXTERNAL_APIS_WORKER"
 service = "external-apis-worker"
 entrypoint = "ExternalAPIsWorker"
 
+[[services]]
+binding = "ENRICHMENT_WORKER"
+service = "enrichment-worker"
+entrypoint = "EnrichmentWorker"
+
 # Durable Object binding for WebSocket progress tracking
 [[durable_objects.bindings]]
 name = "PROGRESS_WEBSOCKET_DO"
