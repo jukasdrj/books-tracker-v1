@@ -1,6 +1,7 @@
 import Foundation
 
 /// A generic polling status.
+@available(*, deprecated, message: "Use WebSocket-based progress tracking instead. See docs/archive/POLLING_DEPRECATION.md for migration guide. Will be removed in Q1 2026.")
 enum PollStatus<Success, Metadata> {
     case inProgress(progress: Double, metadata: Metadata)
     case complete(Success)
@@ -8,6 +9,7 @@ enum PollStatus<Success, Metadata> {
 }
 
 /// A collection of top-level utility functions.
+@available(*, deprecated, message: "Use WebSocket-based progress tracking instead. See docs/archive/POLLING_DEPRECATION.md for migration guide. Will be removed in Q1 2026.")
 enum Utility {
 
     /// Polls an async closure until it returns a `.complete` or `.error` status, or a timeout is reached.
