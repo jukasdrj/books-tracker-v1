@@ -671,47 +671,60 @@ public actor BookSearchAPIService {
         title: String?,
         isbn: String?
     ) async throws -> SearchResponse {
-        // Build query parameters
-        var urlComponents = URLComponents(string: "\(baseURL)/search/advanced")!
-        var queryItems: [URLQueryItem] = []
-        
-        if let author = author, !author.isEmpty {
-            queryItems.append(URLQueryItem(name: "author", value: author))
+        let isAuthorOnlySearch = !(author?.isEmpty ?? true) && (title?.isEmpty ?? true) && (isbn?.isEmpty ?? true)
+
+        let url: URL
+        var request: URLRequest
+
+        if isAuthorOnlySearch, let authorName = author, let encodedAuthor = authorName.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) {
+            // MARK: - Author-Only Search (GET /author/:author)
+            guard let authorURL = URL(string: "\(baseURL)/author/\(encodedAuthor)") else {
+                throw SearchError.invalidURL
+            }
+            url = authorURL
+            request = URLRequest(url: url)
+            request.httpMethod = "GET"
+        } else {
+            // MARK: - Multi-Criteria Search (POST /search/multi)
+            guard let multiSearchURL = URL(string: "\(baseURL)/search/multi") else {
+                throw SearchError.invalidURL
+            }
+            url = multiSearchURL
+            request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+
+            let body: [String: Any?] = [
+                "author": author,
+                "title": title,
+                "isbn": isbn,
+                "maxResults": 20
+            ]
+
+            let requestBody = try JSONSerialization.data(withJSONObject: body.compactMapValues { $0 })
+            request.httpBody = requestBody
         }
-        if let title = title, !title.isEmpty {
-            queryItems.append(URLQueryItem(name: "title", value: title))
-        }
-        if let isbn = isbn, !isbn.isEmpty {
-            queryItems.append(URLQueryItem(name: "isbn", value: isbn))
-        }
-        
-        queryItems.append(URLQueryItem(name: "maxResults", value: "20"))
-        urlComponents.queryItems = queryItems
-        
-        guard let url = urlComponents.url else {
-            throw SearchError.invalidURL
-        }
-        
+
         let (data, response): (Data, URLResponse)
         do {
-            (data, response) = try await urlSession.data(from: url)
+            (data, response) = try await urlSession.data(for: request)
         } catch {
             throw SearchError.networkError(error)
         }
-        
+
         guard let httpResponse = response as? HTTPURLResponse else {
             throw SearchError.invalidResponse
         }
-        
+
         guard httpResponse.statusCode == 200 else {
             throw SearchError.httpError(httpResponse.statusCode)
         }
-        
+
         // Extract performance headers
         let cacheStatus = httpResponse.allHeaderFields["X-Cache"] as? String ?? "MISS"
-        let provider = httpResponse.allHeaderFields["X-Provider"] as? String ?? "advanced-search"
+        let provider = httpResponse.allHeaderFields["X-Provider"] as? String ?? (isAuthorOnlySearch ? "author-search" : "multi-search")
         let cacheHitRate = calculateCacheHitRate(from: cacheStatus)
-        
+
         // Parse response
         let apiResponse: APISearchResponse
         do {
@@ -719,7 +732,7 @@ public actor BookSearchAPIService {
         } catch {
             throw SearchError.decodingError(error)
         }
-        
+
         // Check format and convert
         let isEnhancedFormat = apiResponse.format == "enhanced_work_edition_v1"
         
