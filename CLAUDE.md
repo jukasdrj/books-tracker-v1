@@ -175,8 +175,14 @@ struct BookDetailView: View {
 **API Endpoints:**
 - `/search/title` - Smart general search (6h cache)
 - `/search/isbn` - Dedicated ISBN lookup (7-day cache, ISBNdb-first)
-- `/search/advanced` - Multi-field filtering (title+author)
+- `/search/advanced` - Multi-field filtering (title+author) - **Now orchestrates 3 providers: Google Books + OpenLibrary + ISBNdb**
 - `/search/author` - Author bibliography
+
+**Provider Orchestration (October 2025):**
+- **Parallel Execution**: All 3 providers queried simultaneously via `Promise.allSettled()`
+- **Graceful Degradation**: If any provider fails, others continue (resilient to API downtime)
+- **Smart Deduplication**: 90% similarity threshold merges duplicate results
+- **Provider Tags**: Response shows `orchestrated:google+openlibrary+isbndb` (or subset if providers fail)
 
 **Architecture Rule:** Workers communicate via RPC service bindings - **never** direct API calls from proxy worker. Always orchestrate through specialized workers.
 

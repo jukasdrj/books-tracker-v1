@@ -205,7 +205,7 @@ export class BooksAPIProxyWorker extends WorkerEntrypoint {
             status: 405, headers
           });
         }
-        const result = await handleBookshelfScan(request, env, ctx);
+        const result = await handleBookshelfScan(request, this.env, this.ctx);
         return new Response(JSON.stringify(result), { headers });
       }
 
@@ -217,25 +217,25 @@ export class BooksAPIProxyWorker extends WorkerEntrypoint {
       // Multi-context search endpoints
       if (path.startsWith('/search/author')) {
         if (!query) return new Response(JSON.stringify({ error: "Query parameter 'q' required" }), { status: 400, headers });
-        const result = await handleAuthorSearch(query, { maxResults, page }, env, ctx);
+        const result = await handleAuthorSearch(query, { maxResults, page }, this.env, this.ctx);
         return new Response(JSON.stringify(result), { headers });
       }
 
       if (path.startsWith('/search/title')) {
         if (!query) return new Response(JSON.stringify({ error: "Query parameter 'q' required" }), { status: 400, headers });
-        const result = await handleTitleSearch(query, { maxResults, page }, env, ctx);
+        const result = await handleTitleSearch(query, { maxResults, page }, this.env, this.ctx);
         return new Response(JSON.stringify(result), { headers });
       }
 
       if (path.startsWith('/search/subject')) {
         if (!query) return new Response(JSON.stringify({ error: "Query parameter 'q' required" }), { status: 400, headers });
-        const result = await handleSubjectSearch(query, { maxResults, page }, env, ctx);
+        const result = await handleSubjectSearch(query, { maxResults, page }, this.env, this.ctx);
         return new Response(JSON.stringify(result), { headers });
       }
 
       if (path.startsWith('/search/isbn')) {
         if (!query) return new Response(JSON.stringify({ error: "Query parameter 'q' required" }), { status: 400, headers });
-        const result = await handleISBNSearch(query, { maxResults, page }, env, ctx);
+        const result = await handleISBNSearch(query, { maxResults, page }, this.env, this.ctx);
         return new Response(JSON.stringify(result), { headers });
       }
 
@@ -244,12 +244,12 @@ export class BooksAPIProxyWorker extends WorkerEntrypoint {
         const bookTitle = url.searchParams.get('title');
         const isbn = url.searchParams.get('isbn');
         if (!authorName && !bookTitle && !isbn) return new Response(JSON.stringify({ error: "At least one search parameter required (author, title, or isbn)" }), { status: 400, headers });
-        const result = await handleAdvancedSearch({ authorName, bookTitle, isbn }, { maxResults, page }, env, ctx);
+        const result = await handleAdvancedSearch({ authorName, bookTitle, isbn }, { maxResults, page }, this.env, this.ctx);
         return new Response(JSON.stringify(result), { headers });
       }
 
       if (path.startsWith('/search/auto') || path.startsWith('/search')) {
-        return await handleGeneralSearch(request, env, ctx, headers);
+        return await handleGeneralSearch(request, this.env, this.ctx, headers);
       }
 
       if (path === '/health') {

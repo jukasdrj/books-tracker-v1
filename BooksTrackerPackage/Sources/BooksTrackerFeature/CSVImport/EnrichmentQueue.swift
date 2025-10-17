@@ -223,12 +223,24 @@ public final class EnrichmentQueue {
                     ]
                 )
 
-                // Log result
+                // Log result with detailed error information
                 switch result {
                 case .success:
                     print("✅ Enriched: \(work.title)")
                 case .failure(let error):
-                    print("⚠️ Failed to enrich \(work.title): \(error)")
+                    // Show detailed error information for debugging
+                    switch error {
+                    case .httpError(let statusCode):
+                        print("⚠️ Failed to enrich \(work.title): HTTP \(statusCode)")
+                    case .noMatchFound:
+                        print("⚠️ Failed to enrich \(work.title): No match found")
+                    case .missingTitle:
+                        print("⚠️ Failed to enrich \(work.title): Missing title")
+                    case .apiError(let message):
+                        print("⚠️ Failed to enrich \(work.title): API error - \(message)")
+                    case .invalidQuery, .invalidURL, .invalidResponse:
+                        print("⚠️ Failed to enrich \(work.title): \(error)")
+                    }
                 }
 
                 // Yield to avoid blocking

@@ -72,6 +72,20 @@ public final class EnrichmentService {
 
         } catch {
             totalFailed += 1
+
+            // DIAGNOSTIC: Log actual error type and HTTP status code if available
+            if let enrichmentError = error as? EnrichmentError {
+                switch enrichmentError {
+                case .httpError(let statusCode):
+                    print("🚨 HTTP Error \(statusCode) enriching '\(searchTitle)'")
+                default:
+                    print("🚨 Enrichment error: \(enrichmentError)")
+                }
+                return .failure(enrichmentError)
+            }
+
+            // Fallback for unknown errors
+            print("🚨 Unexpected error enriching '\(searchTitle)': \(error)")
             return .failure(.apiError(error.localizedDescription))
         }
     }
