@@ -92,19 +92,33 @@ export class BookshelfAIWorker {
 
 /**
  * Background processing function for bookshelf scans
- * Updates KV state at each stage transition
+ * Pushes real-time WebSocket progress at each stage
  */
 async function processBookshelfScan(jobId, imageData, env) {
   const startTime = Date.now();
 
   try {
-    // Stage 1: Upload complete (already done)
+    // Stage 1: Image quality analysis (10% progress)
+    await pushProgress(env, jobId, {
+      progress: 0.1,
+      processedItems: 0,
+      totalItems: 3, // 3 stages: analyze, AI processing, enrichment
+      currentStatus: 'Analyzing image quality...'
+    });
+
     await updateJobState(env, jobId, {
       stage: 'analyzing',
       elapsedTime: Math.floor((Date.now() - startTime) / 1000)
     });
 
-    // Stage 2: Call Gemini AI (using existing BookshelfAIWorker)
+    // Stage 2: AI processing (30% → 70% progress)
+    await pushProgress(env, jobId, {
+      progress: 0.3,
+      processedItems: 1,
+      totalItems: 3,
+      currentStatus: 'Processing with Gemini AI...'
+    });
+
     const worker = new BookshelfAIWorker(env);
     const result = await worker.scanBookshelf(imageData);
 
@@ -116,7 +130,22 @@ async function processBookshelfScan(jobId, imageData, env) {
       elapsedTime: Math.floor((Date.now() - startTime) / 1000)
     });
 
-    // Stage 3: Complete (enrichment already done in scanBookshelf)
+    // Stage 3: Enrichment (70% → 100% progress)
+    await pushProgress(env, jobId, {
+      progress: 0.7,
+      processedItems: 2,
+      totalItems: 3,
+      currentStatus: `Enriching ${booksDetected} detected books...`
+    });
+
+    // Stage 4: Complete (100%)
+    await pushProgress(env, jobId, {
+      progress: 1.0,
+      processedItems: 3,
+      totalItems: 3,
+      currentStatus: `Scan complete! Found ${booksDetected} books.`
+    });
+
     await updateJobState(env, jobId, {
       stage: 'complete',
       elapsedTime: Math.floor((Date.now() - startTime) / 1000),
@@ -127,16 +156,31 @@ async function processBookshelfScan(jobId, imageData, env) {
       }
     });
 
+    // Close WebSocket connection on completion
+    await closeConnection(env, jobId, 'Scan completed successfully');
+
     // Explicitly delete KV entry on completion (TTL is backup)
     setTimeout(() => env.SCAN_JOBS.delete(jobId), 60000); // Delete after 1 min
 
   } catch (error) {
+    // Push error to WebSocket
+    await pushProgress(env, jobId, {
+      progress: 0,
+      processedItems: 0,
+      totalItems: 3,
+      currentStatus: 'Scan failed',
+      error: error.message
+    });
+
     await updateJobState(env, jobId, {
       stage: 'error',
       error: error.message,
       errorType: error.name,
       elapsedTime: Math.floor((Date.now() - startTime) / 1000)
     });
+
+    // Close connection on error
+    await closeConnection(env, jobId, `Scan failed: ${error.message}`);
 
     // Delete errored jobs after 1 minute
     setTimeout(() => env.SCAN_JOBS.delete(jobId), 60000);
@@ -157,6 +201,41 @@ async function updateJobState(env, jobId, updates) {
     ...updates,
     lastUpdated: Date.now()
   }), { expirationTtl: 300 });
+}
+
+/**
+ * Pushes progress update via books-api-proxy WebSocket
+ * @param {Object} env - Worker environment with BOOKS_API_PROXY binding
+ * @param {string} jobId - Job identifier for WebSocket connection
+ * @param {Object} progressData - Progress data (progress, processedItems, totalItems, currentStatus)
+ */
+async function pushProgress(env, jobId, progressData) {
+  try {
+    // Call books-api-proxy RPC method to push progress
+    if (env.BOOKS_API_PROXY && env.BOOKS_API_PROXY.pushJobProgress) {
+      await env.BOOKS_API_PROXY.pushJobProgress(jobId, progressData);
+    }
+  } catch (error) {
+    console.error(`[BookshelfAI] Failed to push progress for job ${jobId}:`, error);
+    // Don't throw - progress updates are best-effort
+  }
+}
+
+/**
+ * Closes WebSocket connection via books-api-proxy
+ * @param {Object} env - Worker environment with BOOKS_API_PROXY binding
+ * @param {string} jobId - Job identifier for WebSocket connection
+ * @param {string} reason - Reason for closing connection
+ */
+async function closeConnection(env, jobId, reason) {
+  try {
+    if (env.BOOKS_API_PROXY && env.BOOKS_API_PROXY.closeJobConnection) {
+      await env.BOOKS_API_PROXY.closeJobConnection(jobId, reason);
+    }
+  } catch (error) {
+    console.error(`[BookshelfAI] Failed to close connection for job ${jobId}:`, error);
+    // Don't throw - connection cleanup is best-effort
+  }
 }
 
 /**

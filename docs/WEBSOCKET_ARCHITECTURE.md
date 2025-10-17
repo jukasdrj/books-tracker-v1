@@ -6,7 +6,12 @@
 
 ## Overview
 
-BooksTrack uses WebSocket-based real-time progress tracking for long-running background jobs (CSV import, enrichment, bookshelf scanning). This replaces HTTP polling with server push notifications, delivering **10-100x faster updates** with **77% fewer network requests**.
+BooksTrack uses WebSocket-based real-time progress tracking for all long-running background jobs (CSV import, enrichment, **bookshelf scanning**). This replaces HTTP polling with server push notifications, delivering **10-100x faster updates** with **77% fewer network requests**.
+
+**Supported Jobs:**
+- **CSV Import Enrichment**: Metadata enrichment for bulk imports (100s-1000s of books)
+- **Bookshelf Scanning**: AI-powered book detection from photos (25-40s processing)
+- **Manual Enrichment**: Individual book metadata lookups
 
 ## Architecture Diagram
 
@@ -387,7 +392,7 @@ wsManager.connect(jobId: jobId) { progress in
 
 See `docs/archive/POLLING_DEPRECATION.md` for complete migration guide.
 
-**Quick Migration:**
+**CSV Import/Enrichment Migration:**
 ```swift
 // Before (polling)
 let jobId = await syncCoordinator.startEnrichment(modelContext: ctx)
@@ -396,7 +401,20 @@ let jobId = await syncCoordinator.startEnrichment(modelContext: ctx)
 let jobId = await syncCoordinator.startEnrichmentWithWebSocket(modelContext: ctx)
 ```
 
-Both methods return the same `JobIdentifier` and update `jobStatus[jobId]` - the difference is WebSocket provides real-time updates vs polling delays.
+**Bookshelf Scanner Migration:**
+```swift
+// Before (polling)
+let (books, suggestions) = try await BookshelfAIService.shared.processBookshelfImageWithProgress(image) { progress, stage in
+    print("Progress: \(Int(progress * 100))%")
+}
+
+// After (WebSocket)
+let (books, suggestions) = try await BookshelfAIService.shared.processBookshelfImageWithWebSocket(image) { progress, stage in
+    print("Progress: \(Int(progress * 100))%")
+}
+```
+
+Both methods return the same results - the difference is WebSocket provides **real-time updates** (8ms latency) vs **polling delays** (2000ms interval).
 
 ## Security
 

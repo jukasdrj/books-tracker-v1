@@ -130,6 +130,7 @@ actor BookshelfAIService {
     /// - Parameter image: UIImage to process
     /// - Parameter progressHandler: A closure to handle progress updates.
     /// - Returns: Tuple of detected books and suggestions
+    @available(*, deprecated, message: "Use processBookshelfImageWithWebSocket for real-time progress updates. Polling method will be removed in Q1 2026.")
     func processBookshelfImageWithProgress(
         _ image: UIImage,
         progressHandler: @MainActor @escaping (Double, String) -> Void
@@ -168,6 +169,71 @@ actor BookshelfAIService {
         )
 
         // Step 4: Convert to detected books and suggestions
+        let detectedBooks = response.books.compactMap { aiBook in
+            convertToDetectedBook(aiBook)
+        }
+
+        let suggestions = SuggestionGenerator.generateSuggestions(from: response)
+
+        return (detectedBooks, suggestions)
+    }
+
+    // MARK: - WebSocket Progress Tracking
+
+    /// Process bookshelf image with real-time WebSocket progress updates.
+    /// - Parameters:
+    ///   - image: UIImage to process
+    ///   - wsManager: WebSocketProgressManager instance (optional - creates one if not provided)
+    ///   - progressHandler: Closure called with progress updates (0.0-1.0, status message)
+    /// - Returns: Tuple of detected books and suggestions
+    func processBookshelfImageWithWebSocket(
+        _ image: UIImage,
+        wsManager: WebSocketProgressManager? = nil,
+        progressHandler: @MainActor @escaping (Double, String) -> Void
+    ) async throws -> ([DetectedBook], [SuggestionViewModel]) {
+        // Step 1: Compress image
+        guard let imageData = compressImage(image, maxSizeBytes: maxImageSize) else {
+            throw BookshelfAIError.imageCompressionFailed
+        }
+
+        // Step 2: Start async scan job
+        let jobResponse = try await startScanJob(imageData)
+        let jobId = jobResponse.jobId
+
+        // Step 3: Connect WebSocket for real-time updates
+        let manager = wsManager ?? WebSocketProgressManager()
+
+        await manager.connect(jobId: jobId) { progress in
+            await progressHandler(progress.progress, progress.currentStatus)
+        }
+
+        // Step 4: Wait for final result via polling (as backup/verification)
+        let response = try await Utility.pollForCompletion(
+            check: {
+                let status = try await self.pollJobStatus(jobId: jobId)
+
+                if status.stage == "complete", let result = status.result {
+                    return .complete(result)
+                }
+
+                if status.stage == "error" {
+                    let error = BookshelfAIError.serverError(500, status.error ?? "Unknown error during scan")
+                    return .error(error)
+                }
+
+                return .inProgress(progress: 0.5, metadata: status.stage)
+            },
+            progressHandler: { _, _ in
+                // Ignore polling progress - WebSocket provides real-time updates
+            },
+            interval: .seconds(5),  // Slower polling as WebSocket handles updates
+            timeout: .seconds(90)
+        )
+
+        // Step 5: Disconnect WebSocket
+        manager.disconnect()
+
+        // Step 6: Convert to detected books and suggestions
         let detectedBooks = response.books.compactMap { aiBook in
             convertToDetectedBook(aiBook)
         }
