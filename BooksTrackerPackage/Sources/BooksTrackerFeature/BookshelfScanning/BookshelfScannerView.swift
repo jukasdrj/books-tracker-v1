@@ -360,14 +360,14 @@ class BookshelfScanModel {
         return nil
     }
 
-    /// Process captured image with WebSocket-based real-time progress tracking
+    /// Process captured image with progress tracking
     func processImage(_ image: UIImage) async {
         scanState = .processing
         let startTime = Date()
 
         do {
-            // Call BookshelfAIService with WebSocket progress tracking
-            let (detectedBooks, suggestions) = try await BookshelfAIService.shared.processBookshelfImageWithWebSocket(image) { progress, stage in
+            // Call BookshelfAIService with progress tracking (Swift 6.2 compliant!)
+            let (detectedBooks, suggestions) = try await BookshelfAIService.shared.processBookshelfImageWithProgress(image) { progress, stage in
                 // Progress handler runs on MainActor - safe for UI updates
                 print("📸 Bookshelf scan progress: \(Int(progress * 100))% - \(stage)")
             }
