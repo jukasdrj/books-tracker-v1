@@ -248,6 +248,52 @@ let result = try await tracker.start(
 )
 ```
 
+**Swift 6.2 Enhancements:**
+
+*   **Modern `NotificationCenter` API:** The project now uses the `async/await` API for `NotificationCenter`, which simplifies notification handling and improves readability.
+
+    ```swift
+    // ✅ CORRECT: Swift 6.2 async/await API
+    private func handleNotifications() async {
+        let notifications = AsyncStream.merge(
+            NotificationCenter.default.notifications(named: .switchToLibraryTab),
+            NotificationCenter.default.notifications(named: .enrichmentStarted)
+        )
+
+        for await notification in notifications {
+            handle(notification)
+        }
+    }
+    ```
+
+*   **`@concurrent` Attribute:** The `@concurrent` attribute is used to mark functions that are safe to run concurrently. This allows the compiler to verify their safety and can lead to performance improvements.
+
+    ```swift
+    // ✅ CORRECT: Swift 6.2 @concurrent attribute
+    @concurrent func calculateExpectedProgress(
+        elapsed: Int,
+        stages: [ScanJobResponse.StageMetadata]
+    ) -> Double {
+        // ... function implementation
+    }
+    ```
+
+*   **Swift Testing Enhancements:** The project leverages new features in Swift Testing, such as parameterized tests, to write more concise and effective tests.
+
+    ```swift
+    // ✅ CORRECT: Swift 6.2 parameterized test
+    @Test(
+        "Normalize title for search",
+        arguments: [
+            (input: "The da Vinci Code: The Young Adult Adaptation", expected: "The da Vinci Code"),
+            (input: "Devil's Knot (Justice Knot, #1)", expected: "Devil's Knot")
+        ]
+    )
+    func testTitleNormalization(input: String, expected: String) {
+        #expect(input.normalizedTitleForSearch == expected)
+    }
+    ```
+
 **Lesson:** Don't fight Swift 6 isolation. Let `await` boundaries handle actor → MainActor transitions naturally.
 
 **Full Story:** See CHANGELOG.md "Great Polling Breakthrough" + `docs/SWIFT6_COMPILER_BUG.md`

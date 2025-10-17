@@ -1,7 +1,8 @@
 import Foundation
-import Vision
 import SwiftUI
 
+#if canImport(Vision)
+import Vision
 #if canImport(UIKit)
 import UIKit
 #endif
@@ -329,3 +330,5 @@ public enum VisionError: Error, LocalizedError {
         }
     }
 }
+
+#endif  // canImport(Vision)

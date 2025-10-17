@@ -179,7 +179,7 @@ public final class EnrichmentQueue {
 
         // Notify ContentView that enrichment started
         NotificationCenter.default.post(
-            name: NSNotification.Name("EnrichmentStarted"),
+            name: .enrichmentStarted,
             object: nil,
             userInfo: ["totalBooks": totalCount]
         )
@@ -214,7 +214,7 @@ public final class EnrichmentQueue {
 
                 // Notify ContentView of progress update
                 NotificationCenter.default.post(
-                    name: NSNotification.Name("EnrichmentProgress"),
+                    name: .enrichmentProgress,
                     object: nil,
                     userInfo: [
                         "completed": processedCount,
@@ -239,7 +239,7 @@ public final class EnrichmentQueue {
 
             // Notify ContentView that enrichment completed
             NotificationCenter.default.post(
-                name: NSNotification.Name("EnrichmentCompleted"),
+                name: .enrichmentCompleted,
                 object: nil
             )
         }

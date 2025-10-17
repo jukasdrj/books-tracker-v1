@@ -1,6 +1,11 @@
 import SwiftUI
-import PhotosUI
 import SwiftData
+
+#if canImport(PhotosUI)
+import PhotosUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
 // MARK: - Bookshelf Scanner View
 
@@ -402,3 +407,5 @@ class BookshelfScanModel {
         .modelContainer(for: [Work.self, Edition.self, UserLibraryEntry.self, Author.self])
         .environment(iOS26ThemeStore())
 }
+
+#endif  // canImport(PhotosUI)

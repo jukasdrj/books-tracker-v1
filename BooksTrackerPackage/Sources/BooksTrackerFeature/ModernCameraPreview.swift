@@ -336,9 +336,11 @@ private struct ErrorOverlay: View {
 
             if case .permissionDenied = error {
                 Button("Open Settings") {
+                    #if canImport(UIKit)
                     if let settingsURL = URL(string: UIApplication.openSettingsURLString) {
                         UIApplication.shared.open(settingsURL)
                     }
+                    #endif
                 }
                 .foregroundColor(.blue)
                 .padding(.horizontal, 24)

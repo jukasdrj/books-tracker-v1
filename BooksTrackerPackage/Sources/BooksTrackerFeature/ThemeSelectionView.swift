@@ -105,10 +105,16 @@ public struct ThemeSelectionView: View {
             .padding()
         }
         .navigationTitle("Theme")
+        #if canImport(UIKit)
         .navigationBarTitleDisplayMode(.inline)
+        #endif
         .background(backgroundView.ignoresSafeArea())
         .toolbar {
+            #if canImport(UIKit)
             ToolbarItem(placement: .navigationBarTrailing) {
+            #else
+            ToolbarItem(placement: .automatic) {
+            #endif
                 Button("Done") {
                     dismiss()
                 }

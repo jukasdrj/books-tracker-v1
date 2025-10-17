@@ -73,10 +73,10 @@ public struct iOS26LiquidLibraryView: View {
                 updateFilteredWorks()
                 pendingEnrichmentCount = EnrichmentQueue.shared.count()
             }
-            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("EnrichmentStarted"))) { _ in
+            .onReceive(NotificationCenter.default.publisher(for: .enrichmentStarted)) { _ in
                 isEnriching = true
             }
-            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("EnrichmentCompleted"))) { _ in
+            .onReceive(NotificationCenter.default.publisher(for: .enrichmentCompleted)) { _ in
                 isEnriching = false
                 pendingEnrichmentCount = 0
             }

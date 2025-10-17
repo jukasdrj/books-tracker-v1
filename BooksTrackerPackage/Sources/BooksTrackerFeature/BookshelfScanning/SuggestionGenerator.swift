@@ -1,5 +1,7 @@
 import Foundation
 
+#if canImport(UIKit)
+
 /// Client-side fallback logic for generating suggestions when AI doesn't provide them
 public struct SuggestionGenerator {
 
@@ -117,3 +119,5 @@ public struct SuggestionViewModel: Identifiable, Sendable {
         // Note: We ignore AI message and use our templated message
     }
 }
+
+#endif  // canImport(UIKit)

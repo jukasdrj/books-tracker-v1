@@ -68,7 +68,9 @@ public struct CSVImportFlowView: View {
                 .animation(.smooth(duration: 0.3), value: importService?.importState)
             }
             .navigationTitle("Import Books")
+            #if canImport(UIKit)
             .navigationBarTitleDisplayMode(.large)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }

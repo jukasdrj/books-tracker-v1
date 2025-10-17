@@ -1,7 +1,7 @@
 import Foundation
+
 #if canImport(UIKit)
 import UIKit
-#endif
 
 // MARK: - AI Service Errors
 
@@ -317,7 +317,7 @@ actor BookshelfAIService {
     }
 
     /// Calculate expected progress based on elapsed time and stages
-    nonisolated func calculateExpectedProgress(
+    @concurrent func calculateExpectedProgress(
         elapsed: Int,
         stages: [ScanJobResponse.StageMetadata]
     ) -> Double {
@@ -376,3 +376,5 @@ actor BookshelfAIService {
         throw BookshelfAIError.networkError(NSError(domain: "MaxRetries", code: -1))
     }
 }
+
+#endif  // canImport(UIKit)

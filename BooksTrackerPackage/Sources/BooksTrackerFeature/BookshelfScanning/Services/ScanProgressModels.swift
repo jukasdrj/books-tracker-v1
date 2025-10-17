@@ -1,5 +1,7 @@
 import Foundation
 
+#if canImport(UIKit)
+
 // MARK: - PollableJob Implementation
 
 /// Metadata for bookshelf scan polling
@@ -80,3 +82,5 @@ public class ScanProgressState {
 
     public init() {}
 }
+
+#endif  // canImport(UIKit)

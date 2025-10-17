@@ -1,4 +1,7 @@
 import SwiftUI
+
+#if canImport(UIKit)
+import UIKit
 @preconcurrency import AVFoundation
 
 // MARK: - Camera Preview (UIViewRepresentable)
@@ -52,3 +55,5 @@ struct BookshelfCameraPreview: UIViewRepresentable {
         }
     }
 }
+
+#endif  // canImport(UIKit)
