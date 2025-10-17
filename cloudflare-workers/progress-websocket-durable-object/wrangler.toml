@@ -1,0 +1,12 @@
+name = "progress-websocket-durable-object"
+main = "src/index.js"
+compatibility_date = "2024-10-01"
+
+[[durable_objects.bindings]]
+name = "PROGRESS_WEBSOCKET_DO"
+class_name = "ProgressWebSocketDO"
+script_name = "progress-websocket-durable-object"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["ProgressWebSocketDO"]
