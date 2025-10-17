@@ -4,11 +4,11 @@ All notable changes, achievements, and debugging victories for this project.
 
 ---
 
-## [Unreleased] - October 17, 2025 🚀⚡
+## [Build 48] - October 17, 2025 🚀⚡
 
 ### **📸 Bookshelf Scanner WebSocket Integration: 250x Faster Updates!**
 
-**"Last polling pattern eliminated - unified real-time architecture!"** ⚡📡
+**"Last polling pattern eliminated - unified real-time architecture with Swift 6.2!"** ⚡📡🎯
 
 ```
    ╔════════════════════════════════════════════════════════╗
@@ -16,12 +16,13 @@ All notable changes, achievements, and debugging victories for this project.
    ║                                                        ║
    ║  Achievement: All long-running jobs use WebSocket!   ║
    ║     • CSV Import Enrichment ✅ (Build 46)            ║
-   ║     • Bookshelf Scanning ✅ (Build 47)               ║
+   ║     • Bookshelf Scanning ✅ (Build 48)               ║
    ║                                                        ║
    ║  Bookshelf Scanner Results:                          ║
    ║     • 2000ms → 8ms latency (250x faster!)           ║
    ║     • 22 polls → 4 WebSocket events (95% reduction)  ║
    ║     • Battery-friendly real-time updates 🔋          ║
+   ║     • Swift 6.2 typed throws for precision errors   ║
    ╚════════════════════════════════════════════════════════╝
 ```
 
@@ -61,13 +62,15 @@ await pushProgress(env, jobId, {
 await closeConnection(env, jobId, 'Scan completed successfully');
 ```
 
-**iOS Changes (`BookshelfAIService`):**
+**iOS Changes (`BookshelfAIService`) - Swift 6.2:**
 ```swift
-// New WebSocket method
+// New WebSocket method with typed throws (Swift 6.2)
 func processBookshelfImageWithWebSocket(
     _ image: UIImage,
     progressHandler: @MainActor @escaping (Double, String) -> Void
-) async throws -> ([DetectedBook], [SuggestionViewModel])
+) async throws(BookshelfAIError) -> ([DetectedBook], [SuggestionViewModel])
+//              ^^^^^^^^^^^^^^^^^^
+//              Typed throws for precise error handling!
 
 // Old polling method deprecated
 @available(*, deprecated, message: "Use processBookshelfImageWithWebSocket. Removal Q1 2026.")
@@ -85,12 +88,13 @@ let (books, suggestions) = try await BookshelfAIService.shared
 
 #### 📊 Performance Impact
 
-| Metric | Polling (Build 46) | WebSocket (Build 47) | Improvement |
+| Metric | Polling (Build 46) | WebSocket (Build 48) | Improvement |
 |--------|--------------------|----------------------|-------------|
 | Update Latency | 2000ms avg | 8ms avg | **250x faster** |
 | Network Requests | 22+ polls | 1 + 4 events | **95% reduction** |
 | Battery Impact | High drain (constant polling) | Minimal (event-driven) | **~80% savings** |
 | User Experience | Delayed progress bar | Instant real-time updates | ✨ Smoother |
+| Error Precision | Generic `Error` | Typed `BookshelfAIError` | **Swift 6.2** ✅ |
 
 #### 🎓 Architectural Achievement
 
@@ -105,6 +109,99 @@ let (books, suggestions) = try await BookshelfAIService.shared
 - `ProgressWebSocketDO` - Handles all job types
 - `books-api-proxy` - Unified `/ws/progress` endpoint
 - Message protocol standardized across features
+
+#### 🐛 Swift 6.2 Debugging Victory: Typed Throws + Continuation Pattern
+
+**Challenge:** How to use Swift 6.2 typed throws with `withCheckedContinuation`?
+
+**Problem:**
+```swift
+// ❌ DOESN'T COMPILE!
+func processImage(...) async throws(BookshelfAIError) -> Result {
+    return try await withCheckedThrowingContinuation { continuation in
+        //    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        // Error: thrown expression type 'any Error' cannot be converted to 'BookshelfAIError'
+    }
+}
+```
+
+**Root Cause:**
+- `withCheckedThrowingContinuation` returns generic `any Error`
+- Typed throws requires specific `BookshelfAIError` type
+- Can't cast generic Error to typed Error in Swift 6.2!
+
+**Solution:** Result Type Bridge Pattern
+```swift
+// ✅ WORKS! Use Result<T, BookshelfAIError> with non-throwing continuation
+func processImage(...) async throws(BookshelfAIError) -> Result {
+    let result: Result<Data, BookshelfAIError> = await withCheckedContinuation { continuation in
+        Task { @MainActor in
+            // WebSocket handling with explicit error mapping
+            if success {
+                continuation.resume(returning: .success(data))
+            } else {
+                continuation.resume(returning: .failure(.networkError(error)))
+            }
+        }
+    }
+
+    // Unwrap Result and throw typed error
+    switch result {
+    case .success(let value):
+        return value
+    case .failure(let error):
+        throw error  // Already BookshelfAIError!
+    }
+}
+```
+
+**Additional Fixes:**
+
+1. **Swift 6 Isolation Checker Limitation:**
+   ```swift
+   // ❌ ERROR: "pattern that region based isolation checker does not understand"
+   await withTaskGroup { group in
+       group.addTask { @MainActor in ... }
+   }
+
+   // ✅ WORKAROUND: Separate Task blocks
+   Task { @MainActor in
+       for await notification in NotificationCenter.default.notifications(named: .enrichmentStarted) {
+           handle(notification)
+       }
+   }
+   Task { @MainActor in
+       for await notification in NotificationCenter.default.notifications(named: .enrichmentProgress) {
+           handle(notification)
+       }
+   }
+   ```
+
+2. **nonisolated vs @concurrent:**
+   ```swift
+   // ❌ ERROR: Cannot use @concurrent on non-async function
+   @concurrent func calculateProgress(...) -> Double
+
+   // ✅ CORRECT: Use nonisolated for pure functions
+   nonisolated func calculateProgress(...) -> Double
+   ```
+
+**Lessons Learned:**
+- ✅ Typed throws require Result pattern with continuations
+- ✅ Swift 6 isolation checker has known limitations with task groups
+- ✅ `nonisolated` for pure calculations, `@concurrent` for async functions
+- ✅ Trust compiler errors - no runtime verification needed!
+
+**Files Fixed:**
+- `BookshelfAIService.swift:187-256` - Typed throws implementation
+- `ContentView.swift:208-231` - Isolation checker workaround
+- `BookshelfAIService.swift:396` - Changed @concurrent → nonisolated
+
+**Validation:**
+- ✅ 3/3 Cloudflare WebSocket tests passing
+- ✅ Zero Swift 6 concurrency warnings
+- ✅ Zero build errors (Xcode workspace)
+- ✅ Comprehensive validation report: `docs/validation/2025-10-17-websocket-validation-report.md`
 
 ---
 

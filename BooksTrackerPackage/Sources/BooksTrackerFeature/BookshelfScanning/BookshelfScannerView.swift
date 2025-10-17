@@ -204,24 +204,47 @@ public struct BookshelfScannerView: View {
                 .font(.headline)
                 .foregroundStyle(.primary)
 
-            HStack(spacing: 20) {
-                statisticBadge(
-                    icon: "books.vertical.fill",
-                    value: "\(scanModel.detectedCount)",
-                    label: "Detected"
-                )
+            // Real-time WebSocket progress (when processing)
+            if scanModel.scanState == .processing {
+                VStack(spacing: 12) {
+                    // Progress bar
+                    ProgressView(value: scanModel.currentProgress, total: 1.0)
+                        .tint(themeStore.primaryColor)
 
-                statisticBadge(
-                    icon: "checkmark.circle.fill",
-                    value: "\(scanModel.confirmedCount)",
-                    label: "Ready"
-                )
+                    // Stage label
+                    Text(scanModel.currentStage)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
 
-                statisticBadge(
-                    icon: "questionmark.circle.fill",
-                    value: "\(scanModel.uncertainCount)",
-                    label: "Review"
-                )
+                    // Percentage
+                    Text("\(Int(scanModel.currentProgress * 100))%")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 8)
+            }
+
+            // Statistics (when completed)
+            if scanModel.scanState == .completed {
+                HStack(spacing: 20) {
+                    statisticBadge(
+                        icon: "books.vertical.fill",
+                        value: "\(scanModel.detectedCount)",
+                        label: "Detected"
+                    )
+
+                    statisticBadge(
+                        icon: "checkmark.circle.fill",
+                        value: "\(scanModel.confirmedCount)",
+                        label: "Ready"
+                    )
+
+                    statisticBadge(
+                        icon: "questionmark.circle.fill",
+                        value: "\(scanModel.uncertainCount)",
+                        label: "Review"
+                    )
+                }
             }
         }
         .padding()
@@ -343,6 +366,10 @@ class BookshelfScanModel {
     var uncertainCount: Int = 0
     var scanResult: ScanResult?
 
+    // Real-time progress tracking
+    var currentProgress: Double = 0.0
+    var currentStage: String = ""
+
     enum ScanState: Equatable {
         case idle
         case processing
@@ -365,16 +392,20 @@ class BookshelfScanModel {
         return nil
     }
 
-    /// Process captured image with progress tracking
+    /// Process captured image with WebSocket real-time progress tracking
     func processImage(_ image: UIImage) async {
         scanState = .processing
+        currentProgress = 0.0
+        currentStage = "Initializing..."
         let startTime = Date()
 
         do {
-            // Call BookshelfAIService with progress tracking (Swift 6.2 compliant!)
-            let (detectedBooks, suggestions) = try await BookshelfAIService.shared.processBookshelfImageWithProgress(image) { progress, stage in
+            // Use new WebSocket method for real-time progress updates
+            let (detectedBooks, suggestions) = try await BookshelfAIService.shared.processBookshelfImageWithWebSocket(image) { progress, stage in
                 // Progress handler runs on MainActor - safe for UI updates
-                print("📸 Bookshelf scan progress: \(Int(progress * 100))% - \(stage)")
+                self.currentProgress = progress
+                self.currentStage = stage
+                print("📸 WebSocket progress: \(Int(progress * 100))% - \(stage)")
             }
 
             // Calculate statistics
@@ -390,6 +421,8 @@ class BookshelfScanModel {
                 suggestions: suggestions
             )
 
+            currentProgress = 1.0
+            currentStage = "Complete!"
             scanState = .completed
 
         } catch let error as BookshelfAIError {

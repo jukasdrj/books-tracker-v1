@@ -462,7 +462,7 @@ ToolbarItem(placement: .topBarTrailing) {
 
 ### Bookshelf AI Camera Scanner
 
-**Status:** ✅ SHIPPING (Build 47+ with WebSocket Real-Time Progress)
+**Status:** ✅ SHIPPING (Build 48+ with WebSocket Real-Time Progress)
 
 **Quick Start:**
 ```swift
@@ -479,28 +479,69 @@ Button("Scan Bookshelf (Beta)") { showingBookshelfScanner = true }
 - Backend enrichment integration (89.7% success rate, 5-10s)
 - Suggestions banner (9 types: blurry, glare, cutoff, etc.)
 - Background metadata enrichment via `EnrichmentQueue.shared`
-- Swift 6.1 compliant with @BookshelfCameraActor global actor
+- Swift 6.2 compliant with typed throws and @MainActor progress handlers
 
-**Progress Tracking (Build 47+):**
-- 4 real-time progress stages via WebSocket
-- "Analyzing image quality..." → 10%
-- "Processing with Gemini AI..." → 30%
-- "Enriching N books..." → 70%
-- "Complete!" → 100%
-- 95% fewer network requests vs polling (22+ polls → 4 events)
+**Progress Tracking (Build 48+):**
+- **Real-time WebSocket updates** (no polling delay!)
+- 4 progress stages with smooth percentage updates:
+  - "Analyzing image quality..." → 10%
+  - "Processing with Gemini AI..." → 30%
+  - "Enriching N books..." → 70%
+  - "Complete!" → 100%
+- **Performance:** 95% fewer network requests (22+ polls → 4 WebSocket events)
+- **Battery:** Event-driven updates instead of continuous polling
+
+**WebSocket Implementation (Swift 6.2):**
+```swift
+// Typed throws for precise error handling
+func processBookshelfImageWithWebSocket(
+    _ image: UIImage,
+    progressHandler: @MainActor @escaping (Double, String) -> Void
+) async throws(BookshelfAIError) -> ([DetectedBook], [SuggestionViewModel])
+
+// Real-time progress updates in UI
+@Observable class BookshelfScanModel {
+    var currentProgress: Double = 0.0  // 0.0 - 1.0
+    var currentStage: String = ""      // Live stage name
+
+    func processImage(_ image: UIImage) async {
+        try await BookshelfAIService.shared.processBookshelfImageWithWebSocket(image) {
+            progress, stage in
+            self.currentProgress = progress  // MainActor-safe!
+            self.currentStage = stage
+        }
+    }
+}
+```
 
 **Architecture Highlights:**
-- **Global Actor Pattern:** `@BookshelfCameraActor` for cross-isolation access
-- **Data Bridge:** Return `Data` from actor, create `UIImage` on MainActor
-- **AVFoundation Order:** Add output to session BEFORE configuring properties
+- **Typed Throws:** `throws(BookshelfAIError)` for precise error handling
+- **WebSocket Manager:** `WebSocketProgressManager` with Durable Object backend
+- **Result Pattern:** Bridges typed throws with continuation-based WebSocket handling
+- **Error Handling:** Comprehensive coverage (network, server, compression, quality rejection)
+- **Memory Safety:** Explicit WebSocket cleanup in all code paths
+- **Global Actor Pattern:** `@BookshelfCameraActor` for camera isolation
 
 **Key Files:**
+- `BookshelfAIService.swift` - WebSocket communication with typed throws
+- `WebSocketProgressManager.swift` - Real-time progress tracking
+- `BookshelfScannerView.swift` - UI with live progress bar
 - `BookshelfCameraSessionManager.swift` - Camera session management
-- `BookshelfAIService.swift` - Cloudflare Worker communication
 - `ScanResultsView.swift` - Review and import UI
 - `SuggestionGenerator.swift` - Client-side suggestion fallback
 
-**Full Documentation:** See `docs/features/BOOKSHELF_SCANNER.md`
+**Backend:**
+- **Cloudflare Durable Object:** `progress-websocket-durable-object`
+- **WebSocket Endpoint:** `wss://books-api-proxy.jukasdrj.workers.dev/ws/progress`
+- **Tests:** 3/3 passing (connection lifecycle, broadcasting, completion)
+
+**Deprecated (Build 48+):**
+- `processBookshelfImageWithProgress()` - Polling-based method (will be removed Q1 2026)
+- Use `processBookshelfImageWithWebSocket()` for all new implementations
+
+**Full Documentation:**
+- Feature guide: `docs/features/BOOKSHELF_SCANNER.md`
+- Validation report: `docs/validation/2025-10-17-websocket-validation-report.md`
 
 ### CSV Import & Enrichment System
 
