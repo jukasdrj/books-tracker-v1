@@ -146,11 +146,7 @@ public struct CSVImportView: View {
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
-                #if canImport(UIKit)
                 ToolbarItem(placement: .navigationBarTrailing) {
-                #else
-                ToolbarItem(placement: .automatic) {
-                #endif
                     Button("Done") {
                         dismiss()
                     }

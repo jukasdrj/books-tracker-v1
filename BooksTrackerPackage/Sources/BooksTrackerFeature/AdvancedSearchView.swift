@@ -205,10 +205,8 @@ public struct AdvancedSearchView: View {
             placeholder: "e.g., 9780062073488",
             text: $criteria.isbn,
             focused: $focusedField,
-            field: .isbn
-            #if canImport(UIKit)
-            , keyboardType: .numberPad
-            #endif
+            field: .isbn,
+            keyboardType: .numberPad
         )
         .accessibilityLabel("ISBN field")
         .accessibilityHint("Enter the ISBN number for exact book identification")

@@ -110,11 +110,7 @@ public struct ThemeSelectionView: View {
         #endif
         .background(backgroundView.ignoresSafeArea())
         .toolbar {
-            #if canImport(UIKit)
             ToolbarItem(placement: .navigationBarTrailing) {
-            #else
-            ToolbarItem(placement: .automatic) {
-            #endif
                 Button("Done") {
                     dismiss()
                 }
