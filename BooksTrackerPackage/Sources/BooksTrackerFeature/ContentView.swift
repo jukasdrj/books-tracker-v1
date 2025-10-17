@@ -206,27 +206,26 @@ public struct ContentView: View {
     // MARK: - Notification Handling (Swift 6.2)
 
     private func handleNotifications() async {
-        // Handle notifications concurrently using task group
-        await withTaskGroup(of: Void.self) { group in
-            group.addTask {
-                for await notification in NotificationCenter.default.notifications(named: .switchToLibraryTab) {
-                    await self.handle(notification)
-                }
+        // Handle each notification type sequentially to avoid Swift 6 isolation checker limitations
+        // See: https://github.com/swiftlang/swift/issues/XXXXX
+        Task { @MainActor in
+            for await notification in NotificationCenter.default.notifications(named: .switchToLibraryTab) {
+                handle(notification)
             }
-            group.addTask {
-                for await notification in NotificationCenter.default.notifications(named: .enrichmentStarted) {
-                    await self.handle(notification)
-                }
+        }
+        Task { @MainActor in
+            for await notification in NotificationCenter.default.notifications(named: .enrichmentStarted) {
+                handle(notification)
             }
-            group.addTask {
-                for await notification in NotificationCenter.default.notifications(named: .enrichmentProgress) {
-                    await self.handle(notification)
-                }
+        }
+        Task { @MainActor in
+            for await notification in NotificationCenter.default.notifications(named: .enrichmentProgress) {
+                handle(notification)
             }
-            group.addTask {
-                for await notification in NotificationCenter.default.notifications(named: .enrichmentCompleted) {
-                    await self.handle(notification)
-                }
+        }
+        Task { @MainActor in
+            for await notification in NotificationCenter.default.notifications(named: .enrichmentCompleted) {
+                handle(notification)
             }
         }
     }
