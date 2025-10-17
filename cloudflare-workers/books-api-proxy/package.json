@@ -9,7 +9,7 @@
     "deploy:staging": "wrangler deploy --env staging",
     "deploy:production": "wrangler deploy --env production",
     "tail": "wrangler tail",
-    "test": "wrangler dev --test"
+    "test": "vitest"
   },
   "keywords": [
     "books",
@@ -22,6 +22,7 @@
   "author": "BooksTrack",
   "license": "MIT",
   "devDependencies": {
-    "wrangler": "^4.42.2"
+    "wrangler": "^4.42.2",
+    "vitest": "^2.0.0"
   }
 }

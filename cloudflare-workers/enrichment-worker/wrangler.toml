@@ -1,0 +1,9 @@
+name = "enrichment-worker"
+main = "src/index.js"
+compatibility_date = "2024-10-01"
+
+# Service binding to books-api-proxy for RPC calls
+[[services]]
+binding = "BOOKS_API_PROXY"
+service = "books-api-proxy"
+entrypoint = "BooksAPIProxyWorker"

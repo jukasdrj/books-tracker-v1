@@ -118,6 +118,12 @@ public final class EnrichmentQueue {
         return queue.count
     }
 
+    /// Get all queued work IDs as strings for API calls
+    /// - Returns: Array of persistent identifier strings
+    public func getQueuedWorkIds() -> [String] {
+        return queue.map { "\($0.workPersistentID)" }
+    }
+
     /// Clear all items from the queue
     public func clear() {
         queue.removeAll()
@@ -173,7 +179,7 @@ public final class EnrichmentQueue {
 
         // Notify ContentView that enrichment started
         NotificationCenter.default.post(
-            name: NSNotification.Name("EnrichmentStarted"),
+            name: .enrichmentStarted,
             object: nil,
             userInfo: ["totalBooks": totalCount]
         )
@@ -208,7 +214,7 @@ public final class EnrichmentQueue {
 
                 // Notify ContentView of progress update
                 NotificationCenter.default.post(
-                    name: NSNotification.Name("EnrichmentProgress"),
+                    name: .enrichmentProgress,
                     object: nil,
                     userInfo: [
                         "completed": processedCount,
@@ -217,12 +223,24 @@ public final class EnrichmentQueue {
                     ]
                 )
 
-                // Log result
+                // Log result with detailed error information
                 switch result {
                 case .success:
                     print("✅ Enriched: \(work.title)")
                 case .failure(let error):
-                    print("⚠️ Failed to enrich \(work.title): \(error)")
+                    // Show detailed error information for debugging
+                    switch error {
+                    case .httpError(let statusCode):
+                        print("⚠️ Failed to enrich \(work.title): HTTP \(statusCode)")
+                    case .noMatchFound:
+                        print("⚠️ Failed to enrich \(work.title): No match found")
+                    case .missingTitle:
+                        print("⚠️ Failed to enrich \(work.title): Missing title")
+                    case .apiError(let message):
+                        print("⚠️ Failed to enrich \(work.title): API error - \(message)")
+                    case .invalidQuery, .invalidURL, .invalidResponse:
+                        print("⚠️ Failed to enrich \(work.title): \(error)")
+                    }
                 }
 
                 // Yield to avoid blocking
@@ -233,7 +251,7 @@ public final class EnrichmentQueue {
 
             // Notify ContentView that enrichment completed
             NotificationCenter.default.post(
-                name: NSNotification.Name("EnrichmentCompleted"),
+                name: .enrichmentCompleted,
                 object: nil
             )
         }

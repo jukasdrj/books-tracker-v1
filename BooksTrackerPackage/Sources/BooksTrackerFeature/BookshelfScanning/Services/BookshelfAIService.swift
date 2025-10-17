@@ -1,7 +1,7 @@
 import Foundation
+
 #if canImport(UIKit)
 import UIKit
-#endif
 
 // MARK: - AI Service Errors
 
@@ -130,6 +130,7 @@ actor BookshelfAIService {
     /// - Parameter image: UIImage to process
     /// - Parameter progressHandler: A closure to handle progress updates.
     /// - Returns: Tuple of detected books and suggestions
+    @available(*, deprecated, message: "Use processBookshelfImageWithWebSocket for real-time progress updates. Polling method will be removed in Q1 2026.")
     func processBookshelfImageWithProgress(
         _ image: UIImage,
         progressHandler: @MainActor @escaping (Double, String) -> Void
@@ -175,6 +176,83 @@ actor BookshelfAIService {
         let suggestions = SuggestionGenerator.generateSuggestions(from: response)
 
         return (detectedBooks, suggestions)
+    }
+
+    /// Process bookshelf image with WebSocket real-time progress tracking.
+    /// - Parameters:
+    ///   - image: UIImage to process
+    ///   - progressHandler: Closure to handle progress updates (called on MainActor)
+    /// - Returns: Tuple of detected books and suggestions
+    /// - Throws: BookshelfAIError for image compression, network, or processing errors
+    func processBookshelfImageWithWebSocket(
+        _ image: UIImage,
+        progressHandler: @MainActor @escaping (Double, String) -> Void
+    ) async throws(BookshelfAIError) -> ([DetectedBook], [SuggestionViewModel]) {
+        // Step 1: Compress image to acceptable size
+        guard let imageData = compressImage(image, maxSizeBytes: maxImageSize) else {
+            throw .imageCompressionFailed
+        }
+
+        // Step 2: Start async scan job
+        let jobResponse: ScanJobResponse
+        do {
+            jobResponse = try await startScanJob(imageData)
+        } catch {
+            throw .networkError(error)
+        }
+
+        // Step 3: Connect WebSocket for real-time progress
+        let wsManager = await WebSocketProgressManager()
+
+        // Create continuation to wait for job completion
+        let result: Result<([DetectedBook], [SuggestionViewModel]), BookshelfAIError> = await withCheckedContinuation { continuation in
+            Task { @MainActor in
+                // Connect WebSocket with progress handler
+                await wsManager.connect(jobId: jobResponse.jobId) { jobProgress in
+                    // Convert JobProgress to (Double, String) for progress handler
+                    progressHandler(jobProgress.fractionCompleted, jobProgress.currentStatus)
+
+                    // Check if job is complete
+                    if jobProgress.currentStatus.lowercased().contains("complete") {
+                        // Job finished - poll final status to get results
+                        Task {
+                            do {
+                                let finalStatus = try await self.pollJobStatus(jobId: jobResponse.jobId)
+
+                                if let response = finalStatus.result {
+                                    wsManager.disconnect()
+
+                                    // Convert to detected books and suggestions
+                                    let detectedBooks = response.books.compactMap { aiBook in
+                                        self.convertToDetectedBook(aiBook)
+                                    }
+                                    let suggestions = SuggestionGenerator.generateSuggestions(from: response)
+
+                                    continuation.resume(returning: .success((detectedBooks, suggestions)))
+                                }
+                            } catch {
+                                wsManager.disconnect()
+                                continuation.resume(returning: .failure(.networkError(error)))
+                            }
+                        }
+                    }
+
+                    // Check if job errored
+                    if jobProgress.currentStatus.lowercased().contains("error") {
+                        wsManager.disconnect()
+                        continuation.resume(returning: .failure(.serverError(500, "Job failed: \(jobProgress.currentStatus)")))
+                    }
+                }
+            }
+        }
+
+        // Unwrap result
+        switch result {
+        case .success(let value):
+            return value
+        case .failure(let error):
+            throw error
+        }
     }
 
     // MARK: - Private Methods
@@ -374,3 +452,5 @@ actor BookshelfAIService {
         throw BookshelfAIError.networkError(NSError(domain: "MaxRetries", code: -1))
     }
 }
+
+#endif  // canImport(UIKit)

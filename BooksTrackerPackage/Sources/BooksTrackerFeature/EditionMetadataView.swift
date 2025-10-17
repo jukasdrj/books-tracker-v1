@@ -1,6 +1,10 @@
 import SwiftUI
 import SwiftData
 
+#if canImport(UIKit)
+import UIKit
+#endif
+
 /// Edition Metadata Card - iOS 26 Liquid Glass Design
 /// Displays core bibliographic information and user tracking data
 struct EditionMetadataView: View {
@@ -112,7 +116,9 @@ struct EditionMetadataView: View {
 
             Button(action: {
                 showingStatusPicker.toggle()
+                #if canImport(UIKit)
                 triggerHaptic(.light)
+                #endif
             }) {
                 HStack(spacing: 12) {
                     Image(systemName: currentStatus.systemImage)
@@ -213,7 +219,9 @@ struct EditionMetadataView: View {
                             saveContext()
                         }
                     ), format: .number)
+                    #if canImport(UIKit)
                     .keyboardType(.numberPad)
+                    #endif
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 60)
                     .multilineTextAlignment(.center)
@@ -381,7 +389,9 @@ struct EditionMetadataView: View {
         }
 
         saveContext()
+        #if canImport(UIKit)
         triggerHaptic(.medium)
+        #endif
     }
 
     private func saveContext() {
@@ -393,8 +403,10 @@ struct EditionMetadataView: View {
     }
 
     private func triggerHaptic(_ style: UIImpactFeedbackGenerator.FeedbackStyle) {
+        #if canImport(UIKit)
         let impactFeedback = UIImpactFeedbackGenerator(style: style)
         impactFeedback.impactOccurred()
+        #endif
     }
 }
 
@@ -409,7 +421,9 @@ struct StarRatingView: View {
             ForEach(1...5, id: \.self) { star in
                 Button(action: {
                     rating = Double(star)
+                    #if canImport(UIKit)
                     triggerHaptic(.light)
+                    #endif
                 }) {
                     Image(systemName: star <= Int(rating) ? "star.fill" : "star")
                         .foregroundColor(star <= Int(rating) ? .yellow : .secondary)
@@ -428,8 +442,10 @@ struct StarRatingView: View {
     }
 
     private func triggerHaptic(_ style: UIImpactFeedbackGenerator.FeedbackStyle) {
+        #if canImport(UIKit)
         let impactFeedback = UIImpactFeedbackGenerator(style: style)
         impactFeedback.impactOccurred()
+        #endif
     }
 }
 
@@ -476,9 +492,11 @@ struct ReadingStatusPicker: View {
                 .buttonStyle(.plain)
             }
             .navigationTitle("Reading Status")
+            #if canImport(UIKit)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .automatic) {
                     Button("Done") {
                         dismiss()
                     }
@@ -533,15 +551,17 @@ struct NotesEditorView: View {
             }
             .padding()
             .navigationTitle("Notes")
+            #if canImport(UIKit)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: .automatic) {
                     Button("Cancel") {
                         dismiss()
                     }
                 }
 
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .automatic) {
                     Button("Save") {
                         dismiss()
                     }

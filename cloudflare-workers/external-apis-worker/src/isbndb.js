@@ -1,6 +1,74 @@
 const RATE_LIMIT_KEY = 'isbndb_last_request';
 const RATE_LIMIT_INTERVAL = 1000;
 
+/**
+ * Search ISBNdb for books by title and author using combined search endpoint
+ * This is optimized for enrichment - uses both author and text parameters
+ * @param {string} title - Book title
+ * @param {string} authorName - Author name (optional)
+ * @param {Object} env - Worker environment bindings
+ * @returns {Promise<Object>} { success: boolean, works: Array, totalResults: number }
+ */
+export async function searchISBNdb(title, authorName, env) {
+    try {
+      console.log(`RPC: ISBNdb search for "${title}" by "${authorName || 'any author'}"`);
+
+      // Build search URL with author and text parameters (like the user's example)
+      let searchUrl = `https://api2.isbndb.com/search/books?page=1&pageSize=20&text=${encodeURIComponent(title)}`;
+      if (authorName) {
+        searchUrl += `&author=${encodeURIComponent(authorName)}`;
+      }
+
+      await enforceRateLimit(env);
+      const searchResponse = await fetchWithAuth(searchUrl, env);
+
+      if (!searchResponse.books || searchResponse.books.length === 0) {
+        return { success: true, works: [], totalResults: 0 };
+      }
+
+      // Convert ISBNdb books to normalized work format
+      const works = searchResponse.books.map(book => ({
+        title: book.title,
+        subtitle: book.title_long !== book.title ? book.title_long : null,
+        authors: (book.authors || []).map(name => ({ name })),
+        firstPublicationYear: parseInt(book.date_published?.substring(0, 4), 10) || null,
+        subjects: normalizeGenres(book.subjects),
+
+        externalIds: {
+          openLibraryWorkId: null,
+          openLibraryEditionId: null,
+          goodreadsWorkIds: [],
+          amazonASINs: [],
+          librarythingIds: [],
+          googleBooksVolumeIds: [],
+          isbndbIds: [book.isbn13].filter(Boolean),
+        },
+
+        editions: [{
+          isbn10: book.isbn,
+          isbn13: book.isbn13,
+          publisher: book.publisher,
+          publicationDate: book.date_published,
+          binding: book.binding,
+          pages: book.pages,
+          coverImageURL: book.image,
+          synopsis: book.synopsis,
+        }].filter(e => e.isbn13), // Only include if has ISBN
+      }));
+
+      return {
+        success: true,
+        provider: 'isbndb',
+        works: works,
+        totalResults: searchResponse.total || works.length
+      };
+
+    } catch (error) {
+      console.error(`RPC Error in ISBNdb search for "${title}":`, error);
+      return { success: false, error: error.message };
+    }
+}
+
 export async function getISBNdbEditionsForWork(title, authorName, env) {
     try {
       console.log(`RPC: getEditionsForWork v3 ("${title}", "${authorName}")`);

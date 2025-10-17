@@ -77,6 +77,10 @@ The `Scripts` directory contains scripts for managing application versions and c
 *   **Swift 6+ Concurrency:** The project embraces modern Swift concurrency features like `async/await` and actors.
 *   **SwiftUI State Management:** The project uses pure SwiftUI state management patterns, avoiding the use of ViewModels.
 *   **Performance:** The code emphasizes performance, using `@Observable` over `@Published` and other optimization techniques.
+*   **Swift 6.2 Adoption:** The project actively adopts new features from Swift 6.2 to improve code quality and maintainability. This includes:
+    *   **Modern `NotificationCenter` API:** Using `async/await` for handling notifications, resulting in cleaner and more readable code.
+    *   **`@concurrent` Attribute:** Applying the `@concurrent` attribute to functions that are safe to run concurrently, allowing the compiler to verify their safety.
+    *   **Swift Testing Enhancements:** Leveraging new features in Swift Testing, such as parameterized tests, to write more concise and effective tests.
 
 ### AI-Assisted Development
 

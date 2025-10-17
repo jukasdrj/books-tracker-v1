@@ -142,7 +142,9 @@ public struct CSVImportView: View {
                 }
             }
             .navigationTitle("CSV Import")
+            #if canImport(UIKit)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Done") {
@@ -200,8 +202,10 @@ public struct CSVImportView: View {
                     importResult = .success(result.successCount, result.failureCount)
 
                     // Haptic feedback
+                    #if canImport(UIKit)
                     let generator = UINotificationFeedbackGenerator()
                     generator.notificationOccurred(.success)
+                    #endif
                 }
 
             } catch {
@@ -210,8 +214,10 @@ public struct CSVImportView: View {
                     importResult = .failure(error.localizedDescription)
 
                     // Error haptic
+                    #if canImport(UIKit)
                     let generator = UINotificationFeedbackGenerator()
                     generator.notificationOccurred(.error)
+                    #endif
                 }
             }
         }
@@ -305,7 +311,7 @@ private struct FormatRow: View {
     let value: String
     @Environment(\.iOS26ThemeStore) private var themeStore
 
-    var body: some View{
+    var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Text(label)
                 .font(.caption.bold())

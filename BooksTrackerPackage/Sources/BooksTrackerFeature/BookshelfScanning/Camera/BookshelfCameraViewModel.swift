@@ -1,5 +1,10 @@
 import SwiftUI
+
+#if canImport(AVFoundation)
 @preconcurrency import AVFoundation
+#if canImport(UIKit)
+import UIKit
+#endif
 
 // MARK: - Camera State
 
@@ -153,3 +158,5 @@ final class BookshelfCameraViewModel {
         UIApplication.shared.open(url)
     }
 }
+
+#endif  // canImport(AVFoundation)

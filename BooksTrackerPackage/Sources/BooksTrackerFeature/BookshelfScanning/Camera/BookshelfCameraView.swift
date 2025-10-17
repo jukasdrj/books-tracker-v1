@@ -1,5 +1,10 @@
 import SwiftUI
+
+#if canImport(AVFoundation)
 import AVFoundation
+#if canImport(UIKit)
+import UIKit
+#endif
 
 // MARK: - Bookshelf Camera View
 
@@ -379,3 +384,5 @@ private struct PhotoReviewView: View {
         }
     }
 }
+
+#endif  // canImport(AVFoundation)

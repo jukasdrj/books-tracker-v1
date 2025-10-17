@@ -179,4 +179,79 @@ public final class SyncCoordinator: ObservableObject {
 
         return jobId
     }
+
+    // MARK: - WebSocket-Based Enrichment (New!)
+
+    /// Start enrichment job with WebSocket progress tracking
+    /// Replaces polling with real-time server push updates
+    /// - Parameters:
+    ///   - modelContext: SwiftData model context for persistence
+    ///   - enrichmentQueue: EnrichmentQueue instance (defaults to .shared)
+    ///   - webSocketManager: WebSocket manager (defaults to new instance)
+    /// - Returns: Job identifier for tracking
+    @discardableResult
+    public func startEnrichmentWithWebSocket(
+        modelContext: ModelContext,
+        enrichmentQueue: EnrichmentQueue = .shared,
+        webSocketManager: WebSocketProgressManager? = nil
+    ) async -> JobIdentifier {
+
+        let jobId = JobIdentifier(jobType: "enrichment_ws")
+        activeJobId = jobId
+        jobStatus[jobId] = .queued
+
+        // Create or use provided WebSocket manager
+        let wsManager = webSocketManager ?? WebSocketProgressManager()
+
+        // Get work IDs to enrich
+        let workIds = enrichmentQueue.getQueuedWorkIds()
+
+        // Initial progress
+        let progress = JobProgress(
+            totalItems: workIds.count,
+            processedItems: 0,
+            currentStatus: "Connecting..."
+        )
+        jobStatus[jobId] = .active(progress: progress)
+
+        // Connect WebSocket
+        await wsManager.connect(jobId: jobId.id.uuidString) { [weak self] receivedProgress in
+            guard let self = self else { return }
+
+            // Update job status with WebSocket progress
+            self.jobStatus[jobId] = .active(progress: receivedProgress)
+        }
+
+        // Trigger backend enrichment via API
+        do {
+            let enrichmentAPI = EnrichmentAPIClient()
+            let result = try await enrichmentAPI.startEnrichment(
+                jobId: jobId.id.uuidString,
+                workIds: workIds
+            )
+
+            // Wait for WebSocket to receive all updates
+            // Connection will close automatically when backend finishes
+            try? await Task.sleep(for: .seconds(1))
+
+            let log = [
+                "✅ Enrichment completed successfully",
+                "📊 Total items: \(result.totalCount)",
+                "✅ Processed: \(result.processedCount)"
+            ]
+            jobStatus[jobId] = .completed(log: log)
+
+        } catch {
+            jobStatus[jobId] = .failed(error: error.localizedDescription)
+        }
+
+        // Cleanup
+        wsManager.disconnect()
+
+        if activeJobId == jobId {
+            activeJobId = nil
+        }
+
+        return jobId
+    }
 }

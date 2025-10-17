@@ -69,11 +69,13 @@ export async function handleTitleSearch(query, { maxResults, page }, env, ctx) {
 
         if (results[0].status === 'fulfilled' && results[0].value.success) {
             const googleData = results[0].value;
-            if (googleData.items) {
-                const filteredItems = filterGoogleBooksItems(googleData.items, query);
+            // FIX: Google Books RPC returns 'works', not 'items'
+            if (googleData.works && googleData.works.length > 0) {
+                const transformedItems = googleData.works.map(work => transformWorkToGoogleFormat(work));
+                const filteredItems = filterGoogleBooksItems(transformedItems, query);
                 finalItems = [...finalItems, ...filteredItems];
+                successfulProviders.push('google');
             }
-            successfulProviders.push('google');
         }
 
         if (results[1].status === 'fulfilled' && results[1].value.success) {
@@ -81,8 +83,8 @@ export async function handleTitleSearch(query, { maxResults, page }, env, ctx) {
             if (olData.works) {
                 const transformedItems = olData.works.map(work => transformWorkToGoogleFormat(work));
                 finalItems = [...finalItems, ...transformedItems];
+                successfulProviders.push('openlibrary');
             }
-            successfulProviders.push('openlibrary');
         }
 
         const dedupedItems = deduplicateGoogleBooksItems(finalItems);
@@ -228,9 +230,11 @@ export async function handleAdvancedSearch({ authorName, bookTitle, isbn }, { ma
     const startTime = Date.now();
 
     try {
+        // Add ISBNdb to the orchestration for better coverage
         const searchPromises = [
             env.EXTERNAL_APIS_WORKER.searchGoogleBooks(query, { maxResults }),
             env.EXTERNAL_APIS_WORKER.searchOpenLibrary(query, { maxResults, title: bookTitle, author: authorName, isbn }),
+            env.EXTERNAL_APIS_WORKER.searchISBNdb(bookTitle, authorName),
         ];
 
         const results = await Promise.allSettled(searchPromises);
@@ -238,21 +242,34 @@ export async function handleAdvancedSearch({ authorName, bookTitle, isbn }, { ma
         let finalItems = [];
         let successfulProviders = [];
 
+        // Google Books results
         if (results[0].status === 'fulfilled' && results[0].value.success) {
             const googleData = results[0].value;
-            if (googleData.items) {
-                finalItems = [...finalItems, ...googleData.items];
+            if (googleData.works && googleData.works.length > 0) {
+                const transformedItems = googleData.works.map(work => transformWorkToGoogleFormat(work));
+                finalItems = [...finalItems, ...transformedItems];
+                successfulProviders.push('google');
             }
-            successfulProviders.push('google');
         }
 
+        // OpenLibrary results
         if (results[1].status === 'fulfilled' && results[1].value.success) {
             const olData = results[1].value;
-            if (olData.works) {
+            if (olData.works && olData.works.length > 0) {
                 const transformedItems = olData.works.map(work => transformWorkToGoogleFormat(work));
                 finalItems = [...finalItems, ...transformedItems];
+                successfulProviders.push('openlibrary');
             }
-            successfulProviders.push('openlibrary');
+        }
+
+        // ISBNdb results
+        if (results[2].status === 'fulfilled' && results[2].value.success) {
+            const isbndbData = results[2].value;
+            if (isbndbData.works && isbndbData.works.length > 0) {
+                const transformedItems = isbndbData.works.map(work => transformWorkToGoogleFormat(work));
+                finalItems = [...finalItems, ...transformedItems];
+                successfulProviders.push('isbndb');
+            }
         }
 
         const dedupedItems = advancedDeduplication(finalItems);

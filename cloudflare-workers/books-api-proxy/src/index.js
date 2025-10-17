@@ -56,6 +56,116 @@ export class BooksAPIProxyWorker extends WorkerEntrypoint {
   }
 
   /**
+   * RPC Method: Push progress update for a job
+   * Called by enrichment/import workers
+   * @param {string} jobId - Job identifier
+   * @param {Object} progressData - Progress update data
+   * @returns {Promise<Object>} Success status
+   */
+  async pushJobProgress(jobId, progressData) {
+    const doId = this.env.PROGRESS_WEBSOCKET_DO.idFromName(jobId);
+    const stub = this.env.PROGRESS_WEBSOCKET_DO.get(doId);
+    return await stub.pushProgress(progressData);
+  }
+
+  /**
+   * RPC Method: Close WebSocket connection for a job
+   * @param {string} jobId - Job identifier
+   * @param {string} reason - Closure reason
+   * @returns {Promise<Object>} Success status
+   */
+  async closeJobConnection(jobId, reason) {
+    const doId = this.env.PROGRESS_WEBSOCKET_DO.idFromName(jobId);
+    const stub = this.env.PROGRESS_WEBSOCKET_DO.get(doId);
+    return await stub.closeConnection(reason);
+  }
+
+  /**
+   * Handle enrichment job start request
+   * Triggers background enrichment with WebSocket progress
+   * @param {Request} request - POST request with jobId and workIds
+   * @returns {Promise<Response>} Job start confirmation
+   */
+  async handleEnrichmentStart(request) {
+    try {
+      const { jobId, workIds } = await request.json();
+
+      if (!jobId || !workIds || !Array.isArray(workIds)) {
+        return new Response(JSON.stringify({
+          error: 'Missing required fields: jobId, workIds'
+        }), {
+          status: 400,
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*'
+          }
+        });
+      }
+
+      // Trigger enrichment worker (non-blocking)
+      // Worker will push progress updates via WebSocket
+      this.ctx.waitUntil(
+        this.env.ENRICHMENT_WORKER.enrichBatch(jobId, workIds)
+      );
+
+      // Return immediately - client will receive updates via WebSocket
+      return new Response(JSON.stringify({
+        success: true,
+        jobId: jobId,
+        totalCount: workIds.length,
+        processedCount: 0,
+        status: 'started',
+        message: 'Connect to /ws/progress?jobId=' + jobId + ' for real-time updates'
+      }), {
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        }
+      });
+
+    } catch (error) {
+      return new Response(JSON.stringify({
+        error: 'Failed to start enrichment',
+        details: error.message
+      }), {
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        }
+      });
+    }
+  }
+
+  /**
+   * Handle WebSocket upgrade request
+   * Delegates to Durable Object for connection management
+   * @param {Request} request - WebSocket upgrade request
+   * @returns {Promise<Response>} WebSocket response or error
+   */
+  async handleWebSocketUpgrade(request) {
+    const url = new URL(request.url);
+    const jobId = url.searchParams.get('jobId');
+
+    if (!jobId) {
+      return new Response('Missing jobId parameter', {
+        status: 400,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Content-Type': 'text/plain'
+        }
+      });
+    }
+
+    // Get Durable Object stub for this jobId
+    const doId = this.env.PROGRESS_WEBSOCKET_DO.idFromName(jobId);
+    const stub = this.env.PROGRESS_WEBSOCKET_DO.get(doId);
+
+    // Forward upgrade request to Durable Object
+    return await stub.fetch(request);
+  }
+
+  /**
    * HTTP fetch handler (for external requests)
    */
   async fetch(request) {
@@ -78,6 +188,16 @@ export class BooksAPIProxyWorker extends WorkerEntrypoint {
     };
 
     try {
+      // WebSocket progress endpoint
+      if (path === '/ws/progress') {
+        return this.handleWebSocketUpgrade(request);
+      }
+
+      // Enrichment trigger endpoint
+      if (path === '/api/enrichment/start' && request.method === 'POST') {
+        return await this.handleEnrichmentStart(request);
+      }
+
       // Bookshelf image scanning endpoint (from ship branch)
       if (path.startsWith('/api/scan-bookshelf')) {
         if (request.method !== 'POST') {
@@ -85,7 +205,7 @@ export class BooksAPIProxyWorker extends WorkerEntrypoint {
             status: 405, headers
           });
         }
-        const result = await handleBookshelfScan(request, env, ctx);
+        const result = await handleBookshelfScan(request, this.env, this.ctx);
         return new Response(JSON.stringify(result), { headers });
       }
 
@@ -97,25 +217,25 @@ export class BooksAPIProxyWorker extends WorkerEntrypoint {
       // Multi-context search endpoints
       if (path.startsWith('/search/author')) {
         if (!query) return new Response(JSON.stringify({ error: "Query parameter 'q' required" }), { status: 400, headers });
-        const result = await handleAuthorSearch(query, { maxResults, page }, env, ctx);
+        const result = await handleAuthorSearch(query, { maxResults, page }, this.env, this.ctx);
         return new Response(JSON.stringify(result), { headers });
       }
 
       if (path.startsWith('/search/title')) {
         if (!query) return new Response(JSON.stringify({ error: "Query parameter 'q' required" }), { status: 400, headers });
-        const result = await handleTitleSearch(query, { maxResults, page }, env, ctx);
+        const result = await handleTitleSearch(query, { maxResults, page }, this.env, this.ctx);
         return new Response(JSON.stringify(result), { headers });
       }
 
       if (path.startsWith('/search/subject')) {
         if (!query) return new Response(JSON.stringify({ error: "Query parameter 'q' required" }), { status: 400, headers });
-        const result = await handleSubjectSearch(query, { maxResults, page }, env, ctx);
+        const result = await handleSubjectSearch(query, { maxResults, page }, this.env, this.ctx);
         return new Response(JSON.stringify(result), { headers });
       }
 
       if (path.startsWith('/search/isbn')) {
         if (!query) return new Response(JSON.stringify({ error: "Query parameter 'q' required" }), { status: 400, headers });
-        const result = await handleISBNSearch(query, { maxResults, page }, env, ctx);
+        const result = await handleISBNSearch(query, { maxResults, page }, this.env, this.ctx);
         return new Response(JSON.stringify(result), { headers });
       }
 
@@ -124,12 +244,12 @@ export class BooksAPIProxyWorker extends WorkerEntrypoint {
         const bookTitle = url.searchParams.get('title');
         const isbn = url.searchParams.get('isbn');
         if (!authorName && !bookTitle && !isbn) return new Response(JSON.stringify({ error: "At least one search parameter required (author, title, or isbn)" }), { status: 400, headers });
-        const result = await handleAdvancedSearch({ authorName, bookTitle, isbn }, { maxResults, page }, env, ctx);
+        const result = await handleAdvancedSearch({ authorName, bookTitle, isbn }, { maxResults, page }, this.env, this.ctx);
         return new Response(JSON.stringify(result), { headers });
       }
 
       if (path.startsWith('/search/auto') || path.startsWith('/search')) {
-        return await handleGeneralSearch(request, env, ctx, headers);
+        return await handleGeneralSearch(request, this.env, this.ctx, headers);
       }
 
       if (path === '/health') {

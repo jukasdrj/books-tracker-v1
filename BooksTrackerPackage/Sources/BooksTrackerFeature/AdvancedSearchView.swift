@@ -1,5 +1,9 @@
 import SwiftUI
 
+#if canImport(UIKit)
+import UIKit
+#endif
+
 // MARK: - Advanced Search Criteria Model
 
 /// Encapsulates advanced search criteria with optional fields
@@ -228,7 +232,9 @@ public struct AdvancedSearchView: View {
                         .foregroundStyle(.secondary)
 
                     TextField("1900", text: $criteria.yearStart)
+                        #if canImport(UIKit)
                         .keyboardType(.numberPad)
+                        #endif
                         .textFieldStyle(.plain)
                         .padding(12)
                         .background {
@@ -248,7 +254,9 @@ public struct AdvancedSearchView: View {
                         .foregroundStyle(.secondary)
 
                     TextField("2025", text: $criteria.yearEnd)
+                        #if canImport(UIKit)
                         .keyboardType(.numberPad)
+                        #endif
                         .textFieldStyle(.plain)
                         .padding(12)
                         .background {
@@ -395,7 +403,9 @@ private struct GlassSearchField: View {
     @Binding var text: String
     var focused: FocusState<SearchField?>.Binding
     let field: SearchField
+    #if canImport(UIKit)
     var keyboardType: UIKeyboardType = .default
+    #endif
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -426,7 +436,9 @@ private struct GlassSearchField: View {
             .padding(.horizontal, 4)
 
             TextField(placeholder, text: $text)
+                #if canImport(UIKit)
                 .keyboardType(keyboardType)
+                #endif
                 .textFieldStyle(.plain)
                 .padding(14)
                 .background {

@@ -1,3 +1,4 @@
+#if canImport(AVFoundation)
 @preconcurrency import AVFoundation
 #if canImport(UIKit)
 import UIKit
@@ -251,3 +252,5 @@ private final class PhotoCaptureDelegate: NSObject, AVCapturePhotoCaptureDelegat
         continuation = nil
     }
 }
+
+#endif  // canImport(AVFoundation)

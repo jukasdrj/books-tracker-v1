@@ -1,4 +1,6 @@
 import SwiftUI
+
+#if canImport(ActivityKit)
 import ActivityKit
 import WidgetKit
 
@@ -505,3 +507,5 @@ extension CSVImportActivityAttributes.ContentState {
         return description
     }
 }
+
+#endif  // canImport(ActivityKit)

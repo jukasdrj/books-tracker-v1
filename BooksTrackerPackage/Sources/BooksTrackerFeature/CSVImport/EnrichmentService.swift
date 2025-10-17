@@ -36,17 +36,25 @@ public final class EnrichmentService {
         _ work: Work,
         in modelContext: ModelContext
     ) async -> EnrichmentResult {
-        let title = work.title
+        // Use the original title for logging, but extract the normalized title for searching
+        let rawTitle = work.title
+
+        // IMPORTANT: Normalize the title before searching to improve match rates
+        // This strips series markers, subtitles, and edition details that cause zero-result searches
+        let searchTitle = rawTitle.normalizedTitleForSearch
+
         let authorName = work.primaryAuthorName
 
-        guard !title.isEmpty else {
+        guard !searchTitle.isEmpty else {
             return .failure(.missingTitle)
         }
 
         do {
             // Use advanced search with separated title + author for backend filtering
             let author = authorName != "Unknown Author" ? authorName : nil
-            let response = try await searchAPI(title: title, author: author)
+
+            // Pass the CLEANED searchTitle to the API (not the raw title!)
+            let response = try await searchAPI(title: searchTitle, author: author)
 
             // Find best match from results
             guard let bestMatch = findBestMatch(
@@ -64,6 +72,20 @@ public final class EnrichmentService {
 
         } catch {
             totalFailed += 1
+
+            // DIAGNOSTIC: Log actual error type and HTTP status code if available
+            if let enrichmentError = error as? EnrichmentError {
+                switch enrichmentError {
+                case .httpError(let statusCode):
+                    print("🚨 HTTP Error \(statusCode) enriching '\(searchTitle)'")
+                default:
+                    print("🚨 Enrichment error: \(enrichmentError)")
+                }
+                return .failure(enrichmentError)
+            }
+
+            // Fallback for unknown errors
+            print("🚨 Unexpected error enriching '\(searchTitle)': \(error)")
             return .failure(.apiError(error.localizedDescription))
         }
     }
@@ -136,16 +158,26 @@ public final class EnrichmentService {
         let workTitleLower = work.title.lowercased()
         let workAuthorLower = work.primaryAuthorName.lowercased()
 
+        // Get the normalized title for better matching (strips series markers, subtitles, etc.)
+        let normalizedWorkTitleLower = work.title.normalizedTitleForSearch.lowercased()
+
         // Score each result
         let scoredResults = results.map { result -> (EnrichmentSearchResult, Int) in
             var score = 0
 
             // Title match (highest priority)
-            if result.title.lowercased() == workTitleLower {
+            // Prioritize normalized title matches first, then fall back to raw title
+            if result.title.lowercased() == normalizedWorkTitleLower {
                 score += 100
+            } else if result.title.lowercased().contains(normalizedWorkTitleLower) ||
+                      normalizedWorkTitleLower.contains(result.title.lowercased()) {
+                score += 50
+            } else if result.title.lowercased() == workTitleLower {
+                // Fallback to raw title match (lower score since it's less reliable)
+                score += 30
             } else if result.title.lowercased().contains(workTitleLower) ||
                       workTitleLower.contains(result.title.lowercased()) {
-                score += 50
+                score += 15
             }
 
             // Author match

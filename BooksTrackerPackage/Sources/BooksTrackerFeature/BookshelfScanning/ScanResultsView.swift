@@ -1,6 +1,8 @@
 import SwiftUI
 import SwiftData
 
+#if canImport(UIKit)
+
 // MARK: - Scan Results View
 
 /// Review and confirm detected books before adding to library
@@ -631,3 +633,5 @@ class ScanResultsModel {
     )
     .environment(iOS26ThemeStore())
 }
+
+#endif  // canImport(UIKit)

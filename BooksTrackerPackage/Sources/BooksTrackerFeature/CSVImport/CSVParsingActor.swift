@@ -47,7 +47,8 @@ public actor CSVParsingActor: GlobalActor {
     }
 
     public struct ParsedRow: Sendable {
-        let title: String
+        let title: String           // Original title from CSV
+        let normalizedTitle: String // Cleaned title for searching/matching
         let author: String
         let isbn: String?
         let isbn10: String?
@@ -277,16 +278,20 @@ public actor CSVParsingActor: GlobalActor {
         }
 
         // Required fields check
-        guard let title = title, !title.isEmpty,
+        guard let rawTitle = title, !rawTitle.isEmpty,
               let author = author, !author.isEmpty else {
             return nil
         }
+
+        // Apply normalization here for cleaner search data
+        let cleanedTitle = rawTitle.normalizedTitleForSearch
 
         // Consolidate ISBN fields
         let finalISBN = isbn13 ?? isbn ?? isbn10
 
         return ParsedRow(
-            title: title,
+            title: rawTitle,
+            normalizedTitle: cleanedTitle,
             author: author,
             isbn: finalISBN,
             isbn10: isbn10,

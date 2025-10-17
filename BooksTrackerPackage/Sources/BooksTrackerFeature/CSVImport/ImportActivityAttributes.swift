@@ -1,6 +1,8 @@
 import Foundation
-import ActivityKit
 import SwiftUI
+
+#if canImport(ActivityKit)
+import ActivityKit
 
 // MARK: - CSV Import Live Activity Attributes
 
@@ -380,3 +382,5 @@ extension TimeInterval {
         }
     }
 }
+
+#endif  // canImport(ActivityKit)

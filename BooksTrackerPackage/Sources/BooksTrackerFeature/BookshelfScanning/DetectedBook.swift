@@ -1,6 +1,8 @@
 import Foundation
 import SwiftUI
 
+#if canImport(UIKit)
+
 // MARK: - Detected Book Model
 
 /// Represents a book detected from a bookshelf photo via Vision framework
@@ -120,3 +122,5 @@ public struct ScanStatistics: Sendable {
         self.needsReview = needsReview
     }
 }
+
+#endif  // canImport(UIKit)

@@ -1,6 +1,6 @@
 # 📚 BooksTrack by oooe - Claude Code Guide
 
-**Version 3.0.0 (Build 46+)** | **iOS 26.0+** | **Swift 6.1+** | **Updated: October 16, 2025**
+**Version 3.0.0 (Build 47+)** | **iOS 26.0+** | **Swift 6.1+** | **Updated: October 17, 2025**
 
 This is a personal book tracking iOS app with cultural diversity insights, built with SwiftUI, SwiftData, and a Cloudflare Workers backend.
 
@@ -175,8 +175,14 @@ struct BookDetailView: View {
 **API Endpoints:**
 - `/search/title` - Smart general search (6h cache)
 - `/search/isbn` - Dedicated ISBN lookup (7-day cache, ISBNdb-first)
-- `/search/advanced` - Multi-field filtering (title+author)
+- `/search/advanced` - Multi-field filtering (title+author) - **Now orchestrates 3 providers: Google Books + OpenLibrary + ISBNdb**
 - `/search/author` - Author bibliography
+
+**Provider Orchestration (October 2025):**
+- **Parallel Execution**: All 3 providers queried simultaneously via `Promise.allSettled()`
+- **Graceful Degradation**: If any provider fails, others continue (resilient to API downtime)
+- **Smart Deduplication**: 90% similarity threshold merges duplicate results
+- **Provider Tags**: Response shows `orchestrated:google+openlibrary+isbndb` (or subset if providers fail)
 
 **Architecture Rule:** Workers communicate via RPC service bindings - **never** direct API calls from proxy worker. Always orchestrate through specialized workers.
 
@@ -223,74 +229,80 @@ return AsyncStream { continuation in
 
 **🚨 BAN `Timer.publish` in Actors (Swift 6.2+):**
 
-- **Rule:** Never use `Timer.publish` for polling or delays inside an `actor`.
-- **Reason:** `Timer.publish` is a Combine framework feature that does not integrate well with Swift 6's strict actor isolation, leading to compiler errors and unpredictable behavior. It is not `Sendable` and can cause data races.
-- **Solution:** Always use `await Task.sleep(for:)` for delays and polling loops within any actor. This is the modern, concurrency-safe approach.
-- **For SwiftUI Views:** `Timer.publish` may still be used in `@MainActor`-isolated views if absolutely necessary, but `Task.sleep` is still preferred.
+- **Rule:** Never use `Timer.publish` for polling or delays inside an `actor`
+- **Reason:** Combine doesn't integrate with Swift 6 actor isolation
+- **Solution:** Always use `await Task.sleep(for:)` for delays and polling loops
 
-**🎯 POLLING PATTERN (Swift 6.2 - Oct 2025):**
+**🎯 Polling Pattern:**
 
-```
-   ╔══════════════════════════════════════════════════════╗
-   ║  ⚡ THE GREAT POLLING BREAKTHROUGH OF '25 ⚡        ║
-   ║                                                      ║
-   ║  Problem: TaskGroup + Timer.publish + @MainActor    ║
-   ║           = Compiler bug that blocked us for 8hrs   ║
-   ║                                                      ║
-   ║  Solution: Task + Task.sleep = Pure 🔥 Magic 🔥     ║
-   ╚══════════════════════════════════════════════════════╝
-```
-
-**❌ DON'T: Mix isolation domains in TaskGroup**
 ```swift
-// This pattern BREAKS Swift 6 region isolation checker!
-return try await withThrowingTaskGroup(of: Result?.self) { group in
-    group.addTask { @MainActor [self] in  // ← COMPILER BUG!
-        for await _ in Timer.publish(...).values {
-            let data = self.fetchData()  // Actor method
-            updateUI(data)               // MainActor callback
-        }
-    }
-}
-```
-
-**✅ DO: Use Task.detached with Task.sleep**
-```swift
-// Separation of concerns = Swift 6 happiness! 🎉
+// ✅ CORRECT: Separation of concerns
 Task.detached {
     while !Task.isCancelled {
         let data = await actor.fetchData()        // Background work
         await MainActor.run { updateUI(data) }    // UI updates
-        try await Task.sleep(for: .milliseconds(100))  // ← Key!
+        try await Task.sleep(for: .milliseconds(100))
     }
 }
-```
 
-**🏆 Best Practice: PollingProgressTracker**
-```swift
-// Reusable component for all long-running operations
+// 🏆 Best Practice: Reusable PollingProgressTracker
 @State private var tracker = PollingProgressTracker<MyJob>()
-
 let result = try await tracker.start(
     job: myJob,
     strategy: AdaptivePollingStrategy(),  // Battery-optimized!
     timeout: 90
 )
-
-// Or use SwiftUI modifier:
-.pollingProgressSheet(
-    isPresented: $isProcessing,
-    tracker: tracker,
-    title: "Processing..."
-)
 ```
 
-**Lesson Learned (Oct 2025):**
-> "Don't fight Swift 6 isolation. Let `await` boundaries handle
-> actor → MainActor transitions naturally. Timer.publish is Combine,
-> not structured concurrency. Task.sleep is your friend! 🤝"
+**Swift 6.2 Enhancements:**
 
-**See:** `docs/SWIFT6_COMPILER_BUG.md` for the full debugging saga 📖
+*   **Modern `NotificationCenter` API:** The project now uses the `async/await` API for `NotificationCenter`, which simplifies notification handling and improves readability.
+
+    ```swift
+    // ✅ CORRECT: Swift 6.2 async/await API
+    private func handleNotifications() async {
+        let notifications = AsyncStream.merge(
+            NotificationCenter.default.notifications(named: .switchToLibraryTab),
+            NotificationCenter.default.notifications(named: .enrichmentStarted)
+        )
+
+        for await notification in notifications {
+            handle(notification)
+        }
+    }
+    ```
+
+*   **`@concurrent` Attribute:** The `@concurrent` attribute is used to mark functions that are safe to run concurrently. This allows the compiler to verify their safety and can lead to performance improvements.
+
+    ```swift
+    // ✅ CORRECT: Swift 6.2 @concurrent attribute
+    @concurrent func calculateExpectedProgress(
+        elapsed: Int,
+        stages: [ScanJobResponse.StageMetadata]
+    ) -> Double {
+        // ... function implementation
+    }
+    ```
+
+*   **Swift Testing Enhancements:** The project leverages new features in Swift Testing, such as parameterized tests, to write more concise and effective tests.
+
+    ```swift
+    // ✅ CORRECT: Swift 6.2 parameterized test
+    @Test(
+        "Normalize title for search",
+        arguments: [
+            (input: "The da Vinci Code: The Young Adult Adaptation", expected: "The da Vinci Code"),
+            (input: "Devil's Knot (Justice Knot, #1)", expected: "Devil's Knot")
+        ]
+    )
+    func testTitleNormalization(input: String, expected: String) {
+        #expect(input.normalizedTitleForSearch == expected)
+    }
+    ```
+
+**Lesson:** Don't fight Swift 6 isolation. Let `await` boundaries handle actor → MainActor transitions naturally.
+
+**Full Story:** See CHANGELOG.md "Great Polling Breakthrough" + `docs/SWIFT6_COMPILER_BUG.md`
 
 ### iOS 26 HIG Compliance
 
@@ -426,14 +438,7 @@ let schema = Schema([
 
 ### Barcode Scanning Integration
 
-**Key Files:**
-- `ISBNValidator.swift` - ISBN-10/13 validation with checksum
-- `CameraManager.swift` - Actor-isolated camera management
-- `BarcodeDetectionService.swift` - AsyncStream detection
-- `ModernBarcodeScannerView.swift` - Complete scanner UI
-- `ModernCameraPreview.swift` - UIKit camera preview layer
-
-**Usage:**
+**Quick Start:**
 ```swift
 // In SearchView navigation toolbar
 ToolbarItem(placement: .topBarTrailing) {
@@ -448,240 +453,103 @@ ToolbarItem(placement: .topBarTrailing) {
 }
 ```
 
-**🎯 CRITICAL: Single CameraManager Instance Pattern**
-
-```
-   ╔════════════════════════════════════════════════════════╗
-   ║  📹 THE CAMERA RACE CONDITION FIX (v3.0.1) 🎥        ║
-   ║                                                        ║
-   ║  ❌ Problem: Two CameraManager instances fighting!   ║
-   ║     • ModernBarcodeScannerView creates one           ║
-   ║     • ModernCameraPreview creates another            ║
-   ║     • Result: Race condition → CRASH! 💥            ║
-   ║                                                        ║
-   ║  ✅ Solution: Single-instance dependency injection   ║
-   ╚════════════════════════════════════════════════════════╝
-```
-
-**Architecture Pattern:**
-```swift
-// ✅ CORRECT: ModernBarcodeScannerView owns CameraManager
-struct ModernBarcodeScannerView: View {
-    @State private var cameraManager: CameraManager?
-
-    var body: some View {
-        if let cameraManager = cameraManager {
-            // Pass shared instance to preview
-            ModernCameraPreview(
-                cameraManager: cameraManager,
-                configuration: cameraConfiguration,
-                detectionConfiguration: detectionConfiguration
-            )
-        }
-    }
-
-    private func handleISBNDetectionStream() async {
-        // Create CameraManager ONCE if nil
-        if cameraManager == nil {
-            cameraManager = await CameraManager()
-        }
-
-        // Reuse existing instance
-        guard let manager = cameraManager else { return }
-
-        // Use shared manager for detection
-        let detectionService = await BarcodeDetectionService(...)
-        for await isbn in await detectionService.isbnDetectionStream(
-            cameraManager: manager
-        ) {
-            handleISBNDetected(isbn)
-        }
-    }
-
-    private func cleanup() {
-        // Proper teardown
-        isbnDetectionTask?.cancel()
-        if let manager = cameraManager {
-            await manager.stopSession()
-        }
-        cameraManager = nil
-    }
-}
-
-// ✅ CORRECT: ModernCameraPreview receives CameraManager
-struct ModernCameraPreview: UIViewRepresentable {
-    let cameraManager: CameraManager  // Required parameter
-
-    init(
-        cameraManager: CameraManager,  // No optional, no @StateObject
-        configuration: CameraConfiguration,
-        detectionConfiguration: BarcodeDetectionConfiguration,
-        onError: @escaping (CameraError) -> Void
-    ) {
-        self.cameraManager = cameraManager
-        // ...
-    }
-}
-```
-
-**Key Principles:**
-1. **Single Ownership**: `ModernBarcodeScannerView` creates and owns the `CameraManager`
-2. **Dependency Injection**: Pass shared instance to child views (no @StateObject!)
-3. **Lifecycle Management**: Create once, reuse throughout view lifecycle, cleanup on dismiss
-4. **Swift 6 Compliance**: Respects @CameraSessionActor isolation boundaries
-
-**Why This Matters:**
-- Camera hardware can only have ONE active session
-- Multiple AVCaptureSession instances = undefined behavior
-- Swift 6 actor isolation prevents data races, but doesn't prevent resource conflicts
-- Dependency injection makes ownership explicit
-
-**Lesson Learned (Oct 2025):**
-> "When working with exclusive hardware resources (camera, microphone, GPS),
-> treat them like singletons within your view hierarchy. One owner,
-> explicit passing, clean lifecycle. Trust Swift 6 actors for thread safety,
-> but YOU handle resource exclusivity!" 🎯
-
-### Bookshelf AI Camera Scanner (NEW - Build 46! 📸)
-
 **Key Files:**
-- **Camera:** `BookshelfCameraSessionManager.swift`, `BookshelfCameraViewModel.swift`, `BookshelfCameraPreview.swift`, `BookshelfCameraView.swift`
-- **API:** `BookshelfAIService.swift`
-- **UI:** `BookshelfScannerView.swift`, `ScanResultsView.swift`
+- `ISBNValidator.swift` - ISBN-10/13 validation with checksum
+- `CameraManager.swift` - Actor-isolated camera management (@CameraSessionActor)
+- `BarcodeDetectionService.swift` - AsyncStream detection
+- `ModernBarcodeScannerView.swift` - Complete scanner UI
+- `ModernCameraPreview.swift` - UIKit camera preview layer
+
+**🎯 CRITICAL Pattern: Single CameraManager Instance**
+- Camera hardware requires ONE active session only
+- Parent view owns CameraManager, passes to children via dependency injection
+- **Rule:** Never create multiple CameraManager instances
+- See CHANGELOG.md "Camera Race Condition Fix" for full story
+
+### Bookshelf AI Camera Scanner
+
+**Status:** ✅ SHIPPING (Build 48+ with WebSocket Real-Time Progress)
 
 **Quick Start:**
 ```swift
 // SettingsView - Experimental Features
 Button("Scan Bookshelf (Beta)") { showingBookshelfScanner = true }
     .sheet(isPresented: $showingBookshelfScanner) {
-        BookshelfScannerView()  // Now with working camera! 🎉
+        BookshelfScannerView()
     }
 ```
 
-**Architecture: Swift 6.1 Global Actor Pattern** 🏆
+**Key Features:**
+- Gemini 2.5 Flash AI vision analysis (25-40s)
+- **WebSocket real-time progress tracking** (8ms latency, 250x faster than polling!)
+- Backend enrichment integration (89.7% success rate, 5-10s)
+- Suggestions banner (9 types: blurry, glare, cutoff, etc.)
+- Background metadata enrichment via `EnrichmentQueue.shared`
+- Swift 6.2 compliant with typed throws and @MainActor progress handlers
 
+**Progress Tracking (Build 48+):**
+- **Real-time WebSocket updates** (no polling delay!)
+- 4 progress stages with smooth percentage updates:
+  - "Analyzing image quality..." → 10%
+  - "Processing with Gemini AI..." → 30%
+  - "Enriching N books..." → 70%
+  - "Complete!" → 100%
+- **Performance:** 95% fewer network requests (22+ polls → 4 WebSocket events)
+- **Battery:** Event-driven updates instead of continuous polling
+
+**WebSocket Implementation (Swift 6.2):**
 ```swift
-@globalActor
-actor BookshelfCameraActor {
-    static let shared = BookshelfCameraActor()
-}
+// Typed throws for precise error handling
+func processBookshelfImageWithWebSocket(
+    _ image: UIImage,
+    progressHandler: @MainActor @escaping (Double, String) -> Void
+) async throws(BookshelfAIError) -> ([DetectedBook], [SuggestionViewModel])
 
-@BookshelfCameraActor
-final class BookshelfCameraSessionManager {
-    // Trust Apple's thread-safety guarantee for read-only access
-    nonisolated(unsafe) private let captureSession = AVCaptureSession()
-    nonisolated init() {}  // Cross-actor instantiation
+// Real-time progress updates in UI
+@Observable class BookshelfScanModel {
+    var currentProgress: Double = 0.0  // 0.0 - 1.0
+    var currentStage: String = ""      // Live stage name
 
-    func startSession() async -> AVCaptureSession {
-        // Returns session for MainActor preview layer configuration
+    func processImage(_ image: UIImage) async {
+        try await BookshelfAIService.shared.processBookshelfImageWithWebSocket(image) {
+            progress, stage in
+            self.currentProgress = progress  // MainActor-safe!
+            self.currentStage = stage
+        }
     }
-
-    func capturePhoto(flashMode: FlashMode) async throws -> Data {
-        // ✅ Returns Sendable Data (not UIImage!)
-        // MainActor creates UIImage from Data
-    }
 }
 ```
 
-**Critical Patterns:**
-
-1. **Global Actor (not plain actor):** Required for cross-isolation access
-2. **nonisolated(unsafe):** Trust AVCaptureSession thread-safety
-3. **@preconcurrency import:** Suppress AVFoundation Sendable warnings
-4. **Data Bridge:** Return Data from actor, create UIImage on MainActor
-5. **Task Wrapper:** `Task { @BookshelfCameraActor in ... }.value` for calls
-
-**AVFoundation Configuration Order** ⚠️ CRITICAL:
-```swift
-// ❌ WRONG: Crashes with activeFormat error
-output.maxPhotoDimensions = device.activeFormat.supportedMaxPhotoDimensions.first
-captureSession.addOutput(output)
-
-// ✅ CORRECT: Add to session FIRST
-captureSession.addOutput(output)
-output.maxPhotoDimensions = device.activeFormat.supportedMaxPhotoDimensions.first
-```
-
-**User Journey:**
-```
-Settings → Scan Bookshelf → Camera Button
-    ↓
-Camera permissions (AVCaptureDevice.requestAccess)
-    ↓
-Live preview (AVCaptureVideoPreviewLayer)
-    ↓
-Capture → Review sheet → "Use Photo"
-    ↓
-Upload to Cloudflare Worker (bookshelf-ai-worker)
-    ↓
-Gemini 2.5 Flash AI analysis
-    ↓
-ScanResultsView → Add books to SwiftData
-```
-
-**Privacy:** Camera permission required. Photos uploaded to Cloudflare AI Worker for analysis (not stored). Requires `NSCameraUsageDescription` in Info.plist.
-
-**Status:** ✅ SHIPPING (Build 46)! Swift 6.1 compliant, tested on iPhone 17 Pro (iOS 26.0.1). Zero warnings, zero data races.
-
-**🎉 ENRICHMENT INTEGRATION (Build 49 - October 2025):**
-
-Backend enrichment system (89.7% success rate) now fully integrated with iOS app:
-
-**Response Model Updates (BookshelfAIService.swift):**
-- Added `confidence: Double?` (direct field, replacing nested struct)
-- Added `enrichmentStatus: String?` (tracks backend enrichment results)
-- Added `coverUrl: String?` (enriched book cover URLs)
-- Simplified model structure for better API alignment
-
-**Conversion Logic Enhancement:**
-- Maps enrichment status to detection states:
-  - "ENRICHED"/"FOUND" → `.detected`
-  - "UNCERTAIN"/"NEEDS_REVIEW" → `.uncertain`
-  - "REJECTED" → `.rejected`
-- Graceful fallback for missing enrichment data
-- Uses direct confidence score from Gemini AI
-
-**Timeout Optimization:**
-- Increased from 60s → 70s to accommodate AI (25-40s) + enrichment (5-10s)
-- Ensures reliable completion for full enrichment pipeline
-
-**Swift 6.1 Concurrency Validation:**
-- Actor isolation correct: `BookshelfAIService` remains `actor`
-- Response models properly `Sendable` for cross-actor safety
-- Conversion logic correctly `nonisolated` (pure function)
-- Timeout as immutable `let` property (no data races)
-
-**Architecture:** iOS app → Cloudflare Worker (Gemini 2.5 Flash) → books-api-proxy (RPC enrichment) → Single unified response with confidence scores + metadata
-
-**Background Enrichment Queue:**
-- All scanned books automatically queued for additional metadata enrichment
-- Uses shared `EnrichmentQueue.shared` (same system as CSV import)
-- Silent background processing with progress shown via `EnrichmentProgressBanner`
-- See `ScanResultsView.addAllToLibrary()` lines 577-588 for implementation
-
-**See Issue #16 for implementation details and iOS 26 HIG enhancement recommendations.**
-
-**Suggestions Banner (Build 45+):**
-- AI-generated or client-fallback actionable guidance
-- 9 suggestion types: unreadable_books, low_confidence, edge_cutoff, blurry_image, glare_detected, distance_too_far, multiple_shelves, lighting_issues, angle_issues
-- Unified banner UI with Liquid Glass + severity indicators
-- Individual "Got it" dismissal pattern
-- Templated messages for consistency and localization
-- Hybrid approach: AI-first, client-side fallback for reliability
+**Architecture Highlights:**
+- **Typed Throws:** `throws(BookshelfAIError)` for precise error handling
+- **WebSocket Manager:** `WebSocketProgressManager` with Durable Object backend
+- **Result Pattern:** Bridges typed throws with continuation-based WebSocket handling
+- **Error Handling:** Comprehensive coverage (network, server, compression, quality rejection)
+- **Memory Safety:** Explicit WebSocket cleanup in all code paths
+- **Global Actor Pattern:** `@BookshelfCameraActor` for camera isolation
 
 **Key Files:**
-- `SuggestionGenerator.swift` - Client-side fallback logic
-- `SuggestionViewModel.swift` - Display logic and templated messages
-- `ScanResultsView.swift:suggestionsBanner()` - Banner UI component
+- `BookshelfAIService.swift` - WebSocket communication with typed throws
+- `WebSocketProgressManager.swift` - Real-time progress tracking
+- `BookshelfScannerView.swift` - UI with live progress bar
+- `BookshelfCameraSessionManager.swift` - Camera session management
+- `ScanResultsView.swift` - Review and import UI
+- `SuggestionGenerator.swift` - Client-side suggestion fallback
 
-**Testing Suggestions Banner:**
-- Test image with issues: `docs/testImages/IMG_0014.jpeg` (2 unreadable books)
-- Should trigger "unreadable_books" suggestion
-- Test image quality: Clear image → no suggestions
+**Backend:**
+- **Cloudflare Durable Object:** `progress-websocket-durable-object`
+- **WebSocket Endpoint:** `wss://books-api-proxy.jukasdrj.workers.dev/ws/progress`
+- **Tests:** 3/3 passing (connection lifecycle, broadcasting, completion)
+
+**Deprecated (Build 48+):**
+- `processBookshelfImageWithProgress()` - Polling-based method (will be removed Q1 2026)
+- Use `processBookshelfImageWithWebSocket()` for all new implementations
+
+**Full Documentation:**
+- Feature guide: `docs/features/BOOKSHELF_SCANNER.md`
+- Validation report: `docs/validation/2025-10-17-websocket-validation-report.md`
 
 ### CSV Import & Enrichment System
-
-**Key Files:** `CSVParsingActor.swift`, `CSVImportService.swift`, `EnrichmentService.swift`, `EnrichmentQueue.swift`, `CSVImportFlowView.swift`
 
 **Quick Start:**
 ```swift
@@ -690,59 +558,35 @@ Button("Import CSV Library") { showingCSVImport = true }
     .sheet(isPresented: $showingCSVImport) { CSVImportFlowView() }
 ```
 
-**Performance:** 100 books/min, <200MB memory (1500+ books), 95%+ duplicate detection, 90%+ enrichment success
+**Performance:** 100 books/min, <200MB memory (1500+ books), 90%+ enrichment success
 
 **Format Support:** Goodreads, LibraryThing, StoryGraph (auto-detects columns)
 
-**Architecture:** CSV → `CSVParsingActor` (@globalActor) → `CSVImportService` → SwiftData → `EnrichmentQueue` (@MainActor) → `EnrichmentService` → Cloudflare Worker
+**Architecture:** CSV → `CSVParsingActor` → `CSVImportService` → SwiftData → `EnrichmentQueue` → Cloudflare Worker
 
-**🆕 SyncCoordinator Pattern (Build 46+):**
-- Centralized job orchestration for multi-step background operations
-- Type-safe progress tracking with `JobModels` (JobIdentifier, JobStatus, JobProgress)
-- Services provide stateless Result-based APIs
-- UI observes coordinator state via `@Published` job status
-- Supports CSV import and enrichment job tracking
-- **Key Files:** `SyncCoordinator.swift`, `JobModels.swift`, `SyncCoordinatorTests.swift`
-- **Documentation:** [SyncCoordinator Architecture](docs/architecture/SyncCoordinator-Architecture.md)
-- **Usage:**
-  ```swift
-  @StateObject private var coordinator = SyncCoordinator.shared
+**🎯 Title Normalization (October 2025):**
+- Two-tier storage: Original title for display, normalized for API searches
+- Removes series markers: `(Series, #1)`, edition markers: `[Special]`, subtitles
+- 5-step algorithm in `String+TitleNormalization.swift`
+- **Impact:** Enrichment success 70% → 90%+
 
-  // Start CSV import
-  let jobId = await coordinator.startCSVImport(
-      csvContent: content,
-      mappings: mappings,
-      strategy: .smart,
-      modelContext: modelContext
-  )
+**SyncCoordinator Pattern (Build 46+):**
+- Centralized job orchestration with type-safe progress tracking
+- `JobModels`: JobIdentifier, JobStatus, JobProgress
+- UI observes `@Published` job status
+- See `docs/architecture/SyncCoordinator-Architecture.md`
 
-  // Monitor progress
-  if let status = coordinator.getJobStatus(for: jobId) {
-      switch status {
-      case .active(let progress):
-          ProgressView(value: progress.fractionCompleted)
-          Text(progress.currentStatus)
-      case .completed(let log):
-          ForEach(log, id: \.self) { Text($0) }
-      case .failed(let error):
-          Text("Error: \(error)")
-      default:
-          ProgressView()
-      }
-  }
-  ```
-- **Migration Status:** CSVImportService maintains backward compatibility with legacy @Published API while new code can use coordinator
-
-**🎉 Enrichment Progress Banner (Build 45+):**
-- NotificationCenter-based (NO Live Activity entitlements!)
+**Enrichment Progress Banner:**
+- NotificationCenter-based (no Live Activity entitlements!)
 - Real-time progress: "Enriching Metadata... 15/100 (15%)"
-- Theme-aware gradient, pulsing icon, WCAG AA compliant
-- Files: `ContentView.swift` (lines 9-12, 65-96, 272-365), `EnrichmentQueue.swift` (lines 174-179, 210-219, 235-239)
+- Theme-aware gradient, WCAG AA compliant
 
-**Queue Self-Cleaning:**
-- Startup validation removes stale persistent IDs
-- Graceful handling skips deleted works
-- See `docs/archive/csvMoon-implementation-notes.md` for details
+**Key Files:**
+- `CSVParsingActor.swift`, `CSVImportService.swift`, `EnrichmentService.swift`
+- `EnrichmentQueue.swift`, `SyncCoordinator.swift`, `JobModels.swift`
+- `String+TitleNormalization.swift` (5-step algorithm, 13 tests)
+
+**Full Documentation:** See `docs/features/CSV_IMPORT.md`
 
 ## Debugging & Troubleshooting
 
@@ -888,68 +732,23 @@ var body: some View {
 
 ### Progress UI Components
 
-A suite of reusable progress indicators built with the iOS 26 Liquid Glass design system. These components are designed for tracking long-running operations like AI scanning, CSV imports, and network requests.
+Reusable progress indicators built with iOS 26 Liquid Glass design system.
 
-**Key Files:** `BooksTrackerPackage/Sources/BooksTrackerFeature/ProgressViews/ProgressComponents.swift`
+**Key File:** `ProgressViews/ProgressComponents.swift`
 
 **Components:**
+- **ProgressBanner** - Dismissible banner for ongoing operations
+- **StagedProgressView** - Multi-stage progress bar for multi-step operations
+- **PollingIndicator** - Animated spinner with label for indeterminate tasks
+- **EstimatedTimeRemaining** - Countdown text view
 
-**1. ProgressBanner**
-
-A dismissible banner for showing ongoing progress.
-
-**Usage:**
+**Usage Example:**
 ```swift
-@State private var isBannerShowing = true
-
-var body: some View {
-    if isBannerShowing {
-        ProgressBanner(
-            isShowing: $isBannerShowing,
-            title: "Enriching Metadata",
-            message: "Processing 24 of 100 books..."
-        )
-    }
-}
-```
-
-**2. StagedProgressView**
-
-A multi-stage progress bar for multi-step operations.
-
-**Usage:**
-```swift
-@State private var currentStage = 1
-@State private var currentProgress = 0.75
-let stages = ["Scanning", "Enriching", "Uploading"]
-
-var body: some View {
-    StagedProgressView(
-        stages: stages,
-        currentStageIndex: $currentStage,
-        progress: $currentProgress
-    )
-}
-```
-
-**3. PollingIndicator**
-
-An animated spinner with a label for indeterminate tasks.
-
-**Usage:**
-```swift
-PollingIndicator(stageName: "Waiting for server response...")
-```
-
-**4. EstimatedTimeRemaining**
-
-A text view that counts down to a future completion date.
-
-**Usage:**
-```swift
-let estimatedCompletion = Date().addingTimeInterval(300) // 5 minutes from now
-
-EstimatedTimeRemaining(completionDate: estimatedCompletion)
+ProgressBanner(
+    isShowing: $isBannerShowing,
+    title: "Enriching Metadata",
+    message: "Processing 24 of 100 books..."
+)
 ```
 
 **🎨 CRITICAL: Text Contrast & Accessibility**
@@ -1004,51 +803,45 @@ Text("Page Count")
 
 ```
 📁 Root Directory
-├── 📄 CLAUDE.md                      ← Main development guide (this file)
+├── 📄 CLAUDE.md                      ← Main development guide (this file, <1000 lines)
 ├── 📄 MCP_SETUP.md                   ← XcodeBuildMCP configuration & workflows
 ├── 📄 README.md                      ← Quick start & project overview
-├── 📄 CHANGELOG.md                   ← Version history & releases
+├── 📄 CHANGELOG.md                   ← Version history, debugging sagas, victories
 ├── 📄 FUTURE_ROADMAP.md             ← Aspirational features
 ├── 📁 docs/
+│   ├── 📁 features/                  ← ✨ NEW: Detailed feature documentation
+│   │   ├── 📄 BOOKSHELF_SCANNER.md  ← AI camera scanner architecture
+│   │   └── 📄 CSV_IMPORT.md         ← CSV import & enrichment system
 │   ├── 📄 API.md                     ← Comprehensive API contract & RPC docs
 │   ├── 📄 CLOUDFLARE_DEBUGGING.md   ← Worker debugging & monitoring guide
 │   ├── 📄 CONCURRENCY_GUIDE.md      ← Swift 6 concurrency patterns
-│   ├── 📄 SWIFT6_COMPILER_BUG.md    ← Compiler bug debugging saga (Oct 2025)
+│   ├── 📄 SWIFT6_COMPILER_BUG.md    ← Polling pattern debugging saga
 │   ├── 📄 GITHUB_WORKFLOW.md        ← GitHub Issues workflow
 │   ├── 📄 MIGRATION_RECORD.md       ← Historical migration notes
 │   ├── 📁 architecture/
 │   │   ├── 📄 SyncCoordinator-Architecture.md  ← Current coordinator pattern
-│   │   └── 📄 2025-10-16-csv-coordinator-refactor-plan.md  ← CSV refactor plan (active)
+│   │   └── 📄 2025-10-16-csv-coordinator-refactor-plan.md  ← CSV refactor plan
 │   ├── 📁 plans/
 │   │   ├── 📄 2025-10-16-issue-audit-report.md
 │   │   └── 📄 2025-10-16-project-cleanup.md
 │   └── 📁 archive/
-│       ├── 📄 BOOKSHELF_SCANNER_DESIGN_PLAN.md (Build 46 shipped)
-│       ├── 📄 SUGGESTIONS_WORKER_TEST_RESULTS.md (production)
-│       ├── 📄 testing-results.md (historical)
-│       ├── 📄 cache3-openlibrary-migration.md (implemented)
-│       ├── 📄 csvMoon-implementation-notes.md (CSV import roadmap)
-│       ├── 📄 ARCHIVE_PHASE1_AUDIT_REPORT.md (resolved)
+│       ├── 📄 BOOKSHELF_SCANNER_DESIGN_PLAN.md (shipped)
+│       ├── 📄 csvMoon-implementation-notes.md (implemented)
 │       └── 📁 serena-memories/ (legacy context)
 ├── 📁 .claude/commands/              ← Custom slash commands
 │   ├── 📄 gogo.md                    ← App Store validation pipeline
-│   ├── 📄 build.md                   ← Quick build check
-│   ├── 📄 test.md                    ← Swift test suite runner
-│   ├── 📄 device-deploy.md           ← Physical device deployment
-│   └── 📄 sim.md                     ← Simulator launch & debug
+│   ├── 📄 build.md, test.md, device-deploy.md, sim.md
 └── 📁 cloudflare-workers/
     ├── 📄 README.md                  ← Backend architecture
     └── 📄 SERVICE_BINDING_ARCHITECTURE.md ← RPC technical docs
 ```
 
 **Documentation Philosophy:**
-- CLAUDE.md: Current development standards and patterns (keep under 1200 lines)
-- CHANGELOG.md: Historical achievements and version notes
-- FUTURE_ROADMAP.md: Clearly marked as aspirational
-- docs/API.md: Comprehensive API contracts and RPC bindings
-- docs/CLOUDFLARE_DEBUGGING.md: Operational debugging guide
-- docs/archive/: Completed plans and historical references
-- GitHub Issues: Active tasks and implementation plans
+- **CLAUDE.md:** Current development standards and patterns (<1000 lines, quick reference)
+- **docs/features/:** Deep dives on major features (architecture, testing, lessons learned)
+- **CHANGELOG.md:** Historical achievements, debugging sagas, victory stories
+- **docs/archive/:** Completed plans and historical references
+- **GitHub Issues:** Active tasks and implementation plans
 
 **Implementation Plans & Future Work:**
 - **GitHub Issues**: Active tasks tracked at https://github.com/users/jukasdrj/projects/2

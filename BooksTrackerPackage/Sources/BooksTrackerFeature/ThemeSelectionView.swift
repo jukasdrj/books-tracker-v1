@@ -105,7 +105,9 @@ public struct ThemeSelectionView: View {
             .padding()
         }
         .navigationTitle("Theme")
+        #if canImport(UIKit)
         .navigationBarTitleDisplayMode(.inline)
+        #endif
         .background(backgroundView.ignoresSafeArea())
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {

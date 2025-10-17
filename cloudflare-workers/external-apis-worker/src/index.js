@@ -1,7 +1,7 @@
 import { WorkerEntrypoint } from "cloudflare:workers";
 import { searchGoogleBooks, searchGoogleBooksByISBN } from './google-books.js';
 import { searchOpenLibrary, getOpenLibraryAuthorWorks } from './open-library.js';
-import { getISBNdbEditionsForWork, getISBNdbBookByISBN } from './isbndb.js';
+import { searchISBNdb, getISBNdbEditionsForWork, getISBNdbBookByISBN } from './isbndb.js';
 
 export class ExternalAPIsWorker extends WorkerEntrypoint {
   async searchGoogleBooks(query, params) {
@@ -18,6 +18,10 @@ export class ExternalAPIsWorker extends WorkerEntrypoint {
 
   async getOpenLibraryAuthorWorks(authorName) {
     return await getOpenLibraryAuthorWorks(authorName, this.env);
+  }
+
+  async searchISBNdb(title, authorName) {
+    return await searchISBNdb(title, authorName, this.env);
   }
 
   async getISBNdbEditionsForWork(title, authorName) {

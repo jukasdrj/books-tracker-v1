@@ -59,28 +59,8 @@ public struct ContentView: View {
             // Validate enrichment queue on app startup - remove stale persistent IDs
             EnrichmentQueue.shared.validateQueue(in: modelContext)
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SwitchToLibraryTab"))) { _ in
-            selectedTab = .library
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("EnrichmentStarted"))) { notification in
-            if let userInfo = notification.userInfo,
-               let total = userInfo["totalBooks"] as? Int {
-                isEnriching = true
-                enrichmentProgress = (0, total)
-                currentBookTitle = ""
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("EnrichmentProgress"))) { notification in
-            if let userInfo = notification.userInfo,
-               let completed = userInfo["completed"] as? Int,
-               let total = userInfo["total"] as? Int,
-               let title = userInfo["currentTitle"] as? String {
-                enrichmentProgress = (completed, total)
-                currentBookTitle = title
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("EnrichmentCompleted"))) { _ in
-            isEnriching = false
+        .task {
+            await handleNotifications()
         }
         .overlay(alignment: .bottom) {
             if isEnriching {
@@ -222,6 +202,73 @@ public struct ContentView: View {
             print("Failed to save sample data: \(error)")
         }
     }
+
+    // MARK: - Notification Handling (Swift 6.2)
+
+    private func handleNotifications() async {
+        // Handle each notification type sequentially to avoid Swift 6 isolation checker limitations
+        // See: https://github.com/swiftlang/swift/issues/XXXXX
+        Task { @MainActor in
+            for await notification in NotificationCenter.default.notifications(named: .switchToLibraryTab) {
+                handle(notification)
+            }
+        }
+        Task { @MainActor in
+            for await notification in NotificationCenter.default.notifications(named: .enrichmentStarted) {
+                handle(notification)
+            }
+        }
+        Task { @MainActor in
+            for await notification in NotificationCenter.default.notifications(named: .enrichmentProgress) {
+                handle(notification)
+            }
+        }
+        Task { @MainActor in
+            for await notification in NotificationCenter.default.notifications(named: .enrichmentCompleted) {
+                handle(notification)
+            }
+        }
+    }
+
+    @MainActor
+    private func handle(_ notification: Notification) {
+        switch notification.name {
+        case .switchToLibraryTab:
+            selectedTab = .library
+
+        case .enrichmentStarted:
+            if let userInfo = notification.userInfo,
+               let total = userInfo["totalBooks"] as? Int {
+                isEnriching = true
+                enrichmentProgress = (0, total)
+                currentBookTitle = ""
+            }
+
+        case .enrichmentProgress:
+            if let userInfo = notification.userInfo,
+               let completed = userInfo["completed"] as? Int,
+               let total = userInfo["total"] as? Int,
+               let title = userInfo["currentTitle"] as? String {
+                enrichmentProgress = (completed, total)
+                currentBookTitle = title
+            }
+
+        case .enrichmentCompleted:
+            isEnriching = false
+
+        default:
+            break
+        }
+    }
+}
+
+// MARK: - Notification Names
+
+extension Notification.Name {
+    static let switchToLibraryTab = Notification.Name("SwitchToLibraryTab")
+    static let enrichmentStarted = Notification.Name("EnrichmentStarted")
+    static let enrichmentProgress = Notification.Name("EnrichmentProgress")
+    static let enrichmentCompleted = Notification.Name("EnrichmentCompleted")
 }
 
 // MARK: - Tab Navigation
