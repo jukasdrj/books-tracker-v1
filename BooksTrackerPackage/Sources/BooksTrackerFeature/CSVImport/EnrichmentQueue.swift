@@ -118,6 +118,12 @@ public final class EnrichmentQueue {
         return queue.count
     }
 
+    /// Get all queued work IDs as strings for API calls
+    /// - Returns: Array of persistent identifier strings
+    public func getQueuedWorkIds() -> [String] {
+        return queue.map { "\($0.workPersistentID)" }
+    }
+
     /// Clear all items from the queue
     public func clear() {
         queue.removeAll()
