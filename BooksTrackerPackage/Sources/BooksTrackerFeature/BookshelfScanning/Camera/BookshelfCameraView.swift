@@ -145,51 +145,51 @@ public struct BookshelfCameraView: View {
 
     private var cameraControlsOverlay: some View {
         VStack {
-            // Top bar
-            HStack {
-                // Cancel button
-                Button(action: {
-                    Task {
-                        await viewModel.cleanup()
-                        dismiss()
-                    }
-                }) {
-                    Image(systemName: "xmark")
-                        .font(.title2)
-                        .foregroundStyle(.white)
-                        .padding(12)
-                        .background(.ultraThinMaterial, in: Circle())
-                }
-                .accessibilityLabel("Cancel")
-
-                Spacer()
-
-                // Flash toggle (if available)
-                if viewModel.isFlashAvailable {
+            // Top bar with guidance text (iOS HIG compliant)
+            VStack(spacing: 12) {
+                HStack {
+                    // Cancel button
                     Button(action: {
-                        viewModel.toggleFlash()
+                        Task {
+                            await viewModel.cleanup()
+                            dismiss()
+                        }
                     }) {
-                        Image(systemName: flashIcon)
+                        Image(systemName: "xmark")
                             .font(.title2)
                             .foregroundStyle(.white)
                             .padding(12)
                             .background(.ultraThinMaterial, in: Circle())
                     }
-                    .accessibilityLabel("Flash: \(flashLabel)")
+                    .accessibilityLabel("Cancel")
+
+                    Spacer()
+
+                    // Flash toggle (if available)
+                    if viewModel.isFlashAvailable {
+                        Button(action: {
+                            viewModel.toggleFlash()
+                        }) {
+                            Image(systemName: flashIcon)
+                                .font(.title2)
+                                .foregroundStyle(.white)
+                                .padding(12)
+                                .background(.ultraThinMaterial, in: Circle())
+                        }
+                        .accessibilityLabel("Flash: \(flashLabel)")
+                    }
                 }
+
+                // Guidance text at top (iOS HIG best practice)
+                Text("Align your bookshelf in the frame")
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 2)
             }
             .padding()
-
-            Spacer()
-
-            // Center guidance
-            Text("Align your bookshelf in the frame")
-                .font(.headline)
-                .foregroundStyle(.white)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 12)
-                .background(.ultraThinMaterial, in: Capsule())
-                .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 2)
 
             Spacer()
 
