@@ -267,21 +267,21 @@ public struct SearchView: View {
     @ViewBuilder
     private var searchContentArea: some View {
         ZStack(alignment: .bottom) {
-            switch searchModel.searchState {
-            case .initial:
-                initialStateView
+            switch searchModel.viewState {
+            case .initial(let trending, let recentSearches):
+                initialStateView(trending: trending, recentSearches: recentSearches)
 
-            case .searching:
-                searchingStateView
+            case .searching(let query, let scope, let previousResults):
+                searchingStateView(query: query, scope: scope, previousResults: previousResults)
 
-            case .results:
-                resultsStateView
+            case .results(_, _, let items, let hasMorePages, let cacheHitRate):
+                resultsStateView(items: items, hasMorePages: hasMorePages, cacheHitRate: cacheHitRate)
 
-            case .noResults:
-                noResultsStateView
+            case .noResults(let query, let scope):
+                noResultsStateView(query: query, scope: scope)
 
-            case .error(let message):
-                errorStateView(message: message)
+            case .error(let message, let lastQuery, let lastScope, let recoverySuggestion):
+                errorStateView(message: message, lastQuery: lastQuery, lastScope: lastScope, recoverySuggestion: recoverySuggestion)
             }
 
             // HIG: Debug info only in development builds
@@ -296,7 +296,7 @@ public struct SearchView: View {
     // MARK: - State Views
     // HIG: Enhanced empty states with contextual guidance
 
-    private var initialStateView: some View {
+    private func initialStateView(trending: [SearchResult], recentSearches: [String]) -> some View {
         ScrollView {
             LazyVStack(spacing: 32) {
                 // Welcome section - HIG: Clear, inviting empty state
@@ -322,17 +322,17 @@ public struct SearchView: View {
                 .padding(.top, 32)
 
                 // Recent searches section - HIG: Quick access to previous searches
-                if !searchModel.recentSearches.isEmpty {
-                    recentSearchesSection
+                if !recentSearches.isEmpty {
+                    recentSearchesSection(recentSearches: recentSearches)
                 }
 
                 // Trending books grid - HIG: Contextual content discovery
-                if !searchModel.trendingBooks.isEmpty {
-                    trendingBooksSection
+                if !trending.isEmpty {
+                    trendingBooksSection(trending: trending)
                 }
 
                 // HIG: Helpful tips for first-time users
-                if searchModel.recentSearches.isEmpty {
+                if recentSearches.isEmpty {
                     quickTipsSection
                 }
             }
@@ -359,7 +359,7 @@ public struct SearchView: View {
     }
 
     // HIG: Recent searches for quick re-access
-    private var recentSearchesSection: some View {
+    private func recentSearchesSection(recentSearches: [String]) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
                 Label("Recent Searches", systemImage: "clock")
@@ -378,7 +378,7 @@ public struct SearchView: View {
             LazyVGrid(columns: [
                 GridItem(.adaptive(minimum: 140), spacing: 12)
             ], spacing: 12) {
-                ForEach(Array(searchModel.recentSearches.prefix(6)), id: \.self) { search in
+                ForEach(Array(recentSearches.prefix(6)), id: \.self) { search in
                     Button {
                         searchModel.searchText = search
                     } label: {
@@ -406,7 +406,7 @@ public struct SearchView: View {
     }
 
     // HIG: Trending content for discovery
-    private var trendingBooksSection: some View {
+    private func trendingBooksSection(trending: [SearchResult]) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
                 Label("Trending Books", systemImage: "flame.fill")
@@ -418,7 +418,7 @@ public struct SearchView: View {
             }
 
             iOS26FluidGridSystem<SearchResult, AnyView>.bookLibrary(
-                items: searchModel.trendingBooks
+                items: trending
             ) { book in
                 AnyView(
                     Button {
@@ -489,46 +489,80 @@ public struct SearchView: View {
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
-    // HIG: Loading state with clear feedback
-    private var searchingStateView: some View {
-        VStack(spacing: 24) {
-            Spacer()
-
-            VStack(spacing: 16) {
-                ZStack {
-                    Circle()
-                        .fill(.ultraThinMaterial)
-                        .frame(width: 80, height: 80)
-                        .overlay {
-                            Circle()
-                                .fill(themeStore.glassStint(intensity: 0.2))
+    // HIG: Loading state with clear feedback and smooth UX showing previous results
+    private func searchingStateView(query: String, scope: SearchScope, previousResults: [SearchResult]) -> some View {
+        ZStack {
+            // Show previous results if available for smooth transition
+            if !previousResults.isEmpty {
+                ScrollView {
+                    LazyVStack(spacing: 12) {
+                        ForEach(previousResults) { result in
+                            Button {
+                                selectedBook = result
+                            } label: {
+                                iOS26LiquidListRow(
+                                    work: result.work,
+                                    displayStyle: .standard
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.horizontal, 16)
+                            .opacity(0.5)  // Dim to indicate stale
+                            .accessibilityElement(children: .combine)
+                            .accessibilityLabel("Book: \(result.displayTitle) by \(result.displayAuthors)")
                         }
 
-                    ProgressView()
-                        .scaleEffect(1.5)
-                        .tint(themeStore.primaryColor)
+                        Spacer(minLength: 20)
+                    }
                 }
-
-                VStack(spacing: 8) {
-                    Text("Searching...")
-                        .font(.title3)
-                        .fontWeight(.medium)
-
-                    Text(searchStatusMessage)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                }
+                .disabled(true)  // Prevent interaction during loading
             }
 
-            Spacer()
+            // Loading overlay
+            VStack(spacing: 24) {
+                Spacer()
+
+                VStack(spacing: 16) {
+                    ZStack {
+                        Circle()
+                            .fill(.ultraThinMaterial)
+                            .frame(width: 80, height: 80)
+                            .overlay {
+                                Circle()
+                                    .fill(themeStore.glassStint(intensity: 0.2))
+                            }
+
+                        ProgressView()
+                            .scaleEffect(1.5)
+                            .tint(themeStore.primaryColor)
+                    }
+
+                    VStack(spacing: 8) {
+                        Text("Searching...")
+                            .font(.title3)
+                            .fontWeight(.medium)
+
+                        Text(searchStatusMessage(for: scope))
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                }
+
+                Spacer()
+            }
+            .background {
+                if !previousResults.isEmpty {
+                    Color.clear.background(.ultraThinMaterial)
+                }
+            }
         }
         .transition(.opacity.combined(with: .scale(scale: 0.9)))
     }
 
     // HIG: Contextual loading messages
-    private var searchStatusMessage: String {
-        switch searchScope {
+    private func searchStatusMessage(for scope: SearchScope) -> String {
+        switch scope {
         case .all:
             return "Searching all books..."
         case .title:
@@ -541,15 +575,15 @@ public struct SearchView: View {
     }
 
     // HIG: Results with pagination support
-    private var resultsStateView: some View {
+    private func resultsStateView(items: [SearchResult], hasMorePages: Bool, cacheHitRate: Double) -> some View {
         ZStack(alignment: .bottomTrailing) {
             ScrollView {
                 LazyVStack(spacing: 12) {
                     // Results header
-                    resultsHeader
+                    resultsHeader(count: items.count, cacheHitRate: cacheHitRate)
 
                     // Results list with accessibility
-                    ForEach(searchModel.searchResults) { result in
+                    ForEach(items) { result in
                         Button {
                             selectedBook = result
                         } label: {
@@ -570,7 +604,7 @@ public struct SearchView: View {
                     }
 
                     // HIG: Pagination loading indicator
-                    if searchModel.hasMoreResults {
+                    if hasMorePages {
                         loadMoreIndicator
                             .onAppear {
                                 loadMoreResults()
@@ -605,15 +639,15 @@ public struct SearchView: View {
         ))
     }
 
-    private var resultsHeader: some View {
+    private func resultsHeader(count: Int, cacheHitRate: Double) -> some View {
         HStack {
-            Text("\(searchModel.searchResults.count) results")
+            Text("\(count) results")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
             Spacer()
 
-            if searchModel.cacheHitRate > 0 {
+            if cacheHitRate > 0 {
                 HStack(spacing: 4) {
                     Image(systemName: "bolt.fill")
                         .foregroundStyle(themeStore.primaryColor)
@@ -679,14 +713,14 @@ public struct SearchView: View {
     }
 
     // HIG: Helpful no results state
-    private var noResultsStateView: some View {
+    private func noResultsStateView(query: String, scope: SearchScope) -> some View {
         VStack(spacing: 24) {
             Spacer()
 
             ContentUnavailableView {
                 Label("No Results Found", systemImage: "magnifyingglass")
             } description: {
-                Text(noResultsMessage)
+                Text(noResultsMessage(for: scope, query: query))
             } actions: {
                 VStack(spacing: 12) {
                     Button("Clear Search") {
@@ -703,8 +737,8 @@ public struct SearchView: View {
     }
 
     // HIG: Contextual no results messages
-    private var noResultsMessage: String {
-        switch searchScope {
+    private func noResultsMessage(for scope: SearchScope, query: String) -> String {
+        switch scope {
         case .all:
             return "Try different keywords or check your spelling"
         case .title:
@@ -717,21 +751,38 @@ public struct SearchView: View {
     }
 
     // HIG: Clear error states with recovery options
-    private func errorStateView(message: String) -> some View {
+    private func errorStateView(message: String, lastQuery: String?, lastScope: SearchScope?, recoverySuggestion: String?) -> some View {
         VStack(spacing: 24) {
             Spacer()
 
             ContentUnavailableView {
                 Label("Search Error", systemImage: "exclamationmark.triangle")
             } description: {
-                Text(message)
+                VStack(spacing: 8) {
+                    Text(message)
+
+                    if let suggestion = recoverySuggestion {
+                        Text(suggestion)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                }
             } actions: {
                 VStack(spacing: 12) {
-                    Button("Try Again") {
-                        searchModel.retryLastSearch()
+                    if let query = lastQuery, let scope = lastScope {
+                        Button("Retry Search") {
+                            searchModel.search(query: query, scope: scope)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(themeStore.primaryColor)
+                    } else {
+                        Button("Try Again") {
+                            searchModel.retryLastSearch()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(themeStore.primaryColor)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(themeStore.primaryColor)
 
                     Button("Clear Search") {
                         searchModel.clearSearch()
@@ -819,11 +870,19 @@ public struct SearchView: View {
     #if DEBUG
     private func updatePerformanceText() {
         if searchModel.lastSearchTime > 0 {
-            let cacheStatus = searchModel.cacheHitRate > 0 ? "CACHED" : "FRESH"
+            // Get cache hit rate from viewState if in results state
+            let cacheHitRate: Double
+            if case .results(_, _, _, _, let rate) = searchModel.viewState {
+                cacheHitRate = rate
+            } else {
+                cacheHitRate = 0
+            }
+
+            let cacheStatus = cacheHitRate > 0 ? "CACHED" : "FRESH"
             performanceText = String(format: "%.0fms • %@ • %.0f%% cache",
                                      searchModel.lastSearchTime * 1000,
                                      cacheStatus,
-                                     searchModel.cacheHitRate * 100)
+                                     cacheHitRate * 100)
         } else {
             performanceText = ""
         }
@@ -832,16 +891,16 @@ public struct SearchView: View {
 
     // HIG: Comprehensive accessibility descriptions
     private var accessibilityDescription: String {
-        switch searchModel.searchState {
+        switch searchModel.viewState {
         case .initial:
             return "Search for books. Currently showing trending books and recent searches."
         case .searching:
             return "Searching for books. Please wait."
-        case .results:
-            return "Search results. \(searchModel.searchResults.count) books found. Swipe to browse results."
+        case .results(_, _, let items, _, _):
+            return "Search results. \(items.count) books found. Swipe to browse results."
         case .noResults:
             return "No search results found. Try different keywords."
-        case .error(let message):
+        case .error(let message, _, _, _):
             return "Search error: \(message). Try again or clear search."
         }
     }
