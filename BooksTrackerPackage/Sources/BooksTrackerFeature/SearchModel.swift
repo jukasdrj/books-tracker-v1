@@ -31,17 +31,13 @@ public enum SearchScope: String, CaseIterable, Identifiable, Sendable {
 @Observable
 @MainActor
 public final class SearchModel {
-    // Search state
+    // Unified search state
     var searchText: String = ""
-    var searchResults: [SearchResult] = []
-    var isSearching: Bool = false
-    var searchState: SearchState = .initial
-    var errorMessage: String?
+    var viewState: SearchViewState = .initial(trending: [], recentSearches: [])
 
-    // Trending/featured books for initial state
-    var trendingBooks: [SearchResult] = []
+    // Search suggestions (still separate - UI-specific feature)
     var searchSuggestions: [String] = []
-    var recentSearches: [String] = []
+    var recentSearches: [String] = []  // Public for SearchView access (TODO: move to viewState in Task 4)
     private var popularSearches: [String] = [
         "Andy Weir", "Stephen King", "Agatha Christie", "J.K. Rowling",
         "The Martian", "Dune", "1984", "Pride and Prejudice",
@@ -55,6 +51,9 @@ public final class SearchModel {
     // Dependencies
     private let apiService: BookSearchAPIService
     private var searchTask: Task<Void, Never>?
+
+    // Pagination state
+    private var currentPage: Int = 1
 
     public init(apiService: BookSearchAPIService = BookSearchAPIService()) {
         self.apiService = apiService
@@ -70,22 +69,61 @@ public final class SearchModel {
         }
     }
 
-    // MARK: - Search State Enum
+    // MARK: - Backward Compatibility Properties
+    // TODO: Remove in Task 4 after SearchView is updated
 
-    enum SearchState {
-        case initial        // Show trending books grid
-        case searching      // Loading state with glass spinner
-        case results        // Show search results list
-        case noResults      // ContentUnavailableView with search icon
-        case error(String)  // Error state with retry option
+    var searchResults: [SearchResult] {
+        viewState.currentResults
     }
 
-    // MARK: - Pagination Support
+    var isSearching: Bool {
+        viewState.isSearching
+    }
 
-    var hasMoreResults: Bool = false
-    private var currentPage: Int = 1
-    private var currentQuery: String = ""
-    private var currentScope: SearchScope?
+    var hasMoreResults: Bool {
+        if case .results(_, _, _, let hasMore, _) = viewState {
+            return hasMore
+        }
+        return false
+    }
+
+    var trendingBooks: [SearchResult] {
+        if case .initial(let trending, _) = viewState {
+            return trending
+        }
+        return []
+    }
+
+    var errorMessage: String? {
+        if case .error(let message, _, _, _) = viewState {
+            return message
+        }
+        return nil
+    }
+
+    // Old SearchState enum for backward compatibility
+    var searchState: SearchState {
+        switch viewState {
+        case .initial:
+            return .initial
+        case .searching:
+            return .searching
+        case .results:
+            return .results
+        case .noResults:
+            return .noResults
+        case .error(let message, _, _, _):
+            return .error(message)
+        }
+    }
+
+    enum SearchState {
+        case initial
+        case searching
+        case results
+        case noResults
+        case error(String)
+    }
 
     // MARK: - Public Methods
 
@@ -101,8 +139,16 @@ public final class SearchModel {
     }
 
     private func performAdvancedSearch(criteria: AdvancedSearchCriteria) async {
-        searchState = .searching
-        isSearching = true
+        // Update search text for display (combined query)
+        if let query = criteria.buildSearchQuery() {
+            searchText = query
+        }
+
+        viewState = .searching(
+            query: searchText,
+            scope: .all,
+            previousResults: viewState.currentResults
+        )
 
         let startTime = Date()
 
@@ -113,22 +159,29 @@ public final class SearchModel {
                 isbn: criteria.isbn.isEmpty ? nil : criteria.isbn
             )
 
-            // Backend returns filtered SearchResults directly
-            searchResults = response.results
-            searchState = response.results.isEmpty ? .noResults : .results
             lastSearchTime = Date().timeIntervalSince(startTime) * 1000 // milliseconds
 
-            // Update search text for display (combined query)
-            if let query = criteria.buildSearchQuery() {
-                searchText = query
+            // Backend returns filtered SearchResults directly
+            if response.results.isEmpty {
+                viewState = .noResults(query: searchText, scope: .all)
+            } else {
+                viewState = .results(
+                    query: searchText,
+                    scope: .all,
+                    items: response.results,
+                    hasMorePages: false,
+                    cacheHitRate: response.cacheHitRate
+                )
             }
 
         } catch {
-            searchState = .error(error.localizedDescription)
-            errorMessage = error.localizedDescription
+            viewState = .error(
+                message: error.localizedDescription,
+                lastQuery: searchText,
+                lastScope: .all,
+                recoverySuggestion: "Check your connection and try again"
+            )
         }
-
-        isSearching = false
     }
 
     func search(query: String, scope: SearchScope = .all) {
@@ -144,7 +197,6 @@ public final class SearchModel {
 
         // DO NOT update searchText here. The view's @State is the source of truth.
         // This was causing a feedback loop that broke the spacebar.
-        currentScope = scope
 
         // Determine debounce delay based on query length and type
         let debounceDelay = calculateDebounceDelay(for: trimmedQuery)
@@ -166,12 +218,16 @@ public final class SearchModel {
 
     /// Load more results for pagination
     func loadMoreResults() async {
-        guard hasMoreResults, !isSearching else { return }
+        guard hasMoreResults, !viewState.isSearching else { return }
+
+        // Extract query and scope from current state
+        guard let query = viewState.currentQuery,
+              let scope = viewState.currentScope else { return }
 
         currentPage += 1
         await performSearch(
-            query: currentQuery,
-            scope: currentScope ?? .all,
+            query: query,
+            scope: scope,
             page: currentPage,
             appendResults: true
         )
@@ -207,8 +263,6 @@ public final class SearchModel {
     func clearSearch() {
         searchTask?.cancel()
         searchText = ""
-        searchResults = []
-        errorMessage = nil
         resetToInitialState()
     }
 
@@ -335,13 +389,13 @@ public final class SearchModel {
         appendResults: Bool = false,
         retryCount: Int = 0
     ) async {
-        isSearching = true
-        searchState = .searching
-        errorMessage = nil
-
-        // Store query for pagination
+        // Set searching state with previous results for smooth UX
         if !appendResults {
-            currentQuery = query
+            viewState = .searching(
+                query: query,
+                scope: scope,
+                previousResults: viewState.currentResults
+            )
             currentPage = 1
         }
 
@@ -361,22 +415,28 @@ public final class SearchModel {
             // Process results with scope filtering
             let filteredResults = filterResultsByScope(response.results, scope: scope, query: query)
 
-            // Append or replace results based on pagination
+            // Calculate final results (append or replace)
+            let finalResults: [SearchResult]
             if appendResults {
-                searchResults.append(contentsOf: filteredResults)
+                finalResults = viewState.currentResults + filteredResults
             } else {
-                searchResults = filteredResults
+                finalResults = filteredResults
             }
 
-            // Update pagination state
-            hasMoreResults = filteredResults.count >= 20
+            // Determine if more pages are available
+            let hasMore = filteredResults.count >= 20
 
             // Update UI state based on results
-            if searchResults.isEmpty {
-                searchState = .noResults
-                hasMoreResults = false
+            if finalResults.isEmpty {
+                viewState = .noResults(query: query, scope: scope)
             } else {
-                searchState = .results
+                viewState = .results(
+                    query: query,
+                    scope: scope,
+                    items: finalResults,
+                    hasMorePages: hasMore,
+                    cacheHitRate: response.cacheHitRate
+                )
                 // Add successful search to recent searches
                 if !appendResults {
                     addToRecentSearches(query)
@@ -398,12 +458,14 @@ public final class SearchModel {
             }
 
             // Handle final error state
-            errorMessage = formatUserFriendlyError(error)
-            searchState = .error(formatUserFriendlyError(error))
-            hasMoreResults = false
+            let errorMsg = formatUserFriendlyError(error)
+            viewState = .error(
+                message: errorMsg,
+                lastQuery: query,
+                lastScope: scope,
+                recoverySuggestion: "Check your connection and try again"
+            )
         }
-
-        isSearching = false
     }
 
     /// Filter results by scope (additional client-side filtering for quality)
@@ -471,21 +533,24 @@ public final class SearchModel {
     }
 
     private func resetToInitialState() {
-        searchState = .initial
-        searchResults = []
-        errorMessage = nil
-        isSearching = false
-        hasMoreResults = false
+        // Get current trending and recent searches from viewState if available
+        let trending: [SearchResult]
+        if case .initial(let existingTrending, _) = viewState {
+            trending = existingTrending
+        } else {
+            trending = []
+        }
+
+        viewState = .initial(trending: trending, recentSearches: recentSearches)
         currentPage = 1
-        currentQuery = ""
-        currentScope = nil
     }
 
     private func loadTrendingBooks() async {
         // Load trending books for initial state
         do {
             let response = try await apiService.getTrendingBooks()
-            self.trendingBooks = response.results
+            // Update viewState with loaded trending books
+            viewState = .initial(trending: response.results, recentSearches: recentSearches)
         } catch {
             // Silently fail for trending books - not critical
             print("Failed to load trending books: \(error)")
