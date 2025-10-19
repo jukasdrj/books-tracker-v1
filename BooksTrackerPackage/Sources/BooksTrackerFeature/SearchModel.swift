@@ -127,6 +127,15 @@ public final class SearchModel {
 
     // MARK: - Public Methods
 
+    // MARK: - Search Options Configuration
+
+    private struct SearchOptions {
+        var titleFilter: String?
+        var authorFilter: String?
+        var isbnFilter: String?
+        var isAdvanced: Bool = false
+    }
+
     // MARK: - Advanced Search
 
     func advancedSearch(criteria: AdvancedSearchCriteria) {
@@ -144,43 +153,19 @@ public final class SearchModel {
             searchText = query
         }
 
-        viewState = .searching(
-            query: searchText,
-            scope: .all,
-            previousResults: viewState.currentResults
+        // Configure advanced search options
+        let options = SearchOptions(
+            titleFilter: criteria.bookTitle.isEmpty ? nil : criteria.bookTitle,
+            authorFilter: criteria.authorName.isEmpty ? nil : criteria.authorName,
+            isbnFilter: criteria.isbn.isEmpty ? nil : criteria.isbn,
+            isAdvanced: true
         )
 
-        let startTime = Date()
-
+        // Execute unified search
         do {
-            let response = try await apiService.advancedSearch(
-                author: criteria.authorName.isEmpty ? nil : criteria.authorName,
-                title: criteria.bookTitle.isEmpty ? nil : criteria.bookTitle,
-                isbn: criteria.isbn.isEmpty ? nil : criteria.isbn
-            )
-
-            lastSearchTime = Date().timeIntervalSince(startTime) * 1000 // milliseconds
-
-            // Backend returns filtered SearchResults directly
-            if response.results.isEmpty {
-                viewState = .noResults(query: searchText, scope: .all)
-            } else {
-                viewState = .results(
-                    query: searchText,
-                    scope: .all,
-                    items: response.results,
-                    hasMorePages: false,
-                    cacheHitRate: response.cacheHitRate
-                )
-            }
-
+            try await executeSearch(query: searchText, scope: .all, options: options)
         } catch {
-            viewState = .error(
-                message: error.localizedDescription,
-                lastQuery: searchText,
-                lastScope: .all,
-                recoverySuggestion: "Check your connection and try again"
-            )
+            handleSearchError(error, query: searchText, scope: .all)
         }
     }
 
@@ -212,7 +197,11 @@ public final class SearchModel {
             // Check if task was cancelled
             guard !Task.isCancelled else { return }
 
-            await performSearch(query: trimmedQuery, scope: scope)
+            do {
+                try await executeSearch(query: trimmedQuery, scope: scope)
+            } catch {
+                handleSearchError(error, query: trimmedQuery, scope: scope)
+            }
         }
     }
 
@@ -225,12 +214,17 @@ public final class SearchModel {
               let scope = viewState.currentScope else { return }
 
         currentPage += 1
-        await performSearch(
-            query: query,
-            scope: scope,
-            page: currentPage,
-            appendResults: true
-        )
+
+        do {
+            try await executeSearch(
+                query: query,
+                scope: scope,
+                page: currentPage,
+                appendResults: true
+            )
+        } catch {
+            handleSearchError(error, query: query, scope: scope)
+        }
     }
 
     // MARK: - Smart Debouncing Logic
@@ -275,13 +269,17 @@ public final class SearchModel {
     func searchByISBN(_ isbn: String) {
         // Set search text and immediately perform search without debouncing
         searchText = isbn
-        
+
         // Cancel any previous search
         searchTask?.cancel()
-        
+
         // Start immediate search for ISBN
         searchTask = Task {
-            await performSearch(query: isbn)
+            do {
+                try await executeSearch(query: isbn)
+            } catch {
+                handleSearchError(error, query: isbn, scope: .all)
+            }
         }
     }
 
@@ -382,13 +380,17 @@ public final class SearchModel {
 
     // MARK: - Private Methods
 
-    private func performSearch(
+    // MARK: - Unified Search Execution
+
+    /// Unified search method that handles both basic and advanced searches
+    private func executeSearch(
         query: String,
         scope: SearchScope = .all,
         page: Int = 1,
         appendResults: Bool = false,
+        options: SearchOptions = SearchOptions(),
         retryCount: Int = 0
-    ) async {
+    ) async throws {
         // Set searching state with previous results for smooth UX
         if !appendResults {
             viewState = .searching(
@@ -402,29 +404,40 @@ public final class SearchModel {
         let startTime = CFAbsoluteTimeGetCurrent()
 
         do {
-            // Pass scope directly to API service (no need for prefix approach)
-            let response = try await apiService.search(query: query, maxResults: 20, scope: scope)
+            // Call appropriate API based on search type
+            let response: SearchResponse
+            if options.isAdvanced {
+                response = try await apiService.advancedSearch(
+                    author: options.authorFilter,
+                    title: options.titleFilter,
+                    isbn: options.isbnFilter
+                )
+            } else {
+                response = try await apiService.search(query: query, maxResults: 20, scope: scope)
+            }
 
             // Check if task was cancelled
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled else { throw CancellationError() }
 
             // Update performance metrics
             lastSearchTime = CFAbsoluteTimeGetCurrent() - startTime
             cacheHitRate = response.cacheHitRate
 
-            // Process results with scope filtering
-            let filteredResults = filterResultsByScope(response.results, scope: scope, query: query)
+            // Process results with scope filtering (only for basic search)
+            let processedResults = options.isAdvanced
+                ? response.results
+                : filterResultsByScope(response.results, scope: scope, query: query)
 
             // Calculate final results (append or replace)
             let finalResults: [SearchResult]
             if appendResults {
-                finalResults = viewState.currentResults + filteredResults
+                finalResults = viewState.currentResults + processedResults
             } else {
-                finalResults = filteredResults
+                finalResults = processedResults
             }
 
-            // Determine if more pages are available
-            let hasMore = filteredResults.count >= 20
+            // Determine if more pages are available (advanced search never has pagination)
+            let hasMore = options.isAdvanced ? false : (processedResults.count >= 20)
 
             // Update UI state based on results
             if finalResults.isEmpty {
@@ -444,28 +457,42 @@ public final class SearchModel {
             }
 
         } catch {
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled else { throw CancellationError() }
 
             // Implement intelligent retry logic
             if shouldRetry(error: error, attempt: retryCount) {
                 let retryDelay = calculateRetryDelay(attempt: retryCount)
                 try? await Task.sleep(nanoseconds: UInt64(retryDelay * 1_000_000_000))
 
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled else { throw CancellationError() }
 
-                await performSearch(query: query, scope: scope, page: page, appendResults: appendResults, retryCount: retryCount + 1)
+                try await executeSearch(
+                    query: query,
+                    scope: scope,
+                    page: page,
+                    appendResults: appendResults,
+                    options: options,
+                    retryCount: retryCount + 1
+                )
                 return
             }
 
-            // Handle final error state
-            let errorMsg = formatUserFriendlyError(error)
-            viewState = .error(
-                message: errorMsg,
-                lastQuery: query,
-                lastScope: scope,
-                recoverySuggestion: "Check your connection and try again"
-            )
+            // Re-throw error for caller to handle
+            throw error
         }
+    }
+
+    /// Handle search errors consistently across all search methods
+    private func handleSearchError(_ error: Error, query: String, scope: SearchScope) {
+        guard !Task.isCancelled else { return }
+
+        let errorMsg = formatUserFriendlyError(error)
+        viewState = .error(
+            message: errorMsg,
+            lastQuery: query,
+            lastScope: scope,
+            recoverySuggestion: "Check your connection and try again"
+        )
     }
 
     /// Filter results by scope (additional client-side filtering for quality)
