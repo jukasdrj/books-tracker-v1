@@ -163,6 +163,80 @@ struct BookDetailView: View {
 - Any view that needs to react to model changes
 - Star ratings, progress bars, status indicators, etc.
 
+### Search State Architecture (October 2025)
+
+**Pattern: Unified State Enum**
+
+The search feature uses a comprehensive state enum that eliminates impossible states through Swift's type system:
+
+```swift
+@MainActor
+public enum SearchViewState: Equatable, Sendable {
+    /// Initial state with discovery content
+    case initial(trending: [SearchResult], recentSearches: [String])
+
+    /// Actively searching - preserves previous results for smooth UX
+    case searching(query: String, scope: SearchScope, previousResults: [SearchResult])
+
+    /// Successful search with results
+    case results(query: String, scope: SearchScope, items: [SearchResult],
+                 hasMorePages: Bool, cacheHitRate: Double)
+
+    /// No results found
+    case noResults(query: String, scope: SearchScope)
+
+    /// Error state with retry context
+    case error(message: String, lastQuery: String, lastScope: SearchScope,
+               recoverySuggestion: String)
+}
+```
+
+**Key Benefits:**
+- **Impossible States Eliminated**: Can't have `isSearching=true` + `errorMessage` simultaneously
+- **Rich Context**: Each state carries all necessary data (query, scope, results, error info)
+- **Smooth UX**: `.searching` preserves previous results to prevent flickering
+- **Error Recovery**: Error state includes `lastQuery` and `lastScope` for retry functionality
+
+**Usage in Views:**
+```swift
+struct SearchView: View {
+    @State private var searchModel = SearchModel()
+
+    var body: some View {
+        switch searchModel.state {
+        case .initial(let trending, let recentSearches):
+            TrendingBooksView(trending: trending, recentSearches: recentSearches)
+
+        case .searching(let query, _, let previousResults):
+            LoadingView(query: query, previousResults: previousResults)
+
+        case .results(_, _, let items, let hasMorePages, _):
+            ResultsListView(items: items, hasMorePages: hasMorePages)
+
+        case .noResults(let query, let scope):
+            EmptyStateView(query: query, scope: scope)
+
+        case .error(let message, let lastQuery, let lastScope, let suggestion):
+            ErrorView(message: message, suggestion: suggestion) {
+                searchModel.search(query: lastQuery, scope: lastScope)  // Retry
+            }
+        }
+    }
+}
+```
+
+**Architectural Lessons:**
+- Single source of truth prevents sync bugs
+- Associated values make data flow explicit
+- Pattern matching forces exhaustive case handling
+- Computed properties (`currentResults`, `isSearching`) provide convenience
+
+**Files:**
+- `SearchViewState.swift` - Enum definition with computed properties
+- `SearchModel.swift` - State management with `var state: SearchViewState`
+- `SearchView.swift` - UI rendering via pattern matching
+- `SearchModelTests.swift` - 22 tests covering state transitions
+
 ### Backend Architecture
 
 **Cloudflare Workers Ecosystem:**
