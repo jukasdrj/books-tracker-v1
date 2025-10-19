@@ -71,9 +71,9 @@ struct SearchViewStateTests {
     func testErrorState() {
         let state = SearchViewState.error(
             message: "Network timeout",
-            query: "Swift programming",
-            scope: .author,
-            previousResults: []
+            lastQuery: "Swift programming",
+            lastScope: .author,
+            recoverySuggestion: "Check your connection"
         )
         #expect(state.currentQuery == "Swift programming")
         #expect(state.currentScope == .author)
@@ -108,9 +108,9 @@ struct SearchViewStateTests {
 
         let errorState = SearchViewState.error(
             message: "Error",
-            query: "test",
-            scope: .all,
-            previousResults: []
+            lastQuery: "test",
+            lastScope: .all,
+            recoverySuggestion: "Try again"
         )
         #expect(!errorState.isSearching)
     }
@@ -138,9 +138,9 @@ struct SearchViewStateTests {
 
         let error = SearchViewState.error(
             message: "Error",
-            query: "query4",
-            scope: .all,
-            previousResults: []
+            lastQuery: "query4",
+            lastScope: .all,
+            recoverySuggestion: "Retry"
         )
         #expect(error.currentQuery == "query4")
     }
@@ -168,9 +168,9 @@ struct SearchViewStateTests {
 
         let error = SearchViewState.error(
             message: "Error",
-            query: "test",
-            scope: .all,
-            previousResults: []
+            lastQuery: "test",
+            lastScope: .all,
+            recoverySuggestion: "Retry"
         )
         #expect(error.currentScope == .all)
     }

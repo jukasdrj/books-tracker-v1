@@ -10,18 +10,19 @@ struct BookshelfAIServiceWebSocketTests {
 
     #if canImport(UIKit)
     @Test("processBookshelfImageWithWebSocket calls progress handler")
+    @MainActor
     func testWebSocketProgressHandlerCalled() async throws {
         // Create mock image
         let image = createMockImage()
 
-        // Track progress updates
+        // Track progress updates (MainActor-isolated)
         var progressUpdates: [(Double, String)] = []
         let service = BookshelfAIService.shared
 
         // This test will fail initially because the method doesn't exist yet
         let (books, suggestions) = try await service.processBookshelfImageWithWebSocket(
             image,
-            progressHandler: { @MainActor progress, stage in
+            progressHandler: { progress, stage in
                 progressUpdates.append((progress, stage))
             }
         )
@@ -30,11 +31,12 @@ struct BookshelfAIServiceWebSocketTests {
         #expect(progressUpdates.count >= 1, "Progress handler should be called at least once")
 
         // Verify results are returned (even if empty for test)
-        #expect(books != nil, "Books array should be returned")
-        #expect(suggestions != nil, "Suggestions array should be returned")
+        #expect(!books.isEmpty || books.isEmpty, "Books array should be returned")
+        #expect(!suggestions.isEmpty || suggestions.isEmpty, "Suggestions array should be returned")
     }
 
     @Test("processBookshelfImageWithWebSocket typed throws BookshelfAIError")
+    @MainActor
     func testWebSocketTypedThrows() async throws {
         // This test verifies the typed throws signature
         let image = createMockImage()
@@ -43,11 +45,11 @@ struct BookshelfAIServiceWebSocketTests {
         do {
             let _ = try await service.processBookshelfImageWithWebSocket(
                 image,
-                progressHandler: { @MainActor _, _ in }
+                progressHandler: { _, _ in }
             )
         } catch let error as BookshelfAIError {
             // Typed throws should allow catching BookshelfAIError directly
-            #expect(error != nil, "Should be able to catch typed BookshelfAIError")
+            #expect(true, "Should be able to catch typed BookshelfAIError: \(error)")
         }
     }
 

@@ -6,6 +6,7 @@ import Foundation
 struct WebSocketProgressManagerTests {
 
     @Test("Should initialize with disconnected state")
+    @MainActor
     func testInitialState() async throws {
         let manager = WebSocketProgressManager()
 
@@ -14,6 +15,7 @@ struct WebSocketProgressManagerTests {
     }
 
     @Test("Should handle missing URL gracefully")
+    @MainActor
     func testInvalidURL() async throws {
         let manager = WebSocketProgressManager()
 
@@ -25,6 +27,7 @@ struct WebSocketProgressManagerTests {
     }
 
     @Test("Should disconnect cleanly")
+    @MainActor
     func testDisconnect() async throws {
         let manager = WebSocketProgressManager()
 
