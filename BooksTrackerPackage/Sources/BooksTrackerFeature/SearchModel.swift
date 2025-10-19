@@ -69,63 +69,15 @@ public final class SearchModel {
         }
     }
 
-    // MARK: - Backward Compatibility Properties
-    // TODO: Remove in Task 4 after SearchView is updated
+    // MARK: - Public Methods
 
-    var searchResults: [SearchResult] {
-        viewState.currentResults
-    }
-
-    var isSearching: Bool {
-        viewState.isSearching
-    }
-
+    /// Computed property for pagination support
     var hasMoreResults: Bool {
         if case .results(_, _, _, let hasMore, _) = viewState {
             return hasMore
         }
         return false
     }
-
-    var trendingBooks: [SearchResult] {
-        if case .initial(let trending, _) = viewState {
-            return trending
-        }
-        return []
-    }
-
-    var errorMessage: String? {
-        if case .error(let message, _, _, _) = viewState {
-            return message
-        }
-        return nil
-    }
-
-    // Old SearchState enum for backward compatibility
-    var searchState: SearchState {
-        switch viewState {
-        case .initial:
-            return .initial
-        case .searching:
-            return .searching
-        case .results:
-            return .results
-        case .noResults:
-            return .noResults
-        case .error(let message, _, _, _):
-            return .error(message)
-        }
-    }
-
-    enum SearchState {
-        case initial
-        case searching
-        case results
-        case noResults
-        case error(String)
-    }
-
-    // MARK: - Public Methods
 
     // MARK: - Search Options Configuration
 
