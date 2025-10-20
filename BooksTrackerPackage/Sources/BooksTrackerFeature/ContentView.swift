@@ -4,6 +4,7 @@ import SwiftData
 public struct ContentView: View {
     @Environment(\.iOS26ThemeStore) private var themeStore
     @Environment(\.modelContext) private var modelContext
+    @Environment(FeatureFlags.self) private var featureFlags
     @State private var selectedTab: MainTab = .library
 
     // Enrichment progress tracking (no Live Activity required!)
@@ -50,6 +51,7 @@ public struct ContentView: View {
             .tag(MainTab.settings)
         }
         .tint(themeStore.primaryColor)
+        .tabBarMinimizeBehavior(featureFlags.enableTabBarMinimize ? .onScrollDown : .never)
         .themedBackground()
         // Sample data disabled for production - empty library on first launch
         // .onAppear {

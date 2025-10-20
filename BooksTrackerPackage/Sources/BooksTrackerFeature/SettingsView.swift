@@ -38,6 +38,7 @@ import SwiftData
 public struct SettingsView: View {
     @Environment(\.iOS26ThemeStore) private var themeStore
     @Environment(\.modelContext) private var modelContext
+    @Environment(FeatureFlags.self) private var featureFlags
 
     // MARK: - State Management
 
@@ -184,6 +185,27 @@ public struct SettingsView: View {
                 }
                 .accessibilityLabel("Scan Bookshelf (Beta)")
                 .accessibilityHint("Experimental feature. Detect books from photos using on-device Vision analysis.")
+
+                Toggle(isOn: Binding(
+                    get: { featureFlags.enableTabBarMinimize },
+                    set: { featureFlags.enableTabBarMinimize = $0 }
+                )) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "dock.arrow.down.rectangle")
+                            .foregroundStyle(themeStore.primaryColor)
+                            .frame(width: 28)
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Tab Bar Minimize on Scroll")
+                                .font(.body)
+
+                            Text("Automatically hide tab bar when scrolling for more screen space")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .tint(themeStore.primaryColor)
             } header: {
                 Text("Experimental Features")
             } footer: {
