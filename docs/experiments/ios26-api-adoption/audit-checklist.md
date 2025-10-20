@@ -1,19 +1,19 @@
 # iOS 26 API Adoption Audit - Progress Tracker
 
-**Last Updated:** October 18, 2025
-**Status:** Active Discovery Phase
+**Last Updated:** October 20, 2025
+**Status:** Active Implementation Phase
 
 ---
 
 ## Progress Overview
 
-- [ ] Scroll Dynamics (0/2 implemented)
+- [ ] Scroll Dynamics (1/2 implemented)
 - [ ] Tab & Navigation (0/1 implemented)
 - [ ] Gestures (0/0 discovered)
 - [ ] Visual Effects (0/0 discovered)
 - [ ] Animations (0/0 discovered)
 
-**Total APIs:** 3 discovered, 0 implemented
+**Total APIs:** 3 discovered, 1 implemented
 
 ---
 
@@ -21,20 +21,24 @@
 
 ### Scroll Dynamics
 
-1. 📋 **`.scrollEdgeEffectStyle(.soft, for: .top)`** - [Issue #110](https://github.com/jukasdrj/books-tracker-v1/issues/110) - Backlog
-   - **Status:** Awaiting implementation
+1. ✅ **`.scrollEdgeEffectStyle(.soft, for: .top)`** - Shipped Build 52
+   - **Status:** Implemented and shipped
    - **Priority:** High
    - **Complexity:** Low
-   - **File:** iOS26LiquidLibraryView.swift
-   - **Expected Benefit:** Enhanced Liquid Glass depth perception with softer fade transitions
+   - **Files Modified:**
+     - iOS26LiquidLibraryView.swift:138
+     - SearchView.swift
+   - **Actual Benefit:** Enhanced Liquid Glass depth perception with softer fade transitions. Zero performance impact, excellent theme compatibility, WCAG AA compliant.
+   - **Implementation Date:** October 20, 2025
+   - **Real Device Validation:** ✅ iPhone 16 Pro (iOS 26.0.1)
 
 2. 📋 **`.tabBarMinimizeBehavior(.onScrollDown)`** - [Issue #111](https://github.com/jukasdrj/books-tracker-v1/issues/111) - Backlog
-   - **Status:** Awaiting implementation
+   - **Status:** Awaiting implementation (planned Build 53)
    - **Priority:** High
    - **Complexity:** Low
    - **File:** ContentView.swift
    - **Expected Benefit:** More immersive content-focused experience with dynamic tab hiding
-   - **Note:** May batch with scroll dynamics for efficient review
+   - **Note:** Requires user testing before shipping (3+ non-developers)
 
 ### Tab & Navigation
 
@@ -57,10 +61,10 @@ _No APIs discovered yet - exploration pending_
 ## Implementation Batches
 
 ### Batch 1: Scroll Dynamics (Target: Build 52)
-- [ ] `.scrollEdgeEffectStyle` (#110)
-- [ ] `.tabBarMinimizeBehavior` (#111) - May batch here for efficiency
+- [x] `.scrollEdgeEffectStyle` - ✅ Shipped Build 52
+- [ ] `.tabBarMinimizeBehavior` (#111) - Deferred to Build 53 (requires user testing)
 
-**Estimated Effort:** 2-3 hours (implementation + device testing + documentation)
+**Actual Effort (Edge Effects):** 2 hours (implementation + simulator testing + theme validation + real device testing + documentation)
 
 ---
 
@@ -96,13 +100,13 @@ _No APIs discovered yet - exploration pending_
 
 **Velocity:**
 - APIs discovered: 3
-- APIs implemented: 0
-- Success rate: N/A (no implementations yet)
+- APIs implemented: 1
+- Success rate: 100% (1/1 shipped without issues)
 
 **Quality:**
-- Device validation rate: 0% (target: 100%)
-- Documentation coverage: 100% (all discoveries have issues)
-- Theme testing coverage: 0% (target: 100% for implemented APIs)
+- Device validation rate: 100% (1/1 tested on iPhone 16 Pro)
+- Documentation coverage: 100% (all APIs fully documented)
+- Theme testing coverage: 100% (all 5 themes tested for implemented APIs)
 
 ---
 
