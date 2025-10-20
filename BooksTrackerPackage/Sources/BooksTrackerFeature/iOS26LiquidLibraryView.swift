@@ -163,6 +163,7 @@ public struct iOS26LiquidLibraryView: View {
                     .padding(.horizontal)
                 }
             }
+            .scrollEdgeEffectStyle(.soft, for: .top)  // iOS 26: Soft fade under nav bar for Liquid Glass depth
             .scrollPosition($scrollPosition)
         }
     }
