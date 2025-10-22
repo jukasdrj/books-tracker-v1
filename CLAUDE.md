@@ -632,33 +632,29 @@ Button("Import CSV Library") { showingCSVImport = true }
     .sheet(isPresented: $showingCSVImport) { CSVImportFlowView() }
 ```
 
+**Architecture:** CSV → CSVParsingActor → SyncCoordinator → CSVImportService → SwiftData → EnrichmentQueue
+
+**Key Files:**
+- `CSVImportFlowView.swift` - UI orchestration with SyncCoordinator
+- `SyncCoordinator.swift` - Job lifecycle management
+- `CSVImportService.swift` - Stateless import logic
+- `EnrichmentQueue.swift` - Background metadata enrichment
+
+**Migration Complete (October 2025):**
+- ✅ CSVImportFlowView now uses SyncCoordinator pattern
+- ✅ Removed @Published state from views
+- ✅ Uses ProgressBanner and StagedProgressView components
+- ✅ Full Swift 6 concurrency compliance
+
 **Performance:** 100 books/min, <200MB memory (1500+ books), 90%+ enrichment success
 
 **Format Support:** Goodreads, LibraryThing, StoryGraph (auto-detects columns)
-
-**Architecture:** CSV → `CSVParsingActor` → `CSVImportService` → SwiftData → `EnrichmentQueue` → Cloudflare Worker
 
 **🎯 Title Normalization (October 2025):**
 - Two-tier storage: Original title for display, normalized for API searches
 - Removes series markers: `(Series, #1)`, edition markers: `[Special]`, subtitles
 - 5-step algorithm in `String+TitleNormalization.swift`
 - **Impact:** Enrichment success 70% → 90%+
-
-**SyncCoordinator Pattern (Build 46+):**
-- Centralized job orchestration with type-safe progress tracking
-- `JobModels`: JobIdentifier, JobStatus, JobProgress
-- UI observes `@Published` job status
-- See `docs/architecture/SyncCoordinator-Architecture.md`
-
-**Enrichment Progress Banner:**
-- NotificationCenter-based (no Live Activity entitlements!)
-- Real-time progress: "Enriching Metadata... 15/100 (15%)"
-- Theme-aware gradient, WCAG AA compliant
-
-**Key Files:**
-- `CSVParsingActor.swift`, `CSVImportService.swift`, `EnrichmentService.swift`
-- `EnrichmentQueue.swift`, `SyncCoordinator.swift`, `JobModels.swift`
-- `String+TitleNormalization.swift` (5-step algorithm, 13 tests)
 
 **Full Documentation:** See `docs/features/CSV_IMPORT.md`
 
