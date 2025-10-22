@@ -273,7 +273,8 @@ public class iOS26ThemeStore: @unchecked Sendable {
     // MARK: - Persistence
 
     private func loadSavedTheme() {
-        if let savedThemeRaw = UserDefaults.standard.object(forKey: "iOS26Theme") as? String,
+        // ✅ FIXED: Use string(forKey:) instead of deprecated object(forKey:)
+        if let savedThemeRaw = UserDefaults.standard.string(forKey: "iOS26Theme"),
            let savedTheme = iOS26Theme(rawValue: savedThemeRaw) {
             currentTheme = savedTheme
         }

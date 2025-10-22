@@ -11,6 +11,7 @@ import UIKit
 struct EditionMetadataView: View {
     @Bindable var work: Work
     let edition: Edition
+    @Binding var selectedAuthor: Author?
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.iOS26ThemeStore) private var themeStore
@@ -56,10 +57,19 @@ struct EditionMetadataView: View {
                 .foregroundStyle(.primary)
                 .lineLimit(3)
 
-            // Author Names
-            Text(work.authorNames)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+            // Clickable Author Names
+            if let authors = work.authors {
+                ForEach(authors) { author in
+                    Button {
+                        selectedAuthor = author
+                    } label: {
+                        Text(author.name)
+                            .font(.subheadline)
+                            .foregroundStyle(themeStore.primaryColor)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
 
             // Publisher Info
             if !edition.publisherInfo.isEmpty {
@@ -595,10 +605,12 @@ struct NotesEditorView: View {
 
         return container
     }()
+    
+    @Previewable @State var selectedAuthor: Author?
 
     let themeStore = BooksTrackerFeature.iOS26ThemeStore()
 
-    return EditionMetadataView(work: Work(title: "Sample Book"), edition: Edition())
+    return EditionMetadataView(work: Work(title: "Sample Book"), edition: Edition(), selectedAuthor: $selectedAuthor)
         .modelContainer(container)
         .environment(\.iOS26ThemeStore, themeStore)
         .padding()

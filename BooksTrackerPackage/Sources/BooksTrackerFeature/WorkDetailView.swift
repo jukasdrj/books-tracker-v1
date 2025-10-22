@@ -136,7 +136,7 @@ struct WorkDetailView: View {
                 bookCoverHero
 
                 // MARK: - Edition Metadata Card
-                EditionMetadataView(work: work, edition: primaryEdition)
+                EditionMetadataView(work: work, edition: primaryEdition, selectedAuthor: $selectedAuthor)
                     .padding(.horizontal, 20)
 
                 // Bottom padding
@@ -192,27 +192,25 @@ struct WorkDetailView: View {
                     .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 1)
 
                 // Clickable author names
-                if let authors = work.authors, authors.count == 1, let author = authors.first {
-                    Button {
-                        selectedAuthor = author
-                    } label: {
-                        HStack(spacing: 4) {
-                            Text(author.name)
-                                .font(.title2)
-                                .foregroundColor(.white.opacity(0.9))
-                            Image(systemName: "magnifyingglass")
-                                .font(.footnote)
-                                .foregroundColor(.white.opacity(0.7))
+                if let authors = work.authors {
+                    HStack(spacing: 8) {
+                        ForEach(authors) { author in
+                            Button {
+                                selectedAuthor = author
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Text(author.name)
+                                        .font(.title2)
+                                        .foregroundColor(.white.opacity(0.9))
+                                    Image(systemName: "magnifyingglass")
+                                        .font(.footnote)
+                                        .foregroundColor(.white.opacity(0.7))
+                                }
+                                .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 1)
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 1)
                     }
-                    .buttonStyle(.plain)
-                } else {
-                    Text(work.authorNames)
-                        .font(.title2)
-                        .foregroundColor(.white.opacity(0.9))
-                        .multilineTextAlignment(.center)
-                        .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 1)
                 }
             }
             .padding(.horizontal, 20)

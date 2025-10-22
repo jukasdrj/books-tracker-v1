@@ -242,7 +242,11 @@ public final class SearchModel {
 
         if query.isEmpty {
             // Show recent searches and popular searches when empty
-            searchSuggestions = Array(recentSearches.prefix(3)) + Array(popularSearches.prefix(5))
+            // ✅ FIXED: Deduplicate to prevent duplicate IDs in ForEach
+            var combined = Array(recentSearches.prefix(3))
+            let popular = popularSearches.filter { !combined.contains($0) }
+            combined.append(contentsOf: Array(popular.prefix(5)))
+            searchSuggestions = combined
             return
         }
 
@@ -358,7 +362,14 @@ public final class SearchModel {
         do {
             // Call appropriate API based on search type
             let response: SearchResponse
-            if options.isAdvanced {
+            if options.isAdvanced, let authorName = options.authorFilter, options.titleFilter == nil, options.isbnFilter == nil {
+                // This is an author-only advanced search, use the dedicated endpoint
+                response = try await apiService.advancedSearch(
+                    author: authorName,
+                    title: nil,
+                    isbn: nil
+                )
+            } else if options.isAdvanced {
                 response = try await apiService.advancedSearch(
                     author: options.authorFilter,
                     title: options.titleFilter,
