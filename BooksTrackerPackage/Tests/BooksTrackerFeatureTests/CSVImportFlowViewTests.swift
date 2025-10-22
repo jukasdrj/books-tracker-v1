@@ -9,13 +9,12 @@ struct CSVImportFlowViewTests {
     @Test("View initializes without crash")
     func viewInitialization() {
         let view = CSVImportFlowView()
-        #expect(view != nil)
+        // Test passes if initialization doesn't crash
     }
 
     @Test("View uses SyncCoordinator singleton")
     func usesSyncCoordinator() {
-        // Verify coordinator is accessible
         let coordinator = SyncCoordinator.shared
-        #expect(coordinator != nil)
+        // Test passes if coordinator is accessible
     }
 }

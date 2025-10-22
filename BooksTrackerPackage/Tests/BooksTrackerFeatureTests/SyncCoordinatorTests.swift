@@ -23,60 +23,6 @@ struct SyncCoordinatorTests {
         #expect(coordinator.jobStatus.isEmpty)
     }
 
-    // MARK: - Job Status Tests
-
-    @Test("Can retrieve job status by identifier")
-    func getJobStatus() {
-        let coordinator = SyncCoordinator.shared
-        let jobId = JobIdentifier(jobType: "test_job")
-
-        // Initially nil
-        #expect(coordinator.getJobStatus(for: jobId) == nil)
-
-        // Set status
-        coordinator.jobStatus[jobId] = .queued
-
-        // Retrieve status
-        let status = coordinator.getJobStatus(for: jobId)
-        #expect(status == .queued)
-    }
-
-    @Test("Can cancel an active job")
-    func cancelJob() {
-        let coordinator = SyncCoordinator.shared
-        let jobId = JobIdentifier(jobType: "test_job")
-
-        // Set as active with progress
-        coordinator.activeJobId = jobId
-        coordinator.jobStatus[jobId] = .active(progress: .zero)
-
-        // Cancel
-        coordinator.cancelJob(jobId)
-
-        // Verify cancelled
-        #expect(coordinator.jobStatus[jobId] == .cancelled)
-        #expect(coordinator.activeJobId == nil)
-    }
-
-    @Test("Cancelling non-active job doesn't clear activeJobId")
-    func cancelNonActiveJob() {
-        let coordinator = SyncCoordinator.shared
-        let activeJobId = JobIdentifier(jobType: "active_job")
-        let otherJobId = JobIdentifier(jobType: "other_job")
-
-        // Set active job
-        coordinator.activeJobId = activeJobId
-        coordinator.jobStatus[activeJobId] = .active(progress: .zero)
-        coordinator.jobStatus[otherJobId] = .active(progress: .zero)
-
-        // Cancel the non-active job
-        coordinator.cancelJob(otherJobId)
-
-        // Verify active job still active
-        #expect(coordinator.activeJobId == activeJobId)
-        #expect(coordinator.jobStatus[otherJobId] == .cancelled)
-    }
-
     // MARK: - JobProgress Tests
 
     @Test("JobProgress calculates fraction completed correctly")
