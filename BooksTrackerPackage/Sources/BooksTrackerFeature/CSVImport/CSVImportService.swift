@@ -9,11 +9,18 @@ import SwiftUI
 @MainActor
 public class CSVImportService: ObservableObject {
 
-    // MARK: - Legacy Published State (kept for backward compatibility)
+    // MARK: - Legacy Published State (DEPRECATED - use SyncCoordinator)
 
+    @available(*, deprecated, message: "Use SyncCoordinator.startCSVImport() instead")
     @Published public var importState: ImportState = .idle
+
+    @available(*, deprecated, message: "Use SyncCoordinator.startCSVImport() instead")
     @Published public var progress: ImportProgress = ImportProgress()
+
+    @available(*, deprecated, message: "Use SyncCoordinator.startCSVImport() instead")
     @Published public var mappings: [CSVParsingActor.ColumnMapping] = []
+
+    @available(*, deprecated, message: "Use SyncCoordinator.startCSVImport() instead")
     @Published public var duplicateStrategy: DuplicateStrategy = .smart
 
     // MARK: - State Management
