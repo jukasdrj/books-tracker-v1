@@ -10,9 +10,13 @@ public struct CSVImportFlowView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.iOS26ThemeStore) private var themeStore
 
-    @State private var importService: CSVImportService?
+    @StateObject private var coordinator = SyncCoordinator.shared
+    @State private var currentJobId: JobIdentifier?
     @State private var showingFilePicker = false
     @State private var selectedFileURL: URL?
+    @State private var parsedCSVData: (headers: [String], rows: [[String]])?
+    @State private var columnMappings: [CSVParsingActor.ColumnMapping] = []
+    @State private var duplicateStrategy: CSVImportService.DuplicateStrategy = .smart
 
     public init() {}
 
@@ -24,48 +28,31 @@ public struct CSVImportFlowView: View {
                     .ignoresSafeArea()
 
                 Group {
-                    switch importService?.importState ?? .idle {
-                    case .idle:
+                    if let jobId = currentJobId,
+                       let status = coordinator.getJobStatus(for: jobId) {
+                        // Job is running - show progress
+                        jobProgressView(for: jobId, status: status)
+                    } else if let parsedData = parsedCSVData {
+                        // CSV parsed - show column mapping
+                        ColumnMappingView(
+                            headers: parsedData.headers,
+                            rows: parsedData.rows,
+                            onMappingsConfirmed: { mappings in
+                                columnMappings = mappings
+                                Task { await startImport() }
+                            },
+                            onCancel: { parsedCSVData = nil },
+                            themeStore: themeStore
+                        )
+                    } else {
+                        // Idle state - show file picker
                         FileSelectionView(
                             showingFilePicker: $showingFilePicker,
                             themeStore: themeStore
                         )
-
-                    case .analyzingFile:
-                        AnalyzingFileView(themeStore: themeStore)
-
-                    case .mappingColumns:
-                        if let service = importService {
-                            ColumnMappingView(
-                                importService: service,
-                                themeStore: themeStore
-                            )
-                        }
-
-                    case .importing:
-                        if let service = importService {
-                            ImportProgressView(
-                                progress: service.progress,
-                                themeStore: themeStore
-                            )
-                        }
-
-                    case .completed(let result):
-                        ImportResultsView(
-                            result: result,
-                            themeStore: themeStore,
-                            onDone: { dismiss() }
-                        )
-
-                    case .failed(let error):
-                        ImportErrorView(
-                            error: error,
-                            themeStore: themeStore,
-                            onRetry: { showingFilePicker = true }
-                        )
                     }
                 }
-                .animation(.smooth(duration: 0.3), value: importService?.importState)
+                .animation(.smooth(duration: 0.3), value: currentJobId != nil)
             }
             .navigationTitle("Import Books")
             #if canImport(UIKit)
@@ -74,7 +61,7 @@ public struct CSVImportFlowView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
-                        .disabled(importService?.importState == .importing)
+                        .disabled(currentJobId != nil)
                 }
             }
             .fileImporter(
@@ -85,24 +72,182 @@ public struct CSVImportFlowView: View {
                 handleFileSelection(result)
             }
         }
-        .onAppear {
-            // Initialize service with actual model context
-            if importService == nil {
-                importService = CSVImportService(modelContext: modelContext)
-            }
-        }
     }
 
     private func handleFileSelection(_ result: Result<[URL], Error>) {
         switch result {
         case .success(let urls):
             guard let url = urls.first else { return }
-            Task {
-                await importService?.loadFile(at: url)
-            }
+            Task { await parseCSV(from: url) }
 
         case .failure(let error):
-            importService?.importState = .failed(error.localizedDescription)
+            // Show error alert
+            print("❌ File selection failed: \(error.localizedDescription)")
+        }
+    }
+
+    private func parseCSV(from url: URL) async {
+        do {
+            // Read file content
+            let csvContent = try String(contentsOf: url, encoding: .utf8)
+
+            // Parse using CSVParsingActor
+            let (headers, rows) = try await CSVParsingActor.shared.parseCSV(csvContent)
+
+            // Store for column mapping
+            parsedCSVData = (headers, rows)
+
+        } catch {
+            print("❌ CSV parsing failed: \(error.localizedDescription)")
+            // TODO: Show error UI
+        }
+    }
+
+    private func startImport() async {
+        guard let parsedData = parsedCSVData else { return }
+
+        // Reconstruct CSV content from parsed data
+        let csvContent = ([parsedData.headers] + parsedData.rows)
+            .map { $0.joined(separator: ",") }
+            .joined(separator: "\n")
+
+        // Start import via coordinator
+        currentJobId = await coordinator.startCSVImport(
+            csvContent: csvContent,
+            mappings: columnMappings,
+            strategy: duplicateStrategy,
+            modelContext: modelContext
+        )
+    }
+
+    @ViewBuilder
+    private func jobProgressView(for jobId: JobIdentifier, status: JobStatus) -> some View {
+        switch status {
+        case .queued:
+            PollingIndicator(stageName: "Preparing import...")
+
+        case .active(let progress):
+            VStack(spacing: 24) {
+                ProgressBanner(
+                    isShowing: .constant(true),
+                    title: "Importing CSV",
+                    message: progress.currentStatus
+                )
+
+                StagedProgressView(
+                    stages: ["Parsing", "Importing", "Enriching"],
+                    currentStageIndex: .constant(determineStage(progress)),
+                    progress: .constant(progress.fractionCompleted)
+                )
+
+                // Progress details
+                Text("\(progress.processedItems) of \(progress.totalItems) items")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+
+                if let eta = progress.estimatedTimeRemaining {
+                    EstimatedTimeRemaining(completionDate: Date().addingTimeInterval(eta))
+                }
+            }
+            .padding()
+
+        case .completed(let log):
+            VStack(spacing: 16) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 64))
+                    .foregroundStyle(.green)
+
+                Text("Import Complete")
+                    .font(.title2.bold())
+
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(log, id: \.self) { message in
+                        HStack {
+                            Text(message)
+                                .font(.callout)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                        }
+                    }
+                }
+                .padding()
+                .background {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(.ultraThinMaterial)
+                }
+
+                Button("Done") {
+                    dismiss()
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(themeStore.primaryColor)
+            }
+            .padding()
+
+        case .failed(let error):
+            VStack(spacing: 16) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 64))
+                    .foregroundStyle(.red)
+
+                Text("Import Failed")
+                    .font(.title2.bold())
+
+                Text(error)
+                    .font(.callout)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding()
+                    .background {
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(.ultraThinMaterial)
+                    }
+
+                HStack(spacing: 12) {
+                    Button("Retry") {
+                        currentJobId = nil
+                        showingFilePicker = true
+                    }
+                    .buttonStyle(.bordered)
+
+                    Button("Dismiss") {
+                        dismiss()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(themeStore.primaryColor)
+                }
+            }
+            .padding()
+
+        case .cancelled:
+            VStack(spacing: 16) {
+                Image(systemName: "stop.circle.fill")
+                    .font(.system(size: 64))
+                    .foregroundStyle(.orange)
+
+                Text("Import Cancelled")
+                    .font(.title2.bold())
+
+                Button("Start New Import") {
+                    currentJobId = nil
+                    showingFilePicker = true
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(themeStore.primaryColor)
+            }
+            .padding()
+        }
+    }
+
+    private func determineStage(_ progress: JobProgress) -> Int {
+        // Heuristic based on status message
+        let status = progress.currentStatus.lowercased()
+        if status.contains("pars") || status.contains("analyz") {
+            return 0  // Parsing
+        } else if status.contains("enrich") {
+            return 2  // Enriching
+        } else {
+            return 1  // Importing
         }
     }
 }
@@ -209,80 +354,111 @@ struct FileDropZone: View {
 // MARK: - Column Mapping View
 
 struct ColumnMappingView: View {
-    @ObservedObject var importService: CSVImportService
+    let headers: [String]
+    let rows: [[String]]
+    let onMappingsConfirmed: ([CSVParsingActor.ColumnMapping]) -> Void
+    let onCancel: () -> Void
     let themeStore: iOS26ThemeStore
+
+    @State private var mappings: [CSVParsingActor.ColumnMapping] = []
     @State private var showingPreview = false
+    @State private var isLoading = true
 
     var body: some View {
         VStack(spacing: 0) {
-            // Status header
-            MappingStatusHeader(
-                mappings: importService.mappings,
-                themeStore: themeStore
-            )
-            .padding()
-
-            ScrollView {
+            if isLoading {
                 VStack(spacing: 16) {
-                    // Auto-detected mappings
-                    ForEach(importService.mappings.indices, id: \.self) { index in
-                        MappingRowView(
-                            mapping: $importService.mappings[index],
-                            themeStore: themeStore,
-                            onFieldChange: { field in
-                                importService.updateMapping(
-                                    for: importService.mappings[index].csvColumn,
-                                    to: field
-                                )
-                            }
-                        )
-                    }
+                    ProgressView()
+                        .scaleEffect(1.5)
+                    Text("Analyzing columns...")
+                        .font(.headline)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(40)
+                .task {
+                    await detectMappings()
+                }
+            } else {
+                // Status header
+                MappingStatusHeader(
+                    mappings: mappings,
+                    themeStore: themeStore
+                )
+                .padding()
 
-                    // Preview button
+                ScrollView {
+                    VStack(spacing: 16) {
+                        // Auto-detected mappings
+                        ForEach(mappings.indices, id: \.self) { index in
+                            MappingRowView(
+                                mapping: $mappings[index],
+                                themeStore: themeStore,
+                                onFieldChange: { field in
+                                    mappings[index].mappedField = field
+                                }
+                            )
+                        }
+
+                        // Preview button
+                        Button {
+                            showingPreview.toggle()
+                        } label: {
+                            HStack {
+                                Image(systemName: "eye")
+                                Text("Preview Import")
+                            }
+                            .font(.headline)
+                            .foregroundColor(themeStore.primaryColor)
+                        }
+                        .padding(.top)
+                    }
+                    .padding()
+                }
+
+                // Action bar
+                HStack(spacing: 12) {
+                    Button("Cancel") {
+                        onCancel()
+                    }
+                    .buttonStyle(SecondaryButtonStyle(themeStore: themeStore))
+
                     Button {
-                        showingPreview.toggle()
+                        onMappingsConfirmed(mappings)
                     } label: {
                         HStack {
-                            Image(systemName: "eye")
-                            Text("Preview Import")
+                            Image(systemName: "square.and.arrow.down")
+                            Text("Start Import")
                         }
-                        .font(.headline)
-                        .foregroundColor(themeStore.primaryColor)
                     }
-                    .padding(.top)
+                    .buttonStyle(PrimaryButtonStyle(themeStore: themeStore))
+                    .disabled(!canProceedWithImport())
                 }
                 .padding()
+                .background(.ultraThinMaterial)
             }
-
-            // Action bar
-            HStack(spacing: 12) {
-                Button("Reset Auto-Detect") {
-                    // Reset mappings to auto-detected values
-                }
-                .buttonStyle(SecondaryButtonStyle(themeStore: themeStore))
-
-                Button {
-                    Task {
-                        await importService.startImport(themeStore: themeStore)
-                    }
-                } label: {
-                    HStack {
-                        Image(systemName: "square.and.arrow.down")
-                        Text("Start Import")
-                    }
-                }
-                .buttonStyle(PrimaryButtonStyle(themeStore: themeStore))
-                .disabled(!importService.canProceedWithImport())
-            }
-            .padding()
-            .background(.ultraThinMaterial)
         }
         .sheet(isPresented: $showingPreview) {
             PreviewSheetView(
-                mappings: importService.mappings,
+                mappings: mappings,
                 themeStore: themeStore
             )
         }
+    }
+
+    private func detectMappings() async {
+        // Auto-detect column mappings
+        let detected = await CSVParsingActor.shared.detectColumns(
+            headers: headers,
+            sampleRows: Array(rows.prefix(10))
+        )
+        mappings = detected
+        isLoading = false
+    }
+
+    private func canProceedWithImport() -> Bool {
+        let hasTitle = mappings.contains { $0.mappedField == .title }
+        let hasAuthor = mappings.contains { $0.mappedField == .author }
+        return hasTitle && hasAuthor
     }
 }
 
