@@ -28,6 +28,7 @@ import SwiftUI
     - High contrast support
  */
 
+@available(iOS 26.0, *)
 @MainActor
 public struct ThemeSelectionView: View {
     @Environment(\.iOS26ThemeStore) private var themeStore

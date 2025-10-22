@@ -27,6 +27,7 @@ enum LibraryLayout: String, CaseIterable, Identifiable {
     }
 }
 
+@available(iOS 26.0, *)
 @MainActor
 public struct iOS26LiquidLibraryView: View {
     // ✅ FIX 1: Query all works, filter in-memory for library items
@@ -375,6 +376,7 @@ public struct iOS26LiquidLibraryView: View {
 // MARK: - Ultra-Optimized Library View
 
 /// ✅ CRITICAL FIXES: This version addresses all the major iOS UX issues
+@available(iOS 26.0, *)
 @MainActor
 public struct UltraOptimizedLibraryView: View {
     // ✅ FIX 1: Highly optimized SwiftData query - only loads library entries
@@ -792,6 +794,7 @@ public struct UltraOptimizedLibraryView: View {
 
 // MARK: - Cultural Diversity Insights Sheet
 
+@available(iOS 26.0, *)
 struct CulturalDiversityInsightsView: View {
     let works: [Work]
     @Environment(\.dismiss) private var dismiss
@@ -998,6 +1001,7 @@ struct CulturalDiversityInsightsView: View {
 
 // MARK: - Metric View Component
 
+@available(iOS 26.0, *)
 struct MetricView: View {
     @Environment(\.iOS26ThemeStore) private var themeStore
     let title: String

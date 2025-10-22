@@ -314,6 +314,7 @@ public extension View {
 
 // MARK: - Theme-Aware View Modifiers
 
+@available(iOS 26.0, *)
 struct ThemedBackground: ViewModifier {
     @Environment(\.iOS26ThemeStore) private var themeStore
 
@@ -327,6 +328,7 @@ struct ThemedBackground: ViewModifier {
     }
 }
 
+@available(iOS 26.0, *)
 struct ThemedGlassEffect: ViewModifier {
     @Environment(\.iOS26ThemeStore) private var themeStore
     let variant: GlassVariant
@@ -338,6 +340,7 @@ struct ThemedGlassEffect: ViewModifier {
     }
 }
 
+@available(iOS 26.0, *)
 struct CulturalGlassEffect: ViewModifier {
     @Environment(\.iOS26ThemeStore) private var themeStore
     let region: CulturalRegion
@@ -353,16 +356,19 @@ struct CulturalGlassEffect: ViewModifier {
 
 extension View {
     /// Apply themed background
+    @available(iOS 26.0, *)
     func themedBackground() -> some View {
         modifier(ThemedBackground())
     }
 
     /// Apply themed glass effect
+    @available(iOS 26.0, *)
     func themedGlass(_ variant: GlassVariant = .regular, intensity: Double = 0.3) -> some View {
         modifier(ThemedGlassEffect(variant: variant, intensity: intensity))
     }
 
     /// Apply cultural glass effect
+    @available(iOS 26.0, *)
     func culturalGlass(for region: CulturalRegion, intensity: Double = 0.2) -> some View {
         modifier(CulturalGlassEffect(region: region, intensity: intensity))
     }
@@ -370,6 +376,7 @@ extension View {
 
 // MARK: - Theme Picker Component
 
+@available(iOS 26.0, *)
 struct iOS26ThemePicker: View {
     @Environment(\.iOS26ThemeStore) private var themeStore
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -442,6 +449,7 @@ struct iOS26ThemePicker: View {
     }
 }
 
+@available(iOS 26.0, *)
 struct ThemePreviewCard: View {
     let theme: iOS26Theme
     let isSelected: Bool
@@ -571,6 +579,7 @@ struct ThemePreviewCard: View {
 // MARK: - Theme Card Button Style
 
 /// Custom button style for theme cards with spring animations
+@available(iOS 26.0, *)
 struct ThemeCardButtonStyle: ButtonStyle {
     let isSelected: Bool
     

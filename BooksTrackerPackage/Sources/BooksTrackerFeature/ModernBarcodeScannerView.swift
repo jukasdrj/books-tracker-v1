@@ -3,6 +3,7 @@ import AVFoundation
 
 /// Modern barcode scanner view using Swift 6 concurrency patterns
 /// Replaces the legacy BarcodeScanner.swift with clean architecture
+@available(iOS 26.0, *)
 struct ModernBarcodeScannerView: View {
     // MARK: - Properties
 
@@ -465,6 +466,7 @@ struct ModernBarcodeScannerView: View {
 
 // MARK: - Integration Extension
 
+@available(iOS 26.0, *)
 extension ModernBarcodeScannerView {
     /// Create scanner view with legacy callback compatibility
     static func withCallback(onBarcodeScanned: @escaping (String) -> Void) -> some View {

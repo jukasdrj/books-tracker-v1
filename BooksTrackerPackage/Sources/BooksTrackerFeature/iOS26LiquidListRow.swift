@@ -3,6 +3,7 @@ import SwiftData
 
 /// Liquid list row with iOS 26 design patterns
 /// Optimized for dense information display with smooth interactions
+@available(iOS 26.0, *)
 struct iOS26LiquidListRow: View {
     let work: Work
     let displayStyle: ListRowStyle
