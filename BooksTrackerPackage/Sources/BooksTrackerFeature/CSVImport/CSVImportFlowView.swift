@@ -17,6 +17,7 @@ public struct CSVImportFlowView: View {
     @State private var parsedCSVData: (headers: [String], rows: [[String]])?
     @State private var columnMappings: [CSVParsingActor.ColumnMapping] = []
     @State private var duplicateStrategy: CSVImportService.DuplicateStrategy = .smart
+    @State private var errorMessage: String?
 
     public init() {}
 
@@ -71,6 +72,16 @@ public struct CSVImportFlowView: View {
             ) { result in
                 handleFileSelection(result)
             }
+            .alert("Import Error", isPresented: .constant(errorMessage != nil)) {
+                Button("OK") { errorMessage = nil }
+            } message: {
+                Text(errorMessage ?? "")
+            }
+            .onDisappear {
+                if let jobId = currentJobId {
+                    coordinator.cancelJob(jobId)
+                }
+            }
         }
     }
 
@@ -81,8 +92,7 @@ public struct CSVImportFlowView: View {
             Task { await parseCSV(from: url) }
 
         case .failure(let error):
-            // Show error alert
-            print("❌ File selection failed: \(error.localizedDescription)")
+            errorMessage = "File selection failed: \(error.localizedDescription)"
         }
     }
 
@@ -98,18 +108,28 @@ public struct CSVImportFlowView: View {
             parsedCSVData = (headers, rows)
 
         } catch {
-            print("❌ CSV parsing failed: \(error.localizedDescription)")
-            // TODO: Show error UI
+            errorMessage = "CSV parsing failed: \(error.localizedDescription)"
         }
     }
 
     private func startImport() async {
         guard let parsedData = parsedCSVData else { return }
 
-        // Reconstruct CSV content from parsed data
+        // Reconstruct CSV content with proper RFC 4180 escaping
         let csvContent = ([parsedData.headers] + parsedData.rows)
-            .map { $0.joined(separator: ",") }
+            .map { row in
+                row.map { field in
+                    // CSV RFC 4180 escaping: wrap fields containing special chars
+                    if field.contains(",") || field.contains("\"") || field.contains("\n") {
+                        return "\"\(field.replacingOccurrences(of: "\"", with: "\"\""))\""
+                    }
+                    return field
+                }.joined(separator: ",")
+            }
             .joined(separator: "\n")
+
+        // Clear memory BEFORE async call
+        parsedCSVData = nil
 
         // Start import via coordinator
         currentJobId = await coordinator.startCSVImport(
