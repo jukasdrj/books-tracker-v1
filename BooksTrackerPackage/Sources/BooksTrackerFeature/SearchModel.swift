@@ -375,21 +375,15 @@ public final class SearchModel {
             lastSearchTime = CFAbsoluteTimeGetCurrent() - startTime
             cacheHitRate = response.cacheHitRate
 
-            // Process results with scope filtering (only for basic search)
-            let processedResults = options.isAdvanced
-                ? response.results
-                : filterResultsByScope(response.results, scope: scope, query: query)
-
             // Calculate final results (append or replace)
             let finalResults: [SearchResult]
             if appendResults {
-                finalResults = viewState.currentResults + processedResults
+                finalResults = viewState.currentResults + response.results
             } else {
-                finalResults = processedResults
+                finalResults = response.results
             }
 
-            // Determine if more pages are available (advanced search never has pagination)
-            let hasMore = options.isAdvanced ? false : (processedResults.count >= 20)
+            let hasMore = (finalResults.count) < (response.totalItems ?? 0)
 
             // Update UI state based on results
             if finalResults.isEmpty {
@@ -447,27 +441,7 @@ public final class SearchModel {
         )
     }
 
-    /// Filter results by scope (additional client-side filtering for quality)
-    private func filterResultsByScope(_ results: [SearchResult], scope: SearchScope, query: String) -> [SearchResult] {
-        switch scope {
-        case .all:
-            return results
 
-        case .title:
-            return results.filter { result in
-                result.displayTitle.localizedCaseInsensitiveContains(query)
-            }
-
-        case .author:
-            return results.filter { result in
-                result.displayAuthors.localizedCaseInsensitiveContains(query)
-            }
-
-        case .isbn:
-            // ISBN scope - no additional filtering needed (API handles this)
-            return results
-        }
-    }
 
     // MARK: - Retry Logic
 
@@ -698,7 +672,8 @@ public actor BookSearchAPIService {
             results: results,
             cacheHitRate: cacheHitRate,
             provider: provider,
-            responseTime: 0 // Will be calculated by caller
+            responseTime: 0, // Will be calculated by caller
+            totalItems: apiResponse.totalItems
         )
     }
 
@@ -820,7 +795,8 @@ public actor BookSearchAPIService {
             results: results,
             cacheHitRate: cacheHitRate,
             provider: provider,
-            responseTime: 0
+            responseTime: 0,
+            totalItems: apiResponse.totalItems
         )
     }
 
@@ -984,6 +960,7 @@ public struct SearchResponse: Sendable {
     let cacheHitRate: Double
     let provider: String
     let responseTime: TimeInterval
+    let totalItems: Int?
 }
 
 // MARK: - Error Types

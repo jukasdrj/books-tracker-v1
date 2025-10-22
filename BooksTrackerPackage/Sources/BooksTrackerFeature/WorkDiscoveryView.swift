@@ -544,6 +544,7 @@ private struct DetailRow: View {
 
 // MARK: - Preview
 
+@available(iOS 26.0, *)
 #Preview("Work Discovery View") {
     // Create a mock search result for preview
     let mockWork = Work(

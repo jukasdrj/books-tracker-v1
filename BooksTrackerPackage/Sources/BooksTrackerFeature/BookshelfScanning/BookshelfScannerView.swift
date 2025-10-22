@@ -435,6 +435,7 @@ class BookshelfScanModel {
 
 // MARK: - Preview
 
+@available(iOS 26.0, *)
 #Preview {
     BookshelfScannerView()
         .modelContainer(for: [Work.self, Edition.self, UserLibraryEntry.self, Author.self])

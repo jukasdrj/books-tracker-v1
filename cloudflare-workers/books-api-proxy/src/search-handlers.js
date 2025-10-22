@@ -69,10 +69,16 @@ export async function handleTitleSearch(query, { maxResults, page }, env, ctx) {
 
         if (results[0].status === 'fulfilled' && results[0].value.success) {
             const googleData = results[0].value;
-            // FIX: Google Books RPC returns 'works', not 'items'
-            if (googleData.works && googleData.works.length > 0) {
-                const transformedItems = googleData.works.map(work => transformWorkToGoogleFormat(work));
-                const filteredItems = filterGoogleBooksItems(transformedItems, query);
+            let googleItems = [];
+            if (googleData.items && googleData.items.length > 0) {
+                googleItems = googleData.items;
+            } else if (googleData.works && googleData.works.length > 0) {
+                // Fallback for the incorrect 'works' property
+                googleItems = googleData.works.map(work => transformWorkToGoogleFormat(work));
+            }
+
+            if (googleItems.length > 0) {
+                const filteredItems = filterGoogleBooksItems(googleItems, query);
                 finalItems = [...finalItems, ...filteredItems];
                 successfulProviders.push('google');
             }
@@ -245,9 +251,17 @@ export async function handleAdvancedSearch({ authorName, bookTitle, isbn }, { ma
         // Google Books results
         if (results[0].status === 'fulfilled' && results[0].value.success) {
             const googleData = results[0].value;
-            if (googleData.works && googleData.works.length > 0) {
-                const transformedItems = googleData.works.map(work => transformWorkToGoogleFormat(work));
-                finalItems = [...finalItems, ...transformedItems];
+            let googleItems = [];
+            if (googleData.items && googleData.items.length > 0) {
+                googleItems = googleData.items;
+            } else if (googleData.works && googleData.works.length > 0) {
+                // Fallback for the incorrect 'works' property
+                googleItems = googleData.works.map(work => transformWorkToGoogleFormat(work));
+            }
+
+            if (googleItems.length > 0) {
+                const filteredItems = filterGoogleBooksItems(googleItems, query);
+                finalItems = [...finalItems, ...filteredItems];
                 successfulProviders.push('google');
             }
         }

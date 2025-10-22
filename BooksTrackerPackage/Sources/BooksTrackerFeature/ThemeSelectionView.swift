@@ -128,6 +128,7 @@ public struct ThemeSelectionView: View {
 
 // MARK: - Preview
 
+@available(iOS 26.0, *)
 #Preview {
     NavigationStack {
         ThemeSelectionView()

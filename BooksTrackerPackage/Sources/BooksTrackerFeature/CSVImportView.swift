@@ -414,6 +414,7 @@ enum ImportError: LocalizedError {
 // MARK: - Preview
 // NOTE: ReadingStatus.from() is now in UserLibraryEntry.swift (more comprehensive implementation)
 
+@available(iOS 26.0, *)
 #Preview {
     CSVImportView()
         .modelContainer(for: [Work.self, Edition.self, UserLibraryEntry.self, Author.self])

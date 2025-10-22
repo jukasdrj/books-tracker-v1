@@ -7,6 +7,7 @@ import UIKit
 
 /// Edition Metadata Card - iOS 26 Liquid Glass Design
 /// Displays core bibliographic information and user tracking data
+@available(iOS 26.0, *)
 struct EditionMetadataView: View {
     @Bindable var work: Work
     let edition: Edition
@@ -577,6 +578,7 @@ struct NotesEditorView: View {
 
 // MARK: - Preview
 
+@available(iOS 26.0, *)
 #Preview {
     @Previewable @State var container: ModelContainer = {
         let container = try! ModelContainer(for: Work.self, Edition.self, UserLibraryEntry.self, Author.self)

@@ -230,6 +230,7 @@ public extension CachedAsyncImage where Content == Image, Placeholder == Color {
 
 // MARK: - Preview Support
 
+@available(iOS 26.0, *)
 #Preview("Cached Async Image") {
     VStack(spacing: 20) {
         // Example with book cover URL

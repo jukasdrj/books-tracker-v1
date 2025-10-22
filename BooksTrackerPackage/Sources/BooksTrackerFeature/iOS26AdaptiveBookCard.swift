@@ -3,6 +3,7 @@ import SwiftData
 
 /// Adaptive book card that changes layout based on available space
 /// Provides multiple display modes from compact to detailed
+@available(iOS 26.0, *)
 struct iOS26AdaptiveBookCard: View {
     let work: Work
     let displayMode: AdaptiveDisplayMode
@@ -554,6 +555,7 @@ enum StatusIndicatorStyle {
 
 // MARK: - Preview
 
+@available(iOS 26.0, *)
 #Preview {
     let sampleWork = Work(
         title: "The Seven Husbands of Evelyn Hugo",

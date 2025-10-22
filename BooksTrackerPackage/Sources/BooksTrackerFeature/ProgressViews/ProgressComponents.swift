@@ -7,6 +7,7 @@
 
 import SwiftUI
 
+@available(iOS 26.0, *)
 public struct ProgressBanner: View {
     @Binding var isShowing: Bool
     let title: String
@@ -38,6 +39,8 @@ public struct ProgressBanner: View {
         .transition(.move(edge: .top).combined(with: .opacity))
     }
 }
+
+@available(iOS 26.0, *)
 public struct StagedProgressView: View {
     let stages: [String]
     @Binding var currentStageIndex: Int
@@ -70,6 +73,8 @@ public struct StagedProgressView: View {
         .padding()
     }
 }
+
+@available(iOS 26.0, *)
 public struct PollingIndicator: View {
     let stageName: String
     @State private var isAnimating = false
@@ -127,6 +132,7 @@ public struct EstimatedTimeRemaining: View {
 }
 
 #if DEBUG
+@available(iOS 26.0, *)
 struct ProgressComponents_Previews: PreviewProvider {
     static var previews: some View {
         VStack(spacing: 20) {

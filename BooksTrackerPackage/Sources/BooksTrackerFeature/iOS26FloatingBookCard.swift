@@ -3,6 +3,7 @@ import SwiftData
 
 /// V1.0 Specification: "Floating cover images with a small info card below"
 /// Fluid grid layout adapting to screen size (2 columns phone, more on tablet)
+@available(iOS 26.0, *)
 struct iOS26FloatingBookCard: View {
     let work: Work
     let namespace: Namespace.ID
@@ -339,6 +340,7 @@ struct iOS26FloatingBookCard: View {
 // MARK: - Optimized Book Card
 
 /// ✅ PERFORMANCE-OPTIMIZED VERSION: Fixes image loading and caching issues
+@available(iOS 26.0, *)
 struct OptimizedFloatingBookCard: View {
     let work: Work
     let namespace: Namespace.ID
@@ -742,6 +744,7 @@ class OptimizedLibraryDataSource {
 // MARK: - Navigation Performance Fixes
 
 /// ✅ NAVIGATION FIX: Prevents memory leaks and crashes with SwiftData navigation
+@available(iOS 26.0, *)
 struct SafeWorkNavigation: ViewModifier {
     let workID: UUID
     let allWorks: [Work]
@@ -756,6 +759,7 @@ struct SafeWorkNavigation: ViewModifier {
 }
 
 extension View {
+    @available(iOS 26.0, *)
     func safeWorkNavigation(workID: UUID, allWorks: [Work]) -> some View {
         modifier(SafeWorkNavigation(workID: workID, allWorks: allWorks))
     }
@@ -801,6 +805,7 @@ final class CachedAsyncImageCache: @unchecked Sendable {
 
 // MARK: - Quick Actions Sheet
 
+@available(iOS 26.0, *)
 struct QuickActionsSheet: View {
     let work: Work
     @Environment(\.dismiss) private var dismiss
@@ -902,6 +907,7 @@ struct QuickActionsSheet: View {
     }
 }
 
+@available(iOS 26.0, *)
 struct QuickActionButton: View {
     let title: String
     let icon: String
@@ -942,6 +948,7 @@ struct PressedButtonStyle: ButtonStyle {
 
 // MARK: - Preview
 
+@available(iOS 26.0, *)
 #Preview {
     let sampleWork = Work(
         title: "The Adventures of Huckleberry Finn",

@@ -1031,6 +1031,7 @@ struct BookCardButtonStyle: ButtonStyle {
 
 // MARK: - Preview
 
+@available(iOS 26.0, *)
 #Preview {
     iOS26LiquidLibraryView()
         .modelContainer(for: [Work.self, Edition.self, UserLibraryEntry.self, Author.self])

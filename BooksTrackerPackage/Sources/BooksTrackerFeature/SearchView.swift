@@ -54,6 +54,7 @@ import SwiftData
 
 // MARK: - Main Search View
 
+@available(iOS 26.0, *)
 public struct SearchView: View {
     @Environment(\.iOS26ThemeStore) private var themeStore
     @Environment(\.modelContext) private var modelContext
@@ -341,7 +342,7 @@ public struct SearchView: View {
             .scrollTargetLayout()
         }
         .scrollPosition($scrollPosition)
-        .scrollEdgeEffectStyle(.soft, for: .top)
+        .modifier(iOS26ScrollEdgeEffectModifier(edges: [.top]))
         .onScrollPhaseChange { _, newPhase in
             withAnimation(.easeInOut(duration: 0.2)) {
                 scrollPhase = newPhase
@@ -616,7 +617,7 @@ public struct SearchView: View {
                 .scrollTargetLayout()
             }
             .scrollPosition($scrollPosition)
-            .scrollEdgeEffectStyle(.soft, for: [.top, .bottom])
+            .modifier(iOS26ScrollEdgeEffectModifier(edges: [.top, .bottom]))
             .onScrollPhaseChange { _, newPhase in
                 withAnimation(.easeInOut(duration: 0.2)) {
                     scrollPhase = newPhase
@@ -906,8 +907,20 @@ public struct SearchView: View {
     }
 }
 
+// MARK: - iOS 26 Scroll Edge Effect Helper
+
+@available(iOS 26.0, *)
+struct iOS26ScrollEdgeEffectModifier: ViewModifier {
+    let edges: Edge.Set
+
+    func body(content: Content) -> some View {
+        content.scrollEdgeEffectStyle(.soft, for: edges)
+    }
+}
+
 // MARK: - Preview
 
+@available(iOS 26.0, *)
 #Preview("Search View - Initial State") {
     NavigationStack {
         SearchView()
@@ -916,6 +929,7 @@ public struct SearchView: View {
     .modelContainer(for: [Work.self, Edition.self, Author.self, UserLibraryEntry.self])
 }
 
+@available(iOS 26.0, *)
 #Preview("Search View - Dark Mode") {
     NavigationStack {
         SearchView()

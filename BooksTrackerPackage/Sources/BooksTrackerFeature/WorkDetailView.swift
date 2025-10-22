@@ -3,6 +3,7 @@ import SwiftData
 
 /// Single Book Detail View - iOS 26 Immersive Design
 /// Features blurred cover art background with floating metadata card
+@available(iOS 26.0, *)
 struct WorkDetailView: View {
     @Bindable var work: Work
 
@@ -293,6 +294,7 @@ struct EditionPickerView: View {
 // MARK: - Author Search Results View
 
 /// Dedicated view for displaying search results for a specific author
+@available(iOS 26.0, *)
 struct AuthorSearchResultsView: View {
     let author: Author
 
@@ -429,6 +431,7 @@ struct AuthorSearchResultsView: View {
 
 // MARK: - Preview
 
+@available(iOS 26.0, *)
 #Preview {
     let container = try! ModelContainer(for: Work.self, Edition.self, UserLibraryEntry.self, Author.self)
 

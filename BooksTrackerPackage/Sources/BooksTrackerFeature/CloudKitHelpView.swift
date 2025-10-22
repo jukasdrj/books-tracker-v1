@@ -291,6 +291,7 @@ private struct TroubleshootingItem: View {
 
 // MARK: - Preview
 
+@available(iOS 26.0, *)
 #Preview {
     CloudKitHelpView()
         .iOS26ThemeStore(iOS26ThemeStore())

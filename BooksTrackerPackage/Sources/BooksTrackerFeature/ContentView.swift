@@ -15,71 +15,75 @@ public struct ContentView: View {
     @State private var currentBookTitle = ""
 
     public var body: some View {
-        TabView(selection: $selectedTab) {
-            // Library Tab
-            NavigationStack {
-                iOS26LiquidLibraryView()
+        if #available(iOS 26.0, *) {
+            TabView(selection: $selectedTab) {
+                // Library Tab
+                NavigationStack {
+                    iOS26LiquidLibraryView()
+                }
+                .tabItem {
+                    Label("Library", systemImage: selectedTab == .library ? "books.vertical.fill" : "books.vertical")
+                }
+                .tag(MainTab.library)
+                
+                // Search Tab
+                NavigationStack {
+                    SearchView()
+                }
+                .tabItem {
+                    Label("Search", systemImage: selectedTab == .search ? "magnifyingglass.circle.fill" : "magnifyingglass")
+                }
+                .tag(MainTab.search)
+                
+                // Insights Tab
+                NavigationStack {
+                    InsightsView()
+                }
+                .tabItem {
+                    Label("Insights", systemImage: selectedTab == .insights ? "chart.bar.fill" : "chart.bar")
+                }
+                .tag(MainTab.insights)
+                
+                // Settings Tab
+                NavigationStack {
+                    SettingsView()
+                }
+                .tabItem {
+                    Label("Settings", systemImage: selectedTab == .settings ? "gear.circle.fill" : "gear")
+                }
+                .tag(MainTab.settings)
             }
-            .tabItem {
-                Label("Library", systemImage: selectedTab == .library ? "books.vertical.fill" : "books.vertical")
+            .tint(themeStore.primaryColor)
+            .tabBarMinimizeBehavior(
+                voiceOverEnabled || reduceMotion ? .never : (featureFlags.enableTabBarMinimize ? .onScrollDown : .never)
+            )
+            .themedBackground()
+            // Sample data disabled for production - empty library on first launch
+            // .onAppear {
+            //     setupSampleData()
+            // }
+            .task {
+                // Validate enrichment queue on app startup - remove stale persistent IDs
+                EnrichmentQueue.shared.validateQueue(in: modelContext)
             }
-            .tag(MainTab.library)
-
-            // Search Tab
-            NavigationStack {
-                SearchView()
+            .task {
+                await handleNotifications()
             }
-            .tabItem {
-                Label("Search", systemImage: selectedTab == .search ? "magnifyingglass.circle.fill" : "magnifyingglass")
+            .overlay(alignment: .bottom) {
+                if isEnriching {
+                    EnrichmentBanner(
+                        completed: enrichmentProgress.completed,
+                        total: enrichmentProgress.total,
+                        currentBookTitle: currentBookTitle,
+                        themeStore: themeStore
+                    )
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
             }
-            .tag(MainTab.search)
-
-            // Insights Tab
-            NavigationStack {
-                InsightsView()
-            }
-            .tabItem {
-                Label("Insights", systemImage: selectedTab == .insights ? "chart.bar.fill" : "chart.bar")
-            }
-            .tag(MainTab.insights)
-
-            // Settings Tab
-            NavigationStack {
-                SettingsView()
-            }
-            .tabItem {
-                Label("Settings", systemImage: selectedTab == .settings ? "gear.circle.fill" : "gear")
-            }
-            .tag(MainTab.settings)
+            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isEnriching)
+        } else {
+            // Fallback on earlier versions
         }
-        .tint(themeStore.primaryColor)
-        .tabBarMinimizeBehavior(
-            voiceOverEnabled || reduceMotion ? .never : (featureFlags.enableTabBarMinimize ? .onScrollDown : .never)
-        )
-        .themedBackground()
-        // Sample data disabled for production - empty library on first launch
-        // .onAppear {
-        //     setupSampleData()
-        // }
-        .task {
-            // Validate enrichment queue on app startup - remove stale persistent IDs
-            EnrichmentQueue.shared.validateQueue(in: modelContext)
-        }
-        .task {
-            await handleNotifications()
-        }
-        .overlay(alignment: .bottom) {
-            if isEnriching {
-                EnrichmentBanner(
-                    completed: enrichmentProgress.completed,
-                    total: enrichmentProgress.total,
-                    currentBookTitle: currentBookTitle,
-                    themeStore: themeStore
-                )
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-        }
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isEnriching)
     }
 
     public init() {}
@@ -419,6 +423,7 @@ struct EnrichmentBanner: View {
 
 // MARK: - Preview
 
+@available(iOS 26.0, *)
 #Preview {
     ContentView()
         .modelContainer(for: [Work.self, Edition.self, UserLibraryEntry.self, Author.self])

@@ -34,6 +34,7 @@ import SwiftData
     - Glass effect containers where appropriate
  */
 
+@available(iOS 26.0, *)
 @MainActor
 public struct SettingsView: View {
     @Environment(\.iOS26ThemeStore) private var themeStore
@@ -496,6 +497,7 @@ enum CloudKitStatus {
 
 // MARK: - Preview
 
+@available(iOS 26.0, *)
 #Preview {
     NavigationStack {
         SettingsView()

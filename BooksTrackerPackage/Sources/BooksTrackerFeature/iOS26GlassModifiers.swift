@@ -25,12 +25,12 @@ struct GlassEffectContainer<Content: View>: View {
 
 // MARK: - Progressive Glass Effects
 
+@available(iOS 26.0, *)
 struct ProgressiveGlassEffect: ViewModifier {
     let variant: GlassVariant
     let shape: AnyInsettableShape
     let isInteractive: Bool
 
-    @available(iOS 26.0, *)
     func body(content: Content) -> some View {
         content
             .glassEffect(.regular, in: shape)
@@ -81,6 +81,7 @@ enum GlassVariant {
 
 // MARK: - Glass Button Styles
 
+@available(iOS 26.0, *)
 struct GlassButtonStyle: ButtonStyle {
     let variant: GlassVariant
     let tint: Color?
@@ -90,7 +91,6 @@ struct GlassButtonStyle: ButtonStyle {
         self.tint = tint
     }
 
-    @available(iOS 26.0, *)
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .padding(.horizontal, 16)
@@ -103,6 +103,7 @@ struct GlassButtonStyle: ButtonStyle {
     }
 }
 
+@available(iOS 26.0, *)
 struct GlassProminentButtonStyle: ButtonStyle {
     let tint: Color
 
@@ -110,7 +111,6 @@ struct GlassProminentButtonStyle: ButtonStyle {
         self.tint = tint
     }
 
-    @available(iOS 26.0, *)
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .foregroundColor(.white)
@@ -153,6 +153,7 @@ struct iOS26SheetGlassModifier: ViewModifier {
 
 extension View {
     /// Apply the basic iOS 26 glass effect
+    @available(iOS 26.0, *)
     func glassEffect(
         _ variant: GlassVariant = .regular,
         in shape: some InsettableShape = RoundedRectangle(cornerRadius: 16),
@@ -166,6 +167,7 @@ extension View {
     }
 
     /// Apply glass effect with custom tint
+    @available(iOS 26.0, *)
     func glassEffect(
         _ variant: GlassVariant = .regular,
         tint: Color,
@@ -208,6 +210,7 @@ extension View {
 
 // MARK: - Button Style Extensions
 
+@available(iOS 26.0, *)
 extension ButtonStyle where Self == GlassButtonStyle {
     static var glass: GlassButtonStyle {
         GlassButtonStyle()
@@ -218,6 +221,7 @@ extension ButtonStyle where Self == GlassButtonStyle {
     }
 }
 
+@available(iOS 26.0, *)
 extension ButtonStyle where Self == GlassProminentButtonStyle {
     static var glassProminent: GlassProminentButtonStyle {
         GlassProminentButtonStyle()
@@ -272,6 +276,7 @@ extension View {
 
 // MARK: - Preview Helpers
 
+@available(iOS 26.0, *)
 #Preview("Glass Effects") {
     ScrollView {
         VStack(spacing: 30) {

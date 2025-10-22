@@ -225,6 +225,7 @@ private struct CreditRow: View {
 
 // MARK: - Preview
 
+@available(iOS 26.0, *)
 #Preview {
     AcknowledgementsView()
         .iOS26ThemeStore(iOS26ThemeStore())

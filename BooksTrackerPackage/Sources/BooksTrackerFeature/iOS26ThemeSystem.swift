@@ -584,6 +584,7 @@ struct ThemeCardButtonStyle: ButtonStyle {
 
 // MARK: - Preview
 
+@available(iOS 26.0, *)
 #Preview("Theme System") {
     NavigationStack {
         ScrollView([.vertical], showsIndicators: true) {
@@ -597,7 +598,7 @@ struct ThemeCardButtonStyle: ButtonStyle {
 
                         HStack(spacing: 16) {
                             Button("Primary Action") {}
-                                .buttonStyle(GlassProminentButtonStyle())
+                                .buttonStyle(GlassButtonStyle())
 
                             Button("Secondary") {}
                                 .buttonStyle(GlassButtonStyle())

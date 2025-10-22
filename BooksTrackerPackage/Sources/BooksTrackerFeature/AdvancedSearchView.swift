@@ -486,6 +486,7 @@ private enum SearchField: Hashable {
 
 // MARK: - Preview
 
+@available(iOS 26.0, *)
 #Preview {
     AdvancedSearchView { criteria in
         print("Search triggered with:", criteria.buildSearchQuery() ?? "empty")

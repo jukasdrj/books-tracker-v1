@@ -555,6 +555,7 @@ enum ListRowStyle: String, CaseIterable {
 
 // MARK: - Preview
 
+@available(iOS 26.0, *)
 #Preview {
     let sampleWork = Work(
         title: "Klara and the Sun",

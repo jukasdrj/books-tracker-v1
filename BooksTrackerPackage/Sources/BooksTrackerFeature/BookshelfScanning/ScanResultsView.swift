@@ -599,6 +599,7 @@ class ScanResultsModel {
 
 // MARK: - Preview
 
+@available(iOS 26.0, *)
 #Preview {
     let mockResult = ScanResult(
         detectedBooks: [

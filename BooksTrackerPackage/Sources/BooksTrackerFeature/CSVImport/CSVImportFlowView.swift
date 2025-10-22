@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 
 // MARK: - CSV Import Flow View
 /// Main orchestrator view for the CSV import workflow
+@available(iOS 26.0, *)
 @MainActor
 public struct CSVImportFlowView: View {
     @Environment(\.modelContext) private var modelContext
