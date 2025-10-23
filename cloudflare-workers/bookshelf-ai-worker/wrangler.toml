@@ -36,7 +36,7 @@ secret_name = "google_aistudio_key"
 AI_PROVIDER = "gemini"  # Change to "cloudflare" to use Workers AI
 MAX_IMAGE_SIZE_MB = "10"
 REQUEST_TIMEOUT_MS = "50000"  # Increased to 50s for large image processing
-LOG_LEVEL = "INFO"
+LOG_LEVEL = "DEBUG"  # Maximum AI processing visibility
 CONFIDENCE_THRESHOLD = "0.7"  # Minimum confidence score for enrichment
 
 # KV namespace for scan job tracking
