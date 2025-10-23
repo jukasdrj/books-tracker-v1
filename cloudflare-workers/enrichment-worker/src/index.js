@@ -1,3 +1,8 @@
+import {
+  StructuredLogger,
+  PerformanceTimer
+} from '../../structured-logging-infrastructure.js';
+
 /**
  * Enrichment Worker - Handles batch book enrichment with WebSocket progress
  */
@@ -5,6 +10,8 @@ export class EnrichmentWorker {
   constructor(ctx, env) {
     this.ctx = ctx;
     this.env = env;
+    // Initialize structured logging (Phase B)
+    this.logger = new StructuredLogger('enrichment-worker', env);
   }
 
   /**
@@ -15,6 +22,7 @@ export class EnrichmentWorker {
    * @returns {Promise<Object>} Enrichment result
    */
   async enrichBatch(jobId, workIds, options = {}) {
+    const timer = new PerformanceTimer(this.logger, 'enrichBatch');
     const totalCount = workIds.length;
     let processedCount = 0;
 
@@ -41,6 +49,8 @@ export class EnrichmentWorker {
 
       // Close WebSocket on completion
       await this.env.BOOKS_API_PROXY.closeJobConnection(jobId, 'Enrichment completed');
+
+      await timer.end({ jobId, totalCount, processedCount });
 
       return {
         success: true,
