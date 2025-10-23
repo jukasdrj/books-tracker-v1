@@ -6,6 +6,80 @@ All notable changes, achievements, and debugging victories for this project.
 
 ## [Unreleased]
 
+### Fixed - CSV Import Build Failures (October 22, 2025)
+
+**Type Definition Placement & Sendable Conformance Violations** 🔧
+
+Fixed 15 compilation errors stemming from incorrect type definition placement and inappropriate Sendable conformance with SwiftData models.
+
+**The Problem:**
+1. **Nested Type Mismatch**: Types defined at module level but referenced as nested types (`CSVImportService.DuplicateStrategy`)
+2. **Sendable Violation**: `ImportResult` claimed Sendable while containing `[Work]` (SwiftData @Model = reference type, not Sendable)
+
+**Before (Broken):**
+```swift
+// Types at module level (after class closing brace)
+public enum DuplicateStrategy: Sendable { ... }
+public struct ImportResult: Sendable {  // ❌ VIOLATION!
+    let importedWorks: [Work]  // Work is @Model (reference type)
+}
+
+public class CSVImportService {
+    func importCSV(strategy: DuplicateStrategy) { ... }
+    // Compiler error: 'DuplicateStrategy' is not a member type
+}
+```
+
+**After (Fixed):**
+```swift
+@MainActor
+public class CSVImportService {
+    func importCSV(strategy: DuplicateStrategy) { ... }  // ✅ Works!
+
+    // MARK: - Supporting Types
+    public enum DuplicateStrategy: Sendable { ... }
+    public struct ImportResult {  // ✅ No Sendable - contains @Model
+        let importedWorks: [Work]
+    }
+}
+```
+
+**Architectural Lesson:** Supporting types should be nested inside their primary class to:
+- Establish clear ownership (`CSVImportService.DuplicateStrategy` shows relationship)
+- Prevent namespace pollution
+- Make Swift 6 Sendable boundaries explicit
+
+**SwiftData + Sendable Rule:** Never claim Sendable for types containing @Model objects (Work, Edition, Author, UserLibraryEntry). These are reference types and violate Sendable requirements. Use `@MainActor` isolation instead.
+
+**Sendable Audit Findings:**
+- **1 Violation Fixed**: ImportResult (removed Sendable)
+- **1 Intentional Bypass**: SearchResult uses `@unchecked Sendable` (safe - immutable after creation, MainActor consumption)
+- **41 Safe Conformances**: Value types, enums, actor-isolated classes with proper synchronization
+
+**Files Changed:**
+- `CSVImportService.swift` - Moved 3 type definitions inside class, removed Sendable from ImportResult
+- `SearchModel.swift` - Added safety comment to `@unchecked Sendable`
+- `CSVImportTests.swift` - Updated for nested type references
+- `docs/architecture/2025-10-22-sendable-audit.md` - Complete audit documentation
+- `docs/architecture/nested-types-pattern.md` - Architecture reference guide
+
+**The Numbers:**
+- **Build Errors**: 15 → 0
+- **Warnings**: 0 (maintained zero warnings policy)
+- **Tests Updated**: 3 files (CSVImportTests, CSVImportEnrichmentTests, CSVImportScaleTests)
+- **Lines Changed**: ~100 (type movement + comments + tests)
+
+**Commits:**
+- `e2a89a0` - fix(csv): move type definitions inside CSVImportService class
+- `76d359c` - docs(concurrency): complete Sendable conformance audit
+- `84d3417` - test(csv): update tests for nested type definitions
+
+**Impact:** Established nested types pattern as standard practice. Future services will follow this pattern from the start, preventing similar issues. Added to PR checklist.
+
+**Victory:** Zero build errors, zero warnings, comprehensive Sendable audit completed. Swift 6 strict concurrency compliance achieved! 🎉
+
+---
+
 ### Changed - Search State Architecture Refactor (October 2025)
 
 **The Great Search State Consolidation** 🎯

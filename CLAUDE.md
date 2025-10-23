@@ -453,10 +453,56 @@ let result = try await tracker.start(
 }
 ```
 
+**Nested Types Pattern:**
+
+**Rule:** Supporting types should be nested inside their primary class/service to establish clear ownership and prevent namespace pollution.
+
+**Benefits:**
+- Clear ownership: `CSVImportService.DuplicateStrategy` shows relationship at call site
+- Namespace organization: Prevents module-level type proliferation
+- Improved discoverability: Types grouped with their usage context
+- Swift 6 friendly: Makes Sendable boundaries and isolation explicit
+
+**Example:**
+```swift
+@MainActor
+public class CSVImportService {
+    // Service methods...
+
+    // MARK: - Supporting Types
+
+    public enum DuplicateStrategy: Sendable {
+        case skip, update, addNew, smart
+    }
+
+    public struct ImportResult {  // Not Sendable - contains SwiftData models
+        let successCount: Int
+        let importedWorks: [Work]  // Work is @Model (reference type)
+    }
+}
+
+// Usage in caller:
+let strategy: CSVImportService.DuplicateStrategy = .smart
+```
+
+**Sendable Rule:** Don't claim Sendable for types containing SwiftData @Model objects (Work, Edition, Author, UserLibraryEntry). These are reference types and violate Sendable requirements. Use `@MainActor` isolation instead.
+
+**When to Nest:**
+- Types used exclusively by one service/feature
+- Enums defining service-specific options (strategies, states, errors)
+- Result/response types specific to one operation
+
+**When NOT to Nest:**
+- Types shared across multiple unrelated features
+- Domain models (Work, Edition, Author, etc.)
+- Protocol definitions meant for broad adoption
+
 **Pull Request Checklist:**
 - [ ] **Swift 6 Concurrency:** All new `actor` and `@MainActor` code adheres to isolation rules.
 - [ ] **No `Timer.publish` in actors:** `Task.sleep` is used for all polling and delays in actor contexts.
 - [ ] **SwiftData Reactivity:** `@Bindable` is used for all SwiftData models passed to child views.
+- [ ] **Nested Types:** Supporting types are nested inside their primary class/service.
+- [ ] **No Sendable + SwiftData:** Types containing @Model objects don't claim Sendable conformance.
 - [ ] **WCAG AA Compliance:** All new UI components have a contrast ratio of 4.5:1 or higher.
 - [ ] **Real Device Testing:** All UI changes have been tested on a physical device.
 
