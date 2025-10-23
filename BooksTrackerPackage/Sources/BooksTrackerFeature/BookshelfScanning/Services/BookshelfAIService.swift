@@ -148,6 +148,17 @@ actor BookshelfAIService {
         // Read user-selected provider (UserDefaults is thread-safe)
         let provider = getSelectedProvider()
 
+        // Log scan start (TODO: Replace with Firebase Analytics when configured)
+        let scanID = UUID().uuidString
+        print("[Analytics] bookshelf_scan_started - provider: \(provider.rawValue), scan_id: \(scanID), image_width: \(Int(image.size.width)), image_height: \(Int(image.size.height))")
+        // TODO: Add Firebase Analytics
+        // Analytics.logEvent("bookshelf_scan_started", parameters: [
+        //     "ai_provider": provider.rawValue,
+        //     "scan_id": scanID,
+        //     "image_width": Int(image.size.width),
+        //     "image_height": Int(image.size.height)
+        // ])
+
         // Step 1: Apply provider-specific preprocessing
         let config = provider.preprocessingConfig
         let processedImage = image.resizeForAI(maxDimension: config.maxDimension)
@@ -212,6 +223,15 @@ actor BookshelfAIService {
         // Unwrap result
         switch result {
         case .success(let value):
+            // Log scan completion (TODO: Replace with Firebase Analytics when configured)
+            print("[Analytics] bookshelf_scan_completed - provider: \(provider.rawValue), books_detected: \(value.0.count), scan_id: \(scanID), success: true")
+            // TODO: Add Firebase Analytics
+            // Analytics.logEvent("bookshelf_scan_completed", parameters: [
+            //     "ai_provider": provider.rawValue,
+            //     "books_detected": value.0.count,
+            //     "scan_id": scanID,
+            //     "success": true
+            // ])
             return value
         case .failure(let error):
             throw error

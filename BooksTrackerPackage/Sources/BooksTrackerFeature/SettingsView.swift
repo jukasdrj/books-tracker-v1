@@ -180,6 +180,15 @@ public struct SettingsView: View {
                 }
                 .pickerStyle(.navigationLink)
                 .onChange(of: aiSettings.selectedProvider) { oldValue, newValue in
+                    // Log provider switch (TODO: Replace with Firebase Analytics when configured)
+                    print("[Analytics] ai_provider_switched - from: \(oldValue.rawValue), to: \(newValue.rawValue)")
+                    // TODO: Add Firebase Analytics
+                    // Analytics.logEvent("ai_provider_switched", parameters: [
+                    //     "from_provider": oldValue.rawValue,
+                    //     "to_provider": newValue.rawValue,
+                    //     "timestamp": Date().timeIntervalSince1970
+                    // ])
+
                     // Show warning when switching to Cloudflare for first time
                     if newValue == .cloudflare && oldValue == .gemini {
                         showCloudflareWarning = true
