@@ -40,6 +40,7 @@ public struct SettingsView: View {
     @Environment(\.iOS26ThemeStore) private var themeStore
     @Environment(\.modelContext) private var modelContext
     @Environment(FeatureFlags.self) private var featureFlags
+    @Environment(AIProviderSettings.self) private var aiSettings
 
     // MARK: - State Management
 
@@ -48,6 +49,7 @@ public struct SettingsView: View {
     @State private var showingCloudKitHelp = false
     @State private var showingAcknowledgements = false
     @State private var showingBookshelfScanner = false
+    @State private var showCloudflareWarning = false
 
     // CloudKit status (simplified for now)
     @State private var cloudKitStatus: CloudKitStatus = .unknown
@@ -153,6 +155,37 @@ public struct SettingsView: View {
             // MARK: - Experimental Features Section
 
             Section {
+                Picker("AI Provider", selection: Binding(
+                    get: { aiSettings.selectedProvider },
+                    set: { aiSettings.selectedProvider = $0 }
+                )) {
+                    ForEach(AIProvider.allCases) { provider in
+                        Label {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(provider.displayName)
+                                    .font(.headline)
+                                    .foregroundColor(.primary)
+
+                                Text(provider.description)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        } icon: {
+                            Image(systemName: provider.icon)
+                                .foregroundStyle(themeStore.primaryColor)
+                        }
+                        .tag(provider)
+                    }
+                }
+                .pickerStyle(.navigationLink)
+                .onChange(of: aiSettings.selectedProvider) { oldValue, newValue in
+                    // Show warning when switching to Cloudflare for first time
+                    if newValue == .cloudflare && oldValue == .gemini {
+                        showCloudflareWarning = true
+                    }
+                }
+
                 Button {
                     showingBookshelfScanner = true
                 } label: {
@@ -331,6 +364,16 @@ public struct SettingsView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
+        .alert("Experimental Feature", isPresented: $showCloudflareWarning) {
+            Button("Try It") {
+                // User confirmed, keep Cloudflare selection
+            }
+            Button("Cancel", role: .cancel) {
+                aiSettings.selectedProvider = .gemini
+            }
+        } message: {
+            Text("Cloudflare AI is 5-8x faster than Gemini but may have lower accuracy. This is an experimental feature. You can always switch back to Gemini in Settings.")
+        }
         .confirmationDialog(
             "Reset Library",
             isPresented: $showingResetConfirmation,
@@ -366,31 +409,53 @@ public struct SettingsView: View {
     // MARK: - Actions
 
     private func resetLibrary() {
-        // Delete all UserLibraryEntry objects
-        let fetchDescriptor = FetchDescriptor<UserLibraryEntry>()
+        // ✅ COMPREHENSIVE RESET: Clear all library data and queues
 
         do {
-            let entries = try modelContext.fetch(fetchDescriptor)
+            // 1. Cancel ongoing enrichment processing
+            EnrichmentQueue.shared.stopProcessing()
 
-            for entry in entries {
+            // 2. Clear enrichment queue (persisted queue items)
+            EnrichmentQueue.shared.clear()
+
+            // 3. Delete all Work objects (CASCADE deletes Editions & UserLibraryEntries automatically)
+            let workDescriptor = FetchDescriptor<Work>()
+            let works = try modelContext.fetch(workDescriptor)
+
+            for work in works {
                 // Force fault resolution before deletion
-                // Access all relationship properties to resolve faults
-                _ = entry.work
-                _ = entry.edition
-                _ = entry.readingStatus
-                _ = entry.readingProgress
+                _ = work.authors
+                _ = work.editions
+                _ = work.userLibraryEntries
 
-                modelContext.delete(entry)
+                modelContext.delete(work)
             }
 
+            // 4. Delete all Author objects separately (deleteRule: .nullify doesn't cascade)
+            let authorDescriptor = FetchDescriptor<Author>()
+            let authors = try modelContext.fetch(authorDescriptor)
+
+            for author in authors {
+                // Force fault resolution
+                _ = author.works
+
+                modelContext.delete(author)
+            }
+
+            // 5. Save changes to SwiftData
             try modelContext.save()
 
-            // Haptic feedback
+            // 6. Clear search history from UserDefaults
+            UserDefaults.standard.removeObject(forKey: "RecentBookSearches")
+
+            // Success haptic feedback
             let generator = UINotificationFeedbackGenerator()
             generator.notificationOccurred(.success)
 
+            print("✅ Library reset complete - All works, editions, authors, and queue cleared")
+
         } catch {
-            print("Failed to reset library: \(error)")
+            print("❌ Failed to reset library: \(error)")
 
             // Error haptic
             let generator = UINotificationFeedbackGenerator()
