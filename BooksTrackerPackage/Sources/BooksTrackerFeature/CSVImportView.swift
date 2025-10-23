@@ -40,7 +40,7 @@ public struct CSVImportView: View {
 
     @State private var isImporting = false
     @State private var showingFilePicker = false
-    @State private var importResult: ImportResult?
+    @State private var importResult: CSVImportViewResult?
 
     public init() {}
 
@@ -190,7 +190,7 @@ public struct CSVImportView: View {
             do {
                 // Access security-scoped resource
                 guard url.startAccessingSecurityScopedResource() else {
-                    throw ImportError.accessDenied
+                    throw CSVImportViewError.accessDenied
                 }
                 defer { url.stopAccessingSecurityScopedResource() }
 
@@ -227,7 +227,7 @@ public struct CSVImportView: View {
         let lines = csvData.components(separatedBy: .newlines).filter { !$0.isEmpty }
 
         guard !lines.isEmpty else {
-            throw ImportError.emptyFile
+            throw CSVImportViewError.emptyFile
         }
 
         // Parse header
@@ -236,7 +236,7 @@ public struct CSVImportView: View {
 
         guard let titleIndex = headers.firstIndex(where: { $0.lowercased() == "title" }),
               let authorIndex = headers.firstIndex(where: { $0.lowercased() == "author" }) else {
-            throw ImportError.missingRequiredColumns
+            throw CSVImportViewError.missingRequiredColumns
         }
 
         let isbnIndex = headers.firstIndex(where: { $0.lowercased() == "isbn" })
@@ -326,7 +326,7 @@ private struct FormatRow: View {
 }
 
 private struct ImportResultView: View {
-    let result: ImportResult
+    let result: CSVImportViewResult
     let themeStore: iOS26ThemeStore
 
     var body: some View {
@@ -353,7 +353,7 @@ private struct ImportResultView: View {
 
 // MARK: - Import Result
 
-enum ImportResult: Equatable {
+enum CSVImportViewResult: Equatable {
     case success(Int, Int) // successCount, failureCount
     case failure(String)
 
@@ -394,7 +394,7 @@ enum ImportResult: Equatable {
 
 // MARK: - Import Errors
 
-enum ImportError: LocalizedError {
+enum CSVImportViewError: LocalizedError {
     case accessDenied
     case emptyFile
     case missingRequiredColumns

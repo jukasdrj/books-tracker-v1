@@ -7,102 +7,9 @@ import SwiftUI
 /// - Legacy: @Published state for existing views (backward compatibility)
 /// - Modern: Result-based API for SyncCoordinator integration
 @MainActor
-public class CSVImportService: ObservableObject {
-
-    // MARK: - Legacy Published State (DEPRECATED - use SyncCoordinator)
-
-    @available(*, deprecated, message: "Use SyncCoordinator.startCSVImport() instead")
-    @Published public var importState: ImportState = .idle
-
-    @available(*, deprecated, message: "Use SyncCoordinator.startCSVImport() instead")
-    @Published public var progress: ImportProgress = ImportProgress()
-
-    @available(*, deprecated, message: "Use SyncCoordinator.startCSVImport() instead")
-    @Published public var mappings: [CSVParsingActor.ColumnMapping] = []
-
-    @available(*, deprecated, message: "Use SyncCoordinator.startCSVImport() instead")
-    @Published public var duplicateStrategy: DuplicateStrategy = .smart
-
-    // MARK: - State Management
-
-    public enum ImportState: Equatable {
-        case idle
-        case analyzingFile
-        case mappingColumns
-        case importing
-        case completed(ImportResult)
-        case failed(String)
-    }
-
-    public struct ImportProgress {
-        var totalRows: Int = 0
-        var processedRows: Int = 0
-        var successfulImports: Int = 0
-        var skippedDuplicates: Int = 0
-        var failedImports: Int = 0
-        var currentBook: String = ""
-        var startTime: Date?
-        var errors: [ImportError] = []
-
-        var percentComplete: Double {
-            guard totalRows > 0 else { return 0 }
-            return Double(processedRows) / Double(totalRows)
-        }
-
-        var estimatedTimeRemaining: TimeInterval? {
-            guard let startTime = startTime, processedRows > 0 else { return nil }
-            let elapsed = Date().timeIntervalSince(startTime)
-            let rate = elapsed / Double(processedRows)
-            let remaining = Double(totalRows - processedRows) * rate
-            return remaining
-        }
-    }
-
-    public enum DuplicateStrategy {
-        case skip
-        case update
-        case addNew
-        case smart // Uses ISBN match for skip, title+author for update
-    }
-
-    public struct ImportError: Identifiable, Equatable {
-        public let id = UUID()
-        public let row: Int
-        public let title: String
-        public let message: String
-
-        public static func == (lhs: ImportError, rhs: ImportError) -> Bool {
-            lhs.row == rhs.row &&
-            lhs.title == rhs.title &&
-            lhs.message == rhs.message
-        }
-    }
-
-    public struct ImportResult: Equatable {
-        let successCount: Int
-        let duplicateCount: Int
-        let errorCount: Int
-        let importedWorks: [Work]
-        let errors: [ImportError]
-        let duration: TimeInterval
-
-        public static func == (lhs: ImportResult, rhs: ImportResult) -> Bool {
-            lhs.successCount == rhs.successCount &&
-            lhs.duplicateCount == rhs.duplicateCount &&
-            lhs.errorCount == rhs.errorCount &&
-            lhs.duration == rhs.duration &&
-            lhs.importedWorks.count == rhs.importedWorks.count
-        }
-    }
-
-    // MARK: - Dependencies
+public class CSVImportService {
 
     private let modelContext: ModelContext
-    private let batchSize = 50
-    private var csvContent: String = ""
-    private var parsedData: (headers: [String], rows: [[String]]) = ([], [])
-    private var fileName: String = ""
-    private var updateCounter: Int = 0 // For throttling Live Activity updates
 
     // MARK: - Initialization
 
@@ -226,231 +133,6 @@ public class CSVImportService: ObservableObject {
     public func getRowCount(from csvContent: String) async -> Int {
         let parsedData = try? await CSVParsingActor.shared.parseCSV(csvContent)
         return parsedData?.rows.count ?? 0
-    }
-
-    // MARK: - File Processing (Legacy)
-
-    public func loadFile(at url: URL) async {
-        importState = .analyzingFile
-
-        // Store filename for Live Activity
-        fileName = url.lastPathComponent
-
-        do {
-            // Access security-scoped resource
-            guard url.startAccessingSecurityScopedResource() else {
-                throw ImportServiceError.accessDenied
-            }
-            defer { url.stopAccessingSecurityScopedResource() }
-
-            // Read file content
-            csvContent = try String(contentsOf: url, encoding: .utf8)
-
-            // Parse CSV
-            parsedData = try await CSVParsingActor.shared.parseCSV(csvContent)
-
-            // Detect columns
-            let sampleRows = Array(parsedData.rows.prefix(10))
-            mappings = await CSVParsingActor.shared.detectColumns(
-                headers: parsedData.headers,
-                sampleRows: sampleRows
-            )
-
-            // Update progress
-            progress.totalRows = parsedData.rows.count
-
-            // Move to mapping state
-            importState = .mappingColumns
-
-        } catch {
-            importState = .failed(error.localizedDescription)
-        }
-    }
-
-    // MARK: - Import Execution
-
-    public func startImport(themeStore: iOS26ThemeStore? = nil) async {
-        guard !parsedData.rows.isEmpty else {
-            importState = .failed("No data to import")
-            return
-        }
-
-        importState = .importing
-        progress.startTime = Date()
-        progress.errors = []
-
-        // Start Live Activity with theme colors
-        if #available(iOS 16.2, *) {
-            do {
-                // Extract theme colors for Live Activity
-                let primaryColorHex = themeStore.map { CSVImportActivityAttributes.colorToHex($0.primaryColor) } ?? "#007AFF"
-                let secondaryColorHex = themeStore.map { CSVImportActivityAttributes.colorToHex($0.secondaryColor) } ?? "#4DB0FF"
-
-                try await CSVImportActivityManager.shared.startActivity(
-                    fileName: fileName,
-                    totalBooks: parsedData.rows.count,
-                    themePrimaryColorHex: primaryColorHex,
-                    themeSecondaryColorHex: secondaryColorHex
-                )
-            } catch {
-                print("⚠️ Failed to start Live Activity: \(error)")
-                // Continue import even if Live Activity fails
-            }
-        }
-
-        var importedWorks: [Work] = []
-
-        // Process in batches for memory efficiency
-        for batchStart in stride(from: 0, to: parsedData.rows.count, by: batchSize) {
-            let batchEnd = min(batchStart + batchSize, parsedData.rows.count)
-            let batch = Array(parsedData.rows[batchStart..<batchEnd])
-
-            // Process batch
-            let batchResults = await processBatch(
-                batch,
-                startingRowNumber: batchStart + 2 // +2 for header and 0-based index
-            )
-
-            importedWorks.append(contentsOf: batchResults)
-
-            // Save periodically to avoid memory pressure
-            if batchEnd % 200 == 0 || batchEnd == parsedData.rows.count {
-                do {
-                    try modelContext.save()
-                } catch {
-                    print("Failed to save batch: \(error)")
-                }
-            }
-
-            // Allow UI to update
-            await Task.yield()
-        }
-
-        // Final save
-        do {
-            try modelContext.save()
-        } catch {
-            progress.errors.append(ImportError(
-                row: 0,
-                title: "Save Failed",
-                message: error.localizedDescription
-            ))
-        }
-
-        // Calculate final results
-        let duration = Date().timeIntervalSince(progress.startTime ?? Date())
-        let result = ImportResult(
-            successCount: progress.successfulImports,
-            duplicateCount: progress.skippedDuplicates,
-            errorCount: progress.failedImports,
-            importedWorks: importedWorks,
-            errors: progress.errors,
-            duration: duration
-        )
-
-        // Transition to enrichment phase (keep Live Activity alive!)
-        if #available(iOS 16.2, *) {
-            await CSVImportActivityManager.shared.startEnrichmentPhase(
-                totalBooksToEnrich: importedWorks.count
-            )
-        }
-
-        // Queue imported works for background enrichment
-        await queueWorksForEnrichment(importedWorks)
-
-        importState = .completed(result)
-    }
-
-    // MARK: - Batch Processing
-
-    private func processBatch(_ rows: [[String]], startingRowNumber: Int) async -> [Work] {
-        var importedWorks: [Work] = []
-
-        for (index, row) in rows.enumerated() {
-            let rowNumber = startingRowNumber + index
-
-            // Update progress
-            progress.processedRows += 1
-
-            // Parse row
-            guard let parsedRow = await CSVParsingActor.shared.processRow(
-                values: row,
-                mappings: mappings
-            ) else {
-                progress.failedImports += 1
-                progress.errors.append(ImportError(
-                    row: rowNumber,
-                    title: row.first ?? "Unknown",
-                    message: "Missing required fields"
-                ))
-                continue
-            }
-
-            progress.currentBook = parsedRow.title
-
-            // Update Live Activity (throttled to every 10 books)
-            updateCounter += 1
-            if updateCounter % 10 == 0 {
-                if #available(iOS 16.2, *) {
-                    await CSVImportActivityManager.shared.updateActivity(
-                        processedBooks: progress.processedRows,
-                        successfulImports: progress.successfulImports,
-                        skippedDuplicates: progress.skippedDuplicates,
-                        failedImports: progress.failedImports,
-                        currentBookTitle: parsedRow.title,
-                        estimatedTimeRemaining: progress.estimatedTimeRemaining
-                    )
-                }
-            }
-
-            // Check for duplicates
-            if let existingWork = await findExistingWork(parsedRow) {
-                switch duplicateStrategy {
-                case .skip:
-                    progress.skippedDuplicates += 1
-                    continue
-
-                case .update:
-                    await updateExistingWork(existingWork, with: parsedRow)
-                    progress.successfulImports += 1
-                    importedWorks.append(existingWork)
-
-                case .addNew:
-                    if let newWork = await createNewWork(from: parsedRow) {
-                        progress.successfulImports += 1
-                        importedWorks.append(newWork)
-                    } else {
-                        progress.failedImports += 1
-                    }
-
-                case .smart:
-                    if parsedRow.isbn != nil {
-                        // ISBN match - skip duplicate
-                        progress.skippedDuplicates += 1
-                    } else {
-                        // Title+Author match - update
-                        await updateExistingWork(existingWork, with: parsedRow)
-                        progress.successfulImports += 1
-                        importedWorks.append(existingWork)
-                    }
-                }
-            } else {
-                // Create new work
-                if let newWork = await createNewWork(from: parsedRow) {
-                    progress.successfulImports += 1
-                    importedWorks.append(newWork)
-                } else {
-                    progress.failedImports += 1
-                    progress.errors.append(ImportError(
-                        row: rowNumber,
-                        title: parsedRow.title,
-                        message: "Failed to create work"
-                    ))
-                }
-            }
-        }
-
-        return importedWorks
     }
 
     // MARK: - Duplicate Detection
@@ -639,21 +321,6 @@ public class CSVImportService: ObservableObject {
         return author
     }
 
-    // MARK: - Column Mapping
-
-    public func updateMapping(for column: String, to field: CSVParsingActor.ColumnMapping.BookField?) {
-        if let index = mappings.firstIndex(where: { $0.csvColumn == column }) {
-            mappings[index].mappedField = field
-        }
-    }
-
-    public func canProceedWithImport() -> Bool {
-        // Check that required fields are mapped
-        let hasTitle = mappings.contains { $0.mappedField == .title }
-        let hasAuthor = mappings.contains { $0.mappedField == .author }
-        return hasTitle && hasAuthor
-    }
-
     // MARK: - Background Enrichment
 
     private func queueWorksForEnrichment(_ works: [Work]) async {
@@ -700,6 +367,62 @@ public class CSVImportService: ObservableObject {
                 }
             }
         }
+    }
+
+    // MARK: - Supporting Types
+
+    /// Strategy for handling duplicate entries during CSV import.
+    public enum DuplicateStrategy: String, Sendable, CaseIterable, Identifiable {
+        /// Skip any rows that match an existing book.
+        case skip = "Skip Duplicates"
+
+        /// Update existing book data with information from the CSV.
+        case update = "Update Existing"
+
+        /// Create a new entry, even if it duplicates an existing book.
+        case addNew = "Add as New"
+
+        /// Smartly decide whether to skip or update based on data quality.
+        case smart = "Smart Update"
+
+        public var id: String { self.rawValue }
+    }
+
+    /// Represents the result of a CSV import operation.
+    /// Note: NOT Sendable because it contains SwiftData models (Work)
+    /// which are reference types. This is consumed only on @MainActor.
+    public struct ImportResult {
+        /// The number of successfully imported books.
+        public let successCount: Int
+
+        /// The number of rows skipped as duplicates.
+        public let duplicateCount: Int
+
+        /// The number of rows that resulted in an error.
+        public let errorCount: Int
+
+        /// An array of the Work objects that were successfully imported.
+        public let importedWorks: [Work]
+
+        /// A list of errors encountered during the import.
+        public let errors: [ImportError]
+
+        /// The total duration of the import operation in seconds.
+        public let duration: TimeInterval
+    }
+
+    /// Represents a single error during the CSV import process.
+    public struct ImportError: Sendable, Identifiable, Error {
+        public var id = UUID()
+
+        /// The row number in the CSV file where the error occurred.
+        public let row: Int
+
+        /// The title of the book associated with the error, if available.
+        public let title: String
+
+        /// A message describing the error.
+        public let message: String
     }
 }
 
