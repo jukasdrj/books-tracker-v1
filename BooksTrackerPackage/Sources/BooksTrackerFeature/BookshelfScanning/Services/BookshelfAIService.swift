@@ -254,17 +254,53 @@ actor BookshelfAIService {
 
         print("[Analytics] bookshelf_scan_started - provider: \(provider.rawValue), scan_id: \(jobId)")
 
-        // Use WebSocket flow (extracted for fallback wrapper)
-        let result = try await processViaWebSocket(
-            image: image,
-            jobId: jobId,
-            provider: provider,
-            progressHandler: progressHandler
-        )
+        // Try WebSocket first (preferred for 8ms latency)
+        do {
+            print("🔌 Attempting WebSocket connection for job \(jobId)")
 
-        print("[Analytics] bookshelf_scan_completed - provider: \(provider.rawValue), books_detected: \(result.0.count), scan_id: \(jobId), success: true")
+            let result = try await processViaWebSocket(
+                image: image,
+                jobId: jobId,
+                provider: provider,
+                progressHandler: progressHandler
+            )
 
-        return result
+            print("✅ WebSocket scan completed successfully")
+            print("[Analytics] bookshelf_scan_completed - provider: \(provider.rawValue), books_detected: \(result.0.count), scan_id: \(jobId), success: true, strategy: websocket")
+
+            return result
+
+        } catch let error as BookshelfAIError {
+            // WebSocket failed - fall back to HTTP polling
+            print("⚠️ WebSocket failed: \(error)")
+            print("📊 Falling back to HTTP polling for job \(jobId)")
+
+            // Notify user of fallback
+            await MainActor.run {
+                progressHandler(0.0, "Connecting (using fallback)...")
+            }
+
+            do {
+                let result = try await processViaPolling(
+                    image: image,
+                    jobId: jobId,
+                    provider: provider,
+                    progressHandler: progressHandler
+                )
+
+                print("✅ Polling fallback completed successfully")
+                print("[Analytics] bookshelf_scan_completed - provider: \(provider.rawValue), books_detected: \(result.0.count), scan_id: \(jobId), success: true, strategy: polling_fallback")
+
+                return result
+
+            } catch let pollingError as BookshelfAIError {
+                // Both strategies failed
+                print("❌ Both WebSocket and polling failed")
+                print("[Analytics] bookshelf_scan_failed - provider: \(provider.rawValue), scan_id: \(jobId), websocket_error: \(error), polling_error: \(pollingError)")
+
+                throw pollingError
+            }
+        }
     }
 
     // MARK: - Private Methods

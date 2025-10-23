@@ -41,3 +41,47 @@ func testProcessViaWebSocketConnectionFailure() async {
         )
     }
 }
+
+@Test("processBookshelfImageWithWebSocket falls back to polling on WebSocket failure", .disabled("Requires live backend with WebSocket disabled"))
+func testWebSocketFallbackToPolling() async throws {
+    let mockImage = UIImage(systemName: "book")!
+
+    let service = BookshelfAIService.shared
+
+    var strategies: [ProgressStrategy] = []
+    var progressUpdates: [(Double, String)] = []
+
+    let result = try await service.processBookshelfImageWithWebSocket(mockImage) { progress, status in
+        progressUpdates.append((progress, status))
+
+        // Detect strategy from status message
+        if status.contains("WebSocket") || status.contains("real-time") {
+            strategies.append(.webSocket)
+        } else if status.contains("Polling") || status.contains("fallback") {
+            strategies.append(.polling)
+        }
+    }
+
+    // Should have fallen back to polling
+    #expect(strategies.contains(.polling))
+    #expect(result.0.count > 0)
+}
+
+@Test("processBookshelfImageWithWebSocket uses WebSocket when available", .disabled("Requires live backend"))
+func testWebSocketPreferred() async throws {
+    let mockImage = UIImage(systemName: "book")!
+
+    let service = BookshelfAIService.shared
+
+    var usedWebSocket = false
+
+    let result = try await service.processBookshelfImageWithWebSocket(mockImage) { progress, status in
+        if progress < 1.0 && !status.contains("fallback") {
+            usedWebSocket = true
+        }
+    }
+
+    // WebSocket should be preferred
+    #expect(usedWebSocket == true)
+    #expect(result.0.count > 0)
+}
