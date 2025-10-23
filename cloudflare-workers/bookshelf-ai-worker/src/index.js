@@ -275,6 +275,30 @@ export default {
       }
     }
 
+    // Provider health check endpoint
+    if (url.pathname === '/health/provider') {
+      try {
+        const provider = AIProviderFactory.createProvider(env);
+        return new Response(JSON.stringify({
+          status: 'ok',
+          provider: provider.getProviderName(),
+          supportedProviders: AIProviderFactory.getSupportedProviders(),
+          timestamp: new Date().toISOString()
+        }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (error) {
+        return new Response(JSON.stringify({
+          status: 'error',
+          error: error.message
+        }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+    }
+
     // Process POST requests with image data
     if (request.method === "POST" && url.pathname === "/scan") {
       // Validate content type
