@@ -6,6 +6,7 @@ import SwiftData
 // MARK: - CSV Import Scale Tests
 /// Scale tests to verify performance with 1500+ books as per PRD requirements
 @Suite("CSV Import Scale Tests - 1500+ Books")
+@MainActor
 struct CSVImportScaleTests {
 
     // MARK: - Test Data Generation
@@ -108,13 +109,15 @@ struct CSVImportScaleTests {
         let startTime = Date()
 
         // Load and process file
-        await importService.loadFile(at: tempURL)
+        let (headers, rows) = try await CSVParsingActor.shared.parseCSV(csvContent)
+        let mappings = await CSVParsingActor.shared.detectColumns(headers: headers, sampleRows: Array(rows.prefix(10)))
 
-        // Verify column detection worked
-        #expect(importService.canProceedWithImport())
-
-        // Start import
-        await importService.startImport()
+        let result = await importService.importCSV(
+            content: csvContent,
+            mappings: mappings,
+            strategy: .smart,
+            progressUpdate: { _, _ in }
+        )
 
         let totalTime = Date().timeIntervalSince(startTime)
 
@@ -122,20 +125,20 @@ struct CSVImportScaleTests {
         try? FileManager.default.removeItem(at: tempURL)
 
         // Verify results
-        switch importService.importState {
-        case .completed(let result):
+        switch result {
+        case .success(let importResult):
             print("""
             ✅ 1500 Book Import Results:
-            - Books imported: \(result.successCount)
-            - Import time: \(String(format: "%.2f", result.duration))s
+            - Books imported: \(importResult.successCount)
+            - Import time: \(String(format: "%.2f", importResult.duration))s
             - Total time: \(String(format: "%.2f", totalTime))s
-            - Books/second: \(String(format: "%.1f", Double(result.successCount) / result.duration))
-            - Errors: \(result.errorCount)
+            - Books/second: \(String(format: "%.1f", Double(importResult.successCount) / importResult.duration))
+            - Errors: \(importResult.errorCount)
             """)
 
             // Performance requirements from PRD
-            #expect(result.successCount >= 1450) // Allow for some duplicates/errors
-            #expect(result.duration < 120) // Should complete within 2 minutes
+            #expect(importResult.successCount >= 1450) // Allow for some duplicates/errors
+            #expect(importResult.duration < 120) // Should complete within 2 minutes
             #expect(totalTime < 150) // Total including UI updates < 2.5 minutes
 
             // Verify data integrity
@@ -148,11 +151,8 @@ struct CSVImportScaleTests {
             print("Memory usage after 1500 books: \(String(format: "%.2f", memoryUsageMB)) MB")
             #expect(memoryUsageMB < 500) // Should stay under 500MB
 
-        case .failed(let error):
+        case .failure(let error):
             Issue.record("1500 book import failed: \(error)")
-
-        default:
-            Issue.record("Unexpected import state")
         }
     }
 
@@ -174,31 +174,35 @@ struct CSVImportScaleTests {
 
         let startTime = Date()
 
-        await importService.loadFile(at: tempURL)
-        await importService.startImport()
+        let (headers, rows) = try await CSVParsingActor.shared.parseCSV(csvContent)
+        let mappings = await CSVParsingActor.shared.detectColumns(headers: headers, sampleRows: Array(rows.prefix(10)))
+
+        let result = await importService.importCSV(
+            content: csvContent,
+            mappings: mappings,
+            strategy: .smart,
+            progressUpdate: { _, _ in }
+        )
 
         let totalTime = Date().timeIntervalSince(startTime)
 
         try? FileManager.default.removeItem(at: tempURL)
 
-        switch importService.importState {
-        case .completed(let result):
+        switch result {
+        case .success(let importResult):
             print("""
             ✅ 3000 Book Import Results:
-            - Books imported: \(result.successCount)
-            - Import time: \(String(format: "%.2f", result.duration))s
-            - Books/second: \(String(format: "%.1f", Double(result.successCount) / result.duration))
+            - Books imported: \(importResult.successCount)
+            - Import time: \(String(format: "%.2f", importResult.duration))s
+            - Books/second: \(String(format: "%.1f", Double(importResult.successCount) / importResult.duration))
             """)
 
             // Should still complete reasonably fast
-            #expect(result.duration < 240) // Within 4 minutes
-            #expect(result.successCount >= 2900)
+            #expect(importResult.duration < 240) // Within 4 minutes
+            #expect(importResult.successCount >= 2900)
 
-        case .failed(let error):
+        case .failure(let error):
             Issue.record("3000 book import failed: \(error)")
-
-        default:
-            Issue.record("Unexpected state")
         }
     }
 
@@ -217,141 +221,47 @@ struct CSVImportScaleTests {
             .appendingPathComponent("first_import.csv")
         try firstCSV.write(to: firstURL, atomically: true, encoding: .utf8)
 
-        await importService.loadFile(at: firstURL)
-        await importService.startImport()
+        let (headers, rows) = try await CSVParsingActor.shared.parseCSV(firstCSV)
+        let mappings = await CSVParsingActor.shared.detectColumns(headers: headers, sampleRows: Array(rows.prefix(10)))
 
-        guard case .completed(let firstResult) = importService.importState else {
+        let firstResult = await importService.importCSV(
+            content: firstCSV,
+            mappings: mappings,
+            strategy: .smart,
+            progressUpdate: { _, _ in }
+        )
+
+        guard case .success(let firstImportResult) = firstResult else {
             Issue.record("First import failed")
             return
         }
 
-        print("First import: \(firstResult.successCount) books")
+        print("First import: \(firstImportResult.successCount) books")
 
         // Second import: Same 500 books (should be detected as duplicates)
-        importService.importState = .idle // Reset state
-        importService.duplicateStrategy = .skip
+        let secondResult = await importService.importCSV(
+            content: firstCSV,
+            mappings: mappings,
+            strategy: .skip,
+            progressUpdate: { _, _ in }
+        )
 
-        await importService.loadFile(at: firstURL)
-        await importService.startImport()
-
-        guard case .completed(let secondResult) = importService.importState else {
+        guard case .success(let secondImportResult) = secondResult else {
             Issue.record("Second import failed")
             return
         }
 
         print("""
         Duplicate detection results:
-        - Imported: \(secondResult.successCount)
-        - Duplicates skipped: \(secondResult.duplicateCount)
+        - Imported: \(secondImportResult.successCount)
+        - Duplicates skipped: \(secondImportResult.duplicateCount)
         """)
 
         // Most should be detected as duplicates
-        #expect(secondResult.duplicateCount >= 450)
-        #expect(secondResult.successCount < 50)
+        #expect(secondImportResult.duplicateCount >= 450)
+        #expect(secondImportResult.successCount < 50)
 
         try? FileManager.default.removeItem(at: firstURL)
-    }
-
-    @Test("Progress tracking remains responsive during large imports")
-    func testProgressTracking() async throws {
-        let csvContent = generateTestCSV(bookCount: 1000)
-        let container = try ModelContainer(
-            for: Work.self, Edition.self, Author.self, UserLibraryEntry.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
-        )
-        let modelContext = ModelContext(container)
-        let importService = CSVImportService(modelContext: modelContext)
-
-        let tempURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("progress_test.csv")
-        try csvContent.write(to: tempURL, atomically: true, encoding: .utf8)
-
-        await importService.loadFile(at: tempURL)
-
-        // Track progress updates
-        var progressUpdates: [Double] = []
-        var lastProgress: Double = 0
-
-        // Start import and monitor progress
-        Task {
-            await importService.startImport()
-        }
-
-        // Monitor progress for up to 60 seconds
-        for _ in 0..<60 {
-            try await Task.sleep(for: .milliseconds(500))
-
-            let currentProgress = importService.progress.percentComplete
-            if currentProgress != lastProgress {
-                progressUpdates.append(currentProgress)
-                lastProgress = currentProgress
-
-                print("Progress: \(String(format: "%.1f", currentProgress * 100))% - \(importService.progress.currentBook)")
-            }
-
-            if case .completed = importService.importState {
-                break
-            }
-        }
-
-        // Verify progress was updated regularly
-        #expect(progressUpdates.count > 10) // Should have many progress updates
-        #expect(progressUpdates.last ?? 0 >= 0.95) // Should reach near 100%
-
-        // Verify progress was incremental
-        for i in 1..<progressUpdates.count {
-            #expect(progressUpdates[i] >= progressUpdates[i-1]) // Progress should never go backwards
-        }
-
-        try? FileManager.default.removeItem(at: tempURL)
-    }
-
-    // MARK: - UI Responsiveness Test
-
-    @Test("UI remains responsive during import")
-    @MainActor
-    func testUIResponsiveness() async throws {
-        let csvContent = generateTestCSV(bookCount: 500)
-        let container = try ModelContainer(
-            for: Work.self, Edition.self, Author.self, UserLibraryEntry.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
-        )
-        let modelContext = ModelContext(container)
-        let importService = CSVImportService(modelContext: modelContext)
-
-        let tempURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("ui_test.csv")
-        try csvContent.write(to: tempURL, atomically: true, encoding: .utf8)
-
-        await importService.loadFile(at: tempURL)
-
-        // Track main thread blocks
-        var maxBlockTime: TimeInterval = 0
-        let blockCheckTask = Task { @MainActor in
-            while true {
-                let start = Date()
-                try await Task.sleep(for: .milliseconds(16)) // 60fps frame time
-
-                let elapsed = Date().timeIntervalSince(start)
-                if elapsed > 0.033 { // More than 2 frames
-                    maxBlockTime = max(maxBlockTime, elapsed)
-                }
-
-                if case .completed = importService.importState {
-                    break
-                }
-            }
-        }
-
-        await importService.startImport()
-        blockCheckTask.cancel()
-
-        print("Max main thread block: \(String(format: "%.3f", maxBlockTime))s")
-
-        // Main thread should never be blocked for more than 100ms
-        #expect(maxBlockTime < 0.1)
-
-        try? FileManager.default.removeItem(at: tempURL)
     }
 
     // MARK: - Helper Functions

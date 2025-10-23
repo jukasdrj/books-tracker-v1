@@ -8,8 +8,10 @@ struct CSVImportFlowViewTests {
 
     @Test("View initializes without crash")
     func viewInitialization() {
-        let view = CSVImportFlowView()
-        // Test passes if initialization doesn't crash
+        if #available(iOS 26.0, *) {
+            let view = CSVImportFlowView()
+            // Test passes if initialization doesn't crash
+        }
     }
 
     @Test("View uses SyncCoordinator singleton")

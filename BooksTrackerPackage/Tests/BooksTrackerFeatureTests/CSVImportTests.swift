@@ -6,6 +6,7 @@ import SwiftData
 // MARK: - CSV Import Tests
 /// Comprehensive tests for the CSV import functionality
 @Suite("CSV Import Tests")
+@MainActor
 struct CSVImportTests {
 
     // MARK: - Test Data Paths
@@ -258,27 +259,26 @@ struct CSVImportTests {
         let modelContext = ModelContext(container)
         let importService = CSVImportService(modelContext: modelContext)
 
-        await importService.loadFile(at: smallTestFile)
+        let csvContent = try String(contentsOf: smallTestFile)
+        let (headers, rows) = try await CSVParsingActor.shared.parseCSV(csvContent)
+        let mappings = await CSVParsingActor.shared.detectColumns(headers: headers, sampleRows: Array(rows.prefix(10)))
 
-        // Verify column detection
-        #expect(importService.mappings.count > 0)
-        #expect(importService.canProceedWithImport())
-
-        // Start import
-        await importService.startImport()
+        let result = await importService.importCSV(
+            content: csvContent,
+            mappings: mappings,
+            strategy: .smart,
+            progressUpdate: { _, _ in }
+        )
 
         // Verify results
-        switch importService.importState {
-        case .completed(let result):
-            #expect(result.successCount > 0)
-            #expect(result.successCount <= 36) // File has ~36 books
-            print("✅ Imported \(result.successCount) books from small file")
+        switch result {
+        case .success(let importResult):
+            #expect(importResult.successCount > 0)
+            #expect(importResult.successCount <= 36) // File has ~36 books
+            print("✅ Imported \(importResult.successCount) books from small file")
 
-        case .failed(let error):
+        case .failure(let error):
             Issue.record("Import failed: \(error)")
-
-        default:
-            Issue.record("Unexpected import state")
         }
     }
 
@@ -291,26 +291,29 @@ struct CSVImportTests {
         let modelContext = ModelContext(container)
         let importService = CSVImportService(modelContext: modelContext)
 
-        await importService.loadFile(at: mediumTestFile)
+        let csvContent = try String(contentsOf: mediumTestFile)
+        let (headers, rows) = try await CSVParsingActor.shared.parseCSV(csvContent)
+        let mappings = await CSVParsingActor.shared.detectColumns(headers: headers, sampleRows: Array(rows.prefix(10)))
 
-        // Start import
-        await importService.startImport()
+        let result = await importService.importCSV(
+            content: csvContent,
+            mappings: mappings,
+            strategy: .smart,
+            progressUpdate: { _, _ in }
+        )
 
         // Verify results
-        switch importService.importState {
-        case .completed(let result):
-            #expect(result.successCount > 0)
-            #expect(result.successCount <= 359)
-            print("✅ Imported \(result.successCount) books in \(result.duration)s")
+        switch result {
+        case .success(let importResult):
+            #expect(importResult.successCount > 0)
+            #expect(importResult.successCount <= 359)
+            print("✅ Imported \(importResult.successCount) books in \(importResult.duration)s")
 
             // Verify batch processing worked
-            #expect(result.duration < 30) // Should be fast with batching
+            #expect(importResult.duration < 30) // Should be fast with batching
 
-        case .failed(let error):
+        case .failure(let error):
             Issue.record("Import failed: \(error)")
-
-        default:
-            Issue.record("Unexpected import state")
         }
     }
 
@@ -323,20 +326,19 @@ struct CSVImportTests {
         let modelContext = ModelContext(container)
         let importService = CSVImportService(modelContext: modelContext)
 
-        // Large file uses "Title,Author,ISBN-13" format
-        await importService.loadFile(at: largeTestFile)
+        let csvContent = try String(contentsOf: largeTestFile)
+        let (headers, rows) = try await CSVParsingActor.shared.parseCSV(csvContent)
+        let mappings = await CSVParsingActor.shared.detectColumns(headers: headers, sampleRows: Array(rows.prefix(10)))
 
         // Verify column mapping worked
-        let titleMapping = importService.mappings.first { $0.csvColumn == "Title" }
+        let titleMapping = mappings.first { $0.csvColumn == "Title" }
         #expect(titleMapping?.mappedField == .title)
 
-        let authorMapping = importService.mappings.first { $0.csvColumn == "Author" }
+        let authorMapping = mappings.first { $0.csvColumn == "Author" }
         #expect(authorMapping?.mappedField == .author)
 
-        let isbnMapping = importService.mappings.first { $0.csvColumn == "ISBN-13" }
+        let isbnMapping = mappings.first { $0.csvColumn == "ISBN-13" }
         #expect(isbnMapping?.mappedField == .isbn13 || isbnMapping?.mappedField == .isbn)
-
-        #expect(importService.canProceedWithImport())
     }
 
     // MARK: - Performance Tests
@@ -350,34 +352,37 @@ struct CSVImportTests {
         let modelContext = ModelContext(container)
         let importService = CSVImportService(modelContext: modelContext)
 
-        let startTime = Date()
+        let csvContent = try String(contentsOf: largeTestFile)
+        let (headers, rows) = try await CSVParsingActor.shared.parseCSV(csvContent)
+        let mappings = await CSVParsingActor.shared.detectColumns(headers: headers, sampleRows: Array(rows.prefix(10)))
 
-        await importService.loadFile(at: largeTestFile)
-        await importService.startImport()
+        let result = await importService.importCSV(
+            content: csvContent,
+            mappings: mappings,
+            strategy: .smart,
+            progressUpdate: { _, _ in }
+        )
 
         let duration = Date().timeIntervalSince(startTime)
 
-        switch importService.importState {
-        case .completed(let result):
+        switch result {
+        case .success(let importResult):
             print("""
             ✅ Performance Results:
-            - Total books: \(result.successCount)
-            - Import time: \(String(format: "%.2f", result.duration))s
+            - Total books: \(importResult.successCount)
+            - Import time: \(String(format: "%.2f", importResult.duration))s
             - Total time: \(String(format: "%.2f", duration))s
-            - Books/second: \(String(format: "%.1f", Double(result.successCount) / result.duration))
-            - Duplicates: \(result.duplicateCount)
-            - Errors: \(result.errorCount)
+            - Books/second: \(String(format: "%.1f", Double(importResult.successCount) / importResult.duration))
+            - Duplicates: \(importResult.duplicateCount)
+            - Errors: \(importResult.errorCount)
             """)
 
             // Performance expectations
-            #expect(result.duration < 60) // Should complete within 1 minute
-            #expect(result.successCount > 700) // Most books should import
+            #expect(importResult.duration < 60) // Should complete within 1 minute
+            #expect(importResult.successCount > 700) // Most books should import
 
-        case .failed(let error):
+        case .failure(let error):
             Issue.record("Large file import failed: \(error)")
-
-        default:
-            Issue.record("Unexpected import state")
         }
     }
 
@@ -393,8 +398,16 @@ struct CSVImportTests {
         // Capture initial memory
         let initialMemory = getCurrentMemoryUsage()
 
-        await importService.loadFile(at: largeTestFile)
-        await importService.startImport()
+        let csvContent = try String(contentsOf: largeTestFile)
+        let (headers, rows) = try await CSVParsingActor.shared.parseCSV(csvContent)
+        let mappings = await CSVParsingActor.shared.detectColumns(headers: headers, sampleRows: Array(rows.prefix(10)))
+
+        _ = await importService.importCSV(
+            content: csvContent,
+            mappings: mappings,
+            strategy: .smart,
+            progressUpdate: { _, _ in }
+        )
 
         // Check memory after import
         let finalMemory = getCurrentMemoryUsage()
@@ -426,9 +439,9 @@ struct CSVImportTests {
         // This should fail validation since Title and Author are missing
         let (headers, rows) = try await CSVParsingActor.shared.parseCSV(csvContent)
         let mappings = await CSVParsingActor.shared.detectColumns(headers: headers, sampleRows: rows)
-        importService.mappings = mappings
 
-        #expect(!importService.canProceedWithImport())
+        #expect(mappings.first { $0.mappedField == .title } == nil)
+        #expect(mappings.first { $0.mappedField == .author } == nil)
     }
 
     @Test("Handles malformed CSV gracefully")
