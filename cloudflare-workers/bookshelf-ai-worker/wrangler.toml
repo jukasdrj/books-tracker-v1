@@ -28,9 +28,12 @@ binding = "GEMINI_API_KEY"
 store_id = "b0562ac16fde468c8af12717a6c88400"
 secret_name = "google_aistudio_key"
 
-# Configuration variables
+# AI Provider Configuration
+# AI_PROVIDER: Which AI vision provider to use
+#   - "gemini": Google Gemini 2.5 Flash (requires GEMINI_API_KEY secret)
+#   - "cloudflare": Cloudflare Workers AI (requires AI binding, Phase 2)
 [vars]
-AI_MODEL = "gemini-2.5-flash-preview-05-20"
+AI_PROVIDER = "gemini"
 MAX_IMAGE_SIZE_MB = "10"
 REQUEST_TIMEOUT_MS = "50000"  # Increased to 50s for large image processing
 LOG_LEVEL = "INFO"
