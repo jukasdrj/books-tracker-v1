@@ -11,6 +11,9 @@ export class AIProviderFactory {
      * @throws {Error} If provider configuration is invalid
      */
     static createProvider(env) {
+        if (!env || typeof env !== 'object') {
+            throw new Error('AIProviderFactory.createProvider() requires valid env object');
+        }
         const providerType = env.AI_PROVIDER || 'gemini';
 
         switch (providerType.toLowerCase()) {
