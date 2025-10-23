@@ -2,10 +2,43 @@ import { WorkerEntrypoint } from "cloudflare:workers";
 import { searchGoogleBooks, searchGoogleBooksByISBN } from './google-books.js';
 import { searchOpenLibrary, getOpenLibraryAuthorWorks } from './open-library.js';
 import { searchISBNdb, getISBNdbEditionsForWork, getISBNdbBookByISBN } from './isbndb.js';
+import {
+  StructuredLogger,
+  PerformanceTimer,
+  ProviderHealthMonitor
+} from '../../structured-logging-infrastructure.js';
 
 export class ExternalAPIsWorker extends WorkerEntrypoint {
+  constructor(ctx, env) {
+    super(ctx, env);
+    // Initialize structured logging (Phase B)
+    this.logger = new StructuredLogger('external-apis-worker', env);
+    this.providerMonitor = new ProviderHealthMonitor(this.logger);
+  }
   async searchGoogleBooks(query, params) {
-    return await searchGoogleBooks(query, params, this.env);
+    const timer = new PerformanceTimer(this.logger, 'rpc_searchGoogleBooks');
+    const startTime = Date.now();
+
+    try {
+      const result = await searchGoogleBooks(query, params, this.env);
+      await this.providerMonitor.recordProviderCall(
+        'google_books',
+        'search',
+        true,
+        Date.now() - startTime
+      );
+      await timer.end({ query, resultsCount: result?.items?.length || 0 });
+      return result;
+    } catch (error) {
+      await this.providerMonitor.recordProviderCall(
+        'google_books',
+        'search',
+        false,
+        Date.now() - startTime,
+        error.status || 'unknown'
+      );
+      throw error;
+    }
   }
 
   async searchGoogleBooksByISBN(isbn) {
