@@ -31,9 +31,9 @@ secret_name = "google_aistudio_key"
 # AI Provider Configuration
 # AI_PROVIDER: Which AI vision provider to use
 #   - "gemini": Google Gemini 2.5 Flash (requires GEMINI_API_KEY secret)
-#   - "cloudflare": Cloudflare Workers AI (requires AI binding, Phase 2)
+#   - "cloudflare": Cloudflare Workers AI (requires [ai] binding below)
 [vars]
-AI_PROVIDER = "gemini"
+AI_PROVIDER = "gemini"  # Change to "cloudflare" to use Workers AI
 MAX_IMAGE_SIZE_MB = "10"
 REQUEST_TIMEOUT_MS = "50000"  # Increased to 50s for large image processing
 LOG_LEVEL = "INFO"
@@ -49,3 +49,7 @@ id = "5d4b89403bbb4be1949b1ee30df5353e"
 binding = "BOOKS_API_PROXY"
 service = "books-api-proxy"
 entrypoint = "BooksAPIProxyWorker"
+
+# Workers AI Binding (required for AI_PROVIDER="cloudflare")
+[ai]
+binding = "AI"
