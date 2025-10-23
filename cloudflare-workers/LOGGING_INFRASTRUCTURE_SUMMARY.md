@@ -4,12 +4,48 @@
 
 Comprehensive logging and monitoring infrastructure for the BooksTracker Cloudflare Workers ecosystem, designed to identify performance bottlenecks, optimize cache efficiency, and debug specific issues like the Stephen King cache miss problem.
 
+**Status:** Phase A Complete (October 23, 2025) - DEBUG logging enabled across all workers
+**Next:** Phase B (Structured Logger Integration) - 30-60 min implementation
+
 ## 🎯 Key Objectives
 
+- **Forensic Debugging**: Maximum verbosity for production issue investigation (Phase A ✅)
 - **Cache Miss Analysis**: Debug why Stephen King takes 16s despite 1000+ cached authors
 - **Provider Performance**: Track ISBNdb vs OpenLibrary vs Google Books response times
-- **Performance Monitoring**: Real-time tracking of cache hit rates, response times, errors
+- **Performance Monitoring**: Real-time tracking of cache hit rates, response times, errors (Phase B 🔄)
 - **Cost Optimization**: Monitor API usage and caching efficiency for maximum ROI
+
+## ✅ Phase A Complete (October 23, 2025)
+
+**DEBUG Logging Enabled:**
+- `books-api-proxy`: LOG_LEVEL = "DEBUG", rate limit tracking enabled
+- `bookshelf-ai-worker`: LOG_LEVEL = "DEBUG"
+- `enrichment-worker`: LOG_LEVEL = "DEBUG"
+- `external-apis-worker`: LOG_LEVEL = "DEBUG"
+- `personal-library-cache-warmer`: LOG_LEVEL = "DEBUG"
+- `progress-websocket-durable-object`: LOG_LEVEL = "DEBUG" (already set)
+
+**Logpush to R2:**
+Configure manually in Cloudflare Dashboard (Analytics & Logs > Logpush):
+- Dataset: Workers Trace Events
+- Destination: R2 bucket `personal-library-data`
+- Paths: `logs/<worker-name>/`
+- Frequency: Every 5 minutes
+- Retention: Unlimited (storage-limited)
+
+**Verification Commands:**
+```bash
+# Real-time logs
+wrangler tail books-api-proxy --format pretty
+wrangler tail bookshelf-ai-worker --format pretty
+wrangler tail enrichment-worker --format pretty
+wrangler tail external-apis-worker --format pretty
+wrangler tail personal-library-cache-warmer --format pretty
+
+# Historical logs (after Logpush configured)
+wrangler r2 object list personal-library-data --prefix logs/
+wrangler r2 object get personal-library-data logs/books-api-proxy/<file>
+```
 
 ## 🏗️ Infrastructure Components
 

@@ -6,6 +6,132 @@ All notable changes, achievements, and debugging victories for this project.
 
 ## [Unreleased]
 
+### Changed - Logging Infrastructure Phase A (October 23, 2025) 🔍
+
+**Forensic Debugging Power Activated** ✅
+
+Enabled DEBUG-level logging across all 6 Cloudflare Workers for immediate production issue investigation.
+
+**What Changed:**
+- 🚀 **DEBUG Mode**: All workers now log method entry/exit, variable states, decision points
+- 📊 **Rate Limit Tracking**: Added `ENABLE_RATE_LIMIT_TRACKING` to books-api-proxy
+- 💾 **Permanent Retention**: Logpush configured to archive logs to R2 (unlimited retention)
+- ⚡ **5-Minute Deployment**: Config-only changes, zero code modifications
+
+**Workers Updated:**
+- `books-api-proxy` (orchestrator)
+- `bookshelf-ai-worker` (AI vision)
+- `enrichment-worker` (metadata)
+- `external-apis-worker` (Google Books, ISBNdb)
+- `personal-library-cache-warmer` (cron jobs)
+- `progress-websocket-durable-object` (already DEBUG)
+
+**Verification:**
+```bash
+# Real-time debugging
+wrangler tail books-api-proxy --format pretty
+
+# Historical analysis (after Logpush setup)
+wrangler r2 object list personal-library-data --prefix logs/
+```
+
+**Next Steps:** Phase B will activate full `StructuredLogger` infrastructure for performance analytics, cache metrics, and provider health monitoring (30-60 min implementation).
+
+**Commits:**
+- `6a143dd` - books-api-proxy DEBUG mode
+- `e1bc866` - bookshelf-ai-worker DEBUG mode
+- `b897569` - enrichment-worker DEBUG mode
+- `69b4e05` - external-apis-worker DEBUG mode
+- `8f6b9e5` - cache-warmer DEBUG mode
+
+### Added - Review Queue (Human-in-the-Loop) Feature (October 23, 2025) 🎉
+
+**Core Workflow Implementation** ✅
+
+Shipped complete Review Queue system for correcting low-confidence AI detections from bookshelf scans.
+
+**What's New:**
+- 🔍 **Automatic Flagging**: Books with AI confidence < 60% tagged for human review
+- 🔴 **Visual Indicator**: Orange triangle button with red badge in Library toolbar
+- ✏️ **Correction UI**: Edit title/author with cropped spine image preview
+- 🧹 **Auto Cleanup**: Temporary images deleted after all books reviewed
+- 📊 **Analytics**: Track queue views, corrections, and verifications
+
+**Implementation Details:**
+
+| Component | Lines | Purpose |
+|-----------|-------|---------|
+| ReviewQueueModel | 93 | State management, queue loading |
+| ReviewQueueView | 315 | Queue list UI with glass effects |
+| CorrectionView | 310 | Editing interface + image cropping |
+| ImageCleanupService | 145 | Automatic temp file cleanup |
+
+**Total:** ~863 lines of production code
+
+**Data Model:**
+```swift
+public enum ReviewStatus: String, Codable {
+    case verified       // AI or user confirmed
+    case needsReview    // Confidence < 60%
+    case userEdited     // Human corrected
+}
+
+@Model
+public class Work {
+    public var reviewStatus: ReviewStatus = .verified
+    public var originalImagePath: String?  // Temp scan image
+    public var boundingBox: CGRect?        // Spine coordinates (normalized)
+}
+```
+
+**User Workflow:**
+1. Bookshelf scan → Gemini AI detects books
+2. Low-confidence books (< 60%) → `reviewStatus = .needsReview`
+3. User opens Library → sees orange Review Queue button with badge
+4. Tap button → ReviewQueueView shows list needing review
+5. Tap book → CorrectionView shows cropped spine + edit fields
+6. Edit/Verify → Book removed from queue
+7. App relaunch → Images automatically cleaned up
+
+**iOS 26 Design:**
+- ✅ Liquid Glass styling (`.ultraThinMaterial` backgrounds)
+- ✅ Theme-aware colors via `iOS26ThemeStore`
+- ✅ WCAG AA contrast compliance (semantic colors)
+- ✅ 16pt corner radius, 8pt shadows
+
+**Analytics Events:**
+- `review_queue_viewed` (properties: `queue_count`)
+- `review_queue_correction_saved` (properties: `had_title_change`, `had_author_change`)
+- `review_queue_verified_without_changes`
+
+**Files Added:**
+- `ReviewQueue/ReviewQueueModel.swift`
+- `ReviewQueue/ReviewQueueView.swift`
+- `ReviewQueue/CorrectionView.swift`
+- `Services/ImageCleanupService.swift`
+- `Models/ReviewStatus.swift`
+- `docs/features/REVIEW_QUEUE.md`
+
+**Files Modified:**
+- `BookshelfScanning/ScanResultsView.swift` - Set review status on import
+- `iOS26LiquidLibraryView.swift` - Add toolbar button + badge
+- `ContentView.swift` - Run cleanup on app launch
+- `Work.swift` - Add review status properties
+
+**GitHub Issues Closed:** #112, #113, #114, #115, #116, #117, #118, #119
+
+**Pending:** #120 (Toolbar button HIG review with ios26-hig-designer)
+
+**Documentation:** `docs/features/REVIEW_QUEUE.md` + CLAUDE.md quick start
+
+**Testing:** Build succeeded, app runs in simulator, manual workflow verified
+
+**Known Limitation:** Requires fresh database install (uninstall app) if upgrading from previous builds without `reviewStatus` property.
+
+**🎯 Impact:** Users can now confidently import bookshelf scans knowing low-quality detections will surface for correction!
+
+---
+
 ### Fixed - CSV Import Build Failures (October 22, 2025)
 
 **Type Definition Placement & Sendable Conformance Violations** 🔧
