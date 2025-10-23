@@ -35,14 +35,59 @@ wrangler tail books-api-proxy --format pretty
 wrangler r2 object list personal-library-data --prefix logs/
 ```
 
-**Next Steps:** Phase B will activate full `StructuredLogger` infrastructure for performance analytics, cache metrics, and provider health monitoring (30-60 min implementation).
-
 **Commits:**
 - `6a143dd` - books-api-proxy DEBUG mode
 - `e1bc866` - bookshelf-ai-worker DEBUG mode
 - `b897569` - enrichment-worker DEBUG mode
 - `69b4e05` - external-apis-worker DEBUG mode
 - `8f6b9e5` - cache-warmer DEBUG mode
+
+### Added - Logging Infrastructure Phase B (October 23, 2025) 📊
+
+**Structured Analytics Activated** ✅
+
+Integrated `StructuredLogger` infrastructure across all 5 workers for performance tracking, cache analytics, and provider health monitoring.
+
+**What's New:**
+- 🚀 **Performance Timing**: Automatic operation timing with `PerformanceTimer`
+- 📊 **Analytics Engine Integration**: Performance, cache, and provider metrics flow to 3 datasets
+- 🌐 **Provider Health Monitoring**: Google Books, ISBNdb, Gemini API success rates and response times
+- 📈 **Cache Analytics**: Hit/miss tracking with `CachePerformanceMonitor` (future enhancement)
+- 💾 **30-Day Retention**: All metrics available in Analytics Engine for dashboards
+
+**Workers Updated:**
+- `books-api-proxy` - Performance timing on RPC methods
+- `bookshelf-ai-worker` - AI processing performance and provider health
+- `enrichment-worker` - Batch enrichment timing
+- `external-apis-worker` - Google Books API health monitoring
+- `personal-library-cache-warmer` - Cron job performance tracking
+
+**Analytics Engine Datasets:**
+| Dataset | Purpose | Metrics |
+|---------|---------|---------|
+| `books_api_performance` | Operation timing | Duration, operation type, metadata |
+| `books_api_cache_metrics` | Cache effectiveness | Hit/miss rates, response times (future) |
+| `books_api_provider_performance` | API health | Success/failure rates, response times |
+
+**Verification:**
+```bash
+# Real-time structured logs (emojis indicate structured logging!)
+wrangler tail books-api-proxy --format pretty
+# Look for: 🚀 PERF, 📊 CACHE, 🌐 PROVIDER
+
+# Query Analytics Engine (5 min delay for data ingestion)
+# Navigate to Cloudflare Dashboard → Analytics Engine
+# Run queries from cloudflare-workers/analytics-queries.sql
+```
+
+**Next Steps:** Add cache operation tracking to search handlers for full observability (optional enhancement).
+
+**Commits:**
+- `ed6be8b` - books-api-proxy StructuredLogger integration
+- `12f6c4a` - bookshelf-ai-worker integration
+- `b3626ee` - enrichment-worker integration
+- `d0d6cce` - external-apis-worker integration
+- `8c999b4` - cache-warmer integration
 
 ### Added - Review Queue (Human-in-the-Loop) Feature (October 23, 2025) 🎉
 
