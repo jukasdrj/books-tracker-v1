@@ -276,26 +276,20 @@ export default {
     }
 
     // Provider health check endpoint
-    if (url.pathname === '/health/provider') {
+    if (request.method === "GET" && url.pathname === "/health/provider") {
       try {
         const provider = AIProviderFactory.createProvider(env);
-        return new Response(JSON.stringify({
-          status: 'ok',
+        return Response.json({
+          status: "ok",
           provider: provider.getProviderName(),
           supportedProviders: AIProviderFactory.getSupportedProviders(),
           timestamp: new Date().toISOString()
-        }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' }
         });
       } catch (error) {
-        return new Response(JSON.stringify({
-          status: 'error',
+        return Response.json({
+          status: "error",
           error: error.message
-        }), {
-          status: 500,
-          headers: { 'Content-Type': 'application/json' }
-        });
+        }, { status: 500 });
       }
     }
 
