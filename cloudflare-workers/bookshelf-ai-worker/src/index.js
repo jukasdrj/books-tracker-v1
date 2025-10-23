@@ -156,8 +156,43 @@ async function processBookshelfScan(jobId, imageData, env) {
       currentStatus: 'Processing with AI...'
     });
 
-    const worker = new BookshelfAIWorker(env);
-    const result = await worker.scanBookshelf(imageData);
+    await updateJobState(env, jobId, {
+      stage: 'processing',
+      elapsedTime: Math.floor((Date.now() - startTime) / 1000)
+    });
+
+    // Keep-alive ping to prevent WebSocket timeout during long AI processing
+    // Cloudflare idle timeout: 100s, iOS URLSession timeout: 60s
+    // Send ping every 30s to stay well under both limits
+    const keepAlivePingInterval = setInterval(async () => {
+      try {
+        await pushProgress(env, jobId, {
+          progress: 0.3,  // Keep progress stable during AI processing
+          processedItems: 1,
+          totalItems: 3,
+          currentStatus: 'Processing with AI...',
+          keepAlive: true  // Flag for client to skip redundant UI updates
+        });
+        console.log(`[BookshelfAI] Keep-alive ping sent for job ${jobId}`);
+      } catch (error) {
+        console.error(`[BookshelfAI] Keep-alive ping failed for job ${jobId}:`, error);
+        // Don't clear interval on ping failure - retry on next interval
+      }
+    }, 30000);  // 30 seconds
+
+    let result;
+    try {
+      // AI processing (blocks event loop for 25-40 seconds)
+      const worker = new BookshelfAIWorker(env);
+      result = await worker.scanBookshelf(imageData);
+
+      // Clear keep-alive interval immediately on success
+      clearInterval(keepAlivePingInterval);
+    } catch (error) {
+      // Clear keep-alive interval on error
+      clearInterval(keepAlivePingInterval);
+      throw error;  // Re-throw to be caught by outer handler
+    }
 
     const booksDetected = result.books.length;
 
