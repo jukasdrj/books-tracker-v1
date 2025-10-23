@@ -108,24 +108,46 @@ export class CloudflareProvider extends AIProvider {
                 required: ["books", "suggestions"]
             };
 
-            // AI prompt for book detection (similar to GeminiProvider but optimized for Llama)
-            const prompt = `You are a book detection specialist. Analyze this bookshelf image and identify every book spine visible.
+            // AI prompt for book detection (optimized for Llama 3.2 Vision with step-by-step instructions)
+            const prompt = `You are an expert at analyzing bookshelf images and extracting book information.
 
-For each book:
-1. Extract the title
-2. Extract the author's name
-3. Determine bounding box coordinates (normalized 0-1, corners format: x1, y1, x2, y2)
-4. Provide confidence score (0.0-1.0)
+TASK: Carefully scan this bookshelf image from left to right, top to bottom. For each book spine you can read:
 
-Return JSON with this exact structure:
-{
-  "books": [{"title": "string", "author": "string|null", "isbn": "string|null", "confidence": 0.0-1.0, "boundingBox": {"x1": 0.0-1.0, "y1": 0.0-1.0, "x2": 0.0-1.0, "y2": 0.0-1.0}}],
-  "suggestions": [{"type": "string", "message": "string", "severity": "low|medium|high"}]
-}
+1. Extract the EXACT title as written (preserve capitalization, subtitles, series info)
+2. Extract the EXACT author name as written (first and last name)
+3. If an ISBN is visible, extract all 10 or 13 digits exactly
+4. Estimate your confidence (0.0-1.0) based on text clarity
+5. Provide normalized bounding box coordinates (x1, y1, x2, y2) where:
+   - x1, y1 = top-left corner (0 = left edge, 1 = right edge)
+   - x2, y2 = bottom-right corner (0 = top edge, 1 = bottom edge)
 
-Bounding boxes use normalized coordinates (0-1). Suggestion types: unreadable_books, low_confidence, edge_cutoff, blurry_image, glare_detected, distance_too_far, multiple_shelves, lighting_issues, angle_issues.
+CONFIDENCE SCORING GUIDE:
+- 0.9-1.0: Text is crystal clear, no ambiguity
+- 0.7-0.89: Text is mostly clear, minor blur or glare
+- 0.5-0.69: Text is partially readable, some guessing involved
+- 0.3-0.49: Text is barely readable, low confidence
+- 0.0-0.29: Text is unreadable or heavily obscured
 
-If image quality is good, return empty suggestions array. Only include suggestions when issues are detected.`;
+IMPORTANT RULES:
+- Only include books where you can read AT LEAST the title
+- Use null for author if not visible or unreadable
+- Use null for ISBN if not visible (ISBNs are usually on spine bottom)
+- Bounding boxes should tightly wrap each book spine (not the entire shelf)
+- Books are typically vertical rectangles (height > width)
+- If you're unsure about a title, include it with lower confidence
+
+IMAGE QUALITY ANALYSIS:
+After extracting all readable books, analyze the image for quality issues:
+
+- Blur/motion blur → type: "blurry_image", severity: "medium"
+- Glare/reflections blocking text → type: "glare_detected", severity: "high"
+- Books cut off at edges → type: "edge_cutoff", severity: "low"
+- Camera too far to read spines → type: "distance_too_far", severity: "high"
+- Poor lighting/deep shadows → type: "lighting_issues", severity: "medium"
+- Angled shot (not perpendicular) → type: "angle_issues", severity: "low"
+- Multiple shelves visible (confusing) → type: "multiple_shelves", severity: "low"
+
+Only include suggestions if you detect actual issues. If the image quality is good, return an empty suggestions array.`;
 
             // Call Workers AI with JSON schema mode
             const result = await this.ai.run(this.modelName, {
