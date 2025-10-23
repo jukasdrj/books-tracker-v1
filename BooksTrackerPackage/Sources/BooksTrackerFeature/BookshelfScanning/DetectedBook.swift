@@ -35,6 +35,15 @@ public struct DetectedBook: Identifiable, Sendable {
     /// Used for correction UI to show cropped spine image
     public var originalImagePath: String?
 
+    /// Confidence threshold for requiring human review
+    /// Books below 0.60 (60%) confidence should be reviewed
+    private static let reviewThreshold: Double = 0.60
+
+    /// Whether this detection requires human review
+    public var needsReview: Bool {
+        return confidence < Self.reviewThreshold
+    }
+
     public init(
         isbn: String? = nil,
         title: String? = nil,
