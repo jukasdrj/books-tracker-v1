@@ -140,30 +140,21 @@ actor BookshelfAIService {
     ///
     /// Flow:
     /// 1. Connect WebSocket BEFORE uploading image
-    /// 2. Upload image (server waits for WebSocket ready signal)
-    /// 3. Signal WebSocket ready to server
-    /// 4. Server starts processing (WebSocket guaranteed listening)
-    /// 5. Stream real-time progress
-    ///
+    /// Process bookshelf image using WebSocket for real-time progress
     /// - Parameters:
     ///   - image: UIImage to process
-    ///   - progressHandler: Closure to handle progress updates (called on MainActor)
+    ///   - jobId: Pre-generated job identifier
+    ///   - provider: AI provider (Gemini or Cloudflare)
+    ///   - progressHandler: Closure for progress updates
     /// - Returns: Tuple of detected books and suggestions
-    /// - Throws: BookshelfAIError for image compression, network, or processing errors
-    func processBookshelfImageWithWebSocket(
-        _ image: UIImage,
+    /// - Throws: BookshelfAIError for failures
+    internal func processViaWebSocket(
+        image: UIImage,
+        jobId: String,
+        provider: AIProvider,
         progressHandler: @MainActor @escaping (Double, String) -> Void
     ) async throws(BookshelfAIError) -> ([DetectedBook], [SuggestionViewModel]) {
-        // Read user-selected provider (UserDefaults is thread-safe)
-        let provider = getSelectedProvider()
-
-        // Generate jobId upfront - client controls the UUID for predictable WebSocket binding
-        let jobId = UUID().uuidString
-
-        // Log scan start (TODO: Replace with Firebase Analytics when configured)
-        print("[Analytics] bookshelf_scan_started - provider: \(provider.rawValue), scan_id: \(jobId), image_width: \(Int(image.size.width)), image_height: \(Int(image.size.height))")
-
-        // STEP 1: Connect WebSocket with client-generated jobId (prevents race condition)
+        // STEP 1: Connect WebSocket
         let wsManager = await WebSocketProgressManager()
         do {
             _ = try await wsManager.establishConnection(jobId: jobId)
@@ -173,7 +164,7 @@ actor BookshelfAIService {
             throw .networkError(error)
         }
 
-        // STEP 2: Compress image with adaptive cascade algorithm
+        // STEP 2: Compress image
         let config = provider.preprocessingConfig
         let processedImage = image.resizeForAI(maxDimension: config.maxDimension)
 
@@ -182,10 +173,7 @@ actor BookshelfAIService {
             throw .imageCompressionFailed
         }
 
-        let imageSizeKB = imageData.count / 1024
-        print("[Compression] Final size: \(imageSizeKB)KB (\(imageData.count) bytes) - Ready for upload")
-
-        // STEP 3: Upload image with client-generated jobId
+        // STEP 3: Upload image
         do {
             _ = try await startScanJob(imageData, provider: provider, jobId: jobId)
             print("✅ Image uploaded with jobId: \(jobId)")
@@ -194,23 +182,20 @@ actor BookshelfAIService {
             throw .networkError(error)
         }
 
-        // STEP 5: Listen for real-time progress updates
+        // STEP 4: Listen for progress updates
         let result: Result<([DetectedBook], [SuggestionViewModel]), BookshelfAIError> = await withCheckedContinuation { continuation in
             Task { @MainActor in
-                // Set progress handler directly (WebSocket already connected and configured)
                 wsManager.setProgressHandler { jobProgress in
-                    // Skip UI updates for keep-alive pings (prevents redundant re-renders)
+                    // Skip keep-alive pings
                     guard jobProgress.keepAlive != true else {
                         print("🔁 Keep-alive ping received (skipping UI update)")
                         return
                     }
 
-                    // Convert JobProgress to (Double, String) for progress handler
                     progressHandler(jobProgress.fractionCompleted, jobProgress.currentStatus)
 
-                    // Check if job is complete
+                    // Check for completion
                     if jobProgress.currentStatus.lowercased().contains("complete") {
-                        // Job finished - poll final status to get results
                         Task {
                             do {
                                 let finalStatus = try await self.pollJobStatus(jobId: jobId)
@@ -218,7 +203,6 @@ actor BookshelfAIService {
                                 if let response = finalStatus.result {
                                     wsManager.disconnect()
 
-                                    // Convert to detected books and suggestions
                                     let detectedBooks = response.books.compactMap { aiBook in
                                         self.convertToDetectedBook(aiBook)
                                     }
@@ -233,7 +217,7 @@ actor BookshelfAIService {
                         }
                     }
 
-                    // Check if job errored
+                    // Check for error
                     if jobProgress.currentStatus.lowercased().contains("error") {
                         wsManager.disconnect()
                         continuation.resume(returning: .failure(.serverError(500, "Job failed: \(jobProgress.currentStatus)")))
@@ -245,12 +229,42 @@ actor BookshelfAIService {
         // Unwrap result
         switch result {
         case .success(let value):
-            // Log scan completion (TODO: Replace with Firebase Analytics when configured)
-            print("[Analytics] bookshelf_scan_completed - provider: \(provider.rawValue), books_detected: \(value.0.count), scan_id: \(jobId), success: true")
             return value
         case .failure(let error):
             throw error
         }
+    }
+
+    /// 2. Upload image (server waits for WebSocket ready signal)
+    /// 3. Signal WebSocket ready to server
+    /// 4. Server starts processing (WebSocket guaranteed listening)
+    /// 5. Stream real-time progress
+    ///
+    /// - Parameters:
+    ///   - image: UIImage to process
+    ///   - progressHandler: Closure to handle progress updates (called on MainActor)
+    /// - Returns: Tuple of detected books and suggestions
+    /// - Throws: BookshelfAIError for image compression, network, or processing errors
+    func processBookshelfImageWithWebSocket(
+        _ image: UIImage,
+        progressHandler: @MainActor @escaping (Double, String) -> Void
+    ) async throws(BookshelfAIError) -> ([DetectedBook], [SuggestionViewModel]) {
+        let provider = getSelectedProvider()
+        let jobId = UUID().uuidString
+
+        print("[Analytics] bookshelf_scan_started - provider: \(provider.rawValue), scan_id: \(jobId)")
+
+        // Use WebSocket flow (extracted for fallback wrapper)
+        let result = try await processViaWebSocket(
+            image: image,
+            jobId: jobId,
+            provider: provider,
+            progressHandler: progressHandler
+        )
+
+        print("[Analytics] bookshelf_scan_completed - provider: \(provider.rawValue), books_detected: \(result.0.count), scan_id: \(jobId), success: true")
+
+        return result
     }
 
     // MARK: - Private Methods
