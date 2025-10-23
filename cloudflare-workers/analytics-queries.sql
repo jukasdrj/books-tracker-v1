@@ -1,7 +1,54 @@
 -- 📊 Cloudflare Analytics Engine Queries
 -- Performance monitoring and optimization templates for books tracker infrastructure
+-- Updated: October 23, 2025 (Phase B - Structured Logging Complete)
 
--- === CACHE HIT RATE ANALYSIS ===
+-- === PHASE B: STRUCTURED LOGGING QUERIES ===
+
+-- Worker Performance Overview (All workers)
+SELECT
+  blob2 as worker,
+  blob1 as operation,
+  COUNT(*) as total_operations,
+  ROUND(AVG(double1), 2) as avg_duration_ms,
+  ROUND(MIN(double1), 2) as min_duration_ms,
+  ROUND(MAX(double1), 2) as max_duration_ms
+FROM books_api_performance
+WHERE timestamp > NOW() - INTERVAL '1' HOUR
+GROUP BY worker, operation
+ORDER BY avg_duration_ms DESC
+LIMIT 20;
+
+-- Provider Health Dashboard (Success rates & response times)
+SELECT
+  blob1 as provider,
+  blob2 as operation,
+  COUNT(*) as total_calls,
+  SUM(double1) as success_count,
+  COUNT(*) - SUM(double1) as failure_count,
+  ROUND(100.0 * SUM(double1) / COUNT(*), 2) as success_rate_percent,
+  ROUND(AVG(double2), 2) as avg_response_time_ms,
+  ROUND(MAX(double2), 2) as max_response_time_ms
+FROM books_api_provider_performance
+WHERE timestamp > NOW() - INTERVAL '1' HOUR
+GROUP BY provider, operation
+ORDER BY success_rate_percent ASC;
+
+-- Cache Effectiveness (Hit/Miss rates by worker)
+SELECT
+  blob3 as worker,
+  blob1 as operation,
+  COUNT(*) as total_operations,
+  SUM(CASE WHEN double1 = 1 THEN 1 ELSE 0 END) as hits,
+  SUM(CASE WHEN double1 = 0 THEN 1 ELSE 0 END) as misses,
+  ROUND(100.0 * SUM(double1) / COUNT(*), 2) as hit_rate_percent,
+  ROUND(AVG(double2), 2) as avg_response_time_ms
+FROM books_api_cache_metrics
+WHERE timestamp > NOW() - INTERVAL '1' HOUR
+  AND blob1 = 'get'
+GROUP BY worker, operation
+ORDER BY hit_rate_percent DESC;
+
+-- === CACHE HIT RATE ANALYSIS (Legacy) ===
 
 -- Overall cache performance
 SELECT
