@@ -9,6 +9,11 @@
  */
 
 import { AIProviderFactory } from './providers/AIProviderFactory.js';
+import {
+  StructuredLogger,
+  PerformanceTimer,
+  ProviderHealthMonitor
+} from '../../structured-logging-infrastructure.js';
 
 // Global API key cache (populated from env.GEMINI_API_KEY binding on first request)
 let geminiApiKey;
@@ -19,6 +24,9 @@ let geminiApiKey;
 export class BookshelfAIWorker {
   constructor(env) {
     this.env = env;
+    // Initialize structured logging (Phase B)
+    this.logger = new StructuredLogger('bookshelf-ai-worker', env);
+    this.providerMonitor = new ProviderHealthMonitor(this.logger);
   }
 
   /**
@@ -28,6 +36,7 @@ export class BookshelfAIWorker {
    * @returns {Promise<Object>} Scan results with books array
    */
   async scanBookshelf(imageData, options = {}) {
+    const timer = new PerformanceTimer(this.logger, 'scanBookshelf');
     const startTime = Date.now();
 
     try {
@@ -51,7 +60,13 @@ export class BookshelfAIWorker {
 
       const processingTime = Date.now() - startTime;
 
-      // Track analytics
+      // Track analytics with structured logging
+      await timer.end({
+        detectedCount: enrichedBooks.length,
+        readableCount: enrichedBooks.filter(b => b.title && b.author).length,
+        provider: result.metadata?.provider || 'unknown'
+      });
+
       return {
         success: true,
         books: enrichedBooks,
@@ -95,6 +110,31 @@ async function processBookshelfScan(jobId, imageData, env) {
   const startTime = Date.now();
 
   try {
+    // Wait for iOS to signal WebSocket is ready (up to 10 seconds)
+    console.log(`[BookshelfAI] Waiting for WebSocket ready signal for job ${jobId}...`);
+    const maxWaitTime = 10000; // 10 seconds max wait
+    const checkInterval = 100; // Check every 100ms
+    let waited = 0;
+    let websocketReady = false;
+
+    while (waited < maxWaitTime) {
+      const jobData = await env.SCAN_JOBS.get(jobId);
+      if (jobData) {
+        const job = JSON.parse(jobData);
+        if (job.websocketReady) {
+          websocketReady = true;
+          console.log(`[BookshelfAI] WebSocket ready after ${waited}ms for job ${jobId}`);
+          break;
+        }
+      }
+      await new Promise(resolve => setTimeout(resolve, checkInterval));
+      waited += checkInterval;
+    }
+
+    if (!websocketReady) {
+      console.warn(`[BookshelfAI] WebSocket not ready after ${waited}ms, proceeding anyway for job ${jobId}`);
+    }
+
     // Stage 1: Image quality analysis (10% progress)
     await pushProgress(env, jobId, {
       progress: 0.1,
@@ -308,8 +348,8 @@ export default {
         // Get image data
         const imageData = await request.arrayBuffer();
 
-        // Generate unique job ID
-        const jobId = crypto.randomUUID();
+        // Use client-provided jobId if available (for WebSocket-first protocol), otherwise generate one
+        const jobId = url.searchParams.get('jobId') || crypto.randomUUID();
 
         // Read provider preference from header (iOS sends this)
         const requestedProvider = request.headers.get('X-AI-Provider') || env.AI_PROVIDER;
@@ -419,8 +459,63 @@ export default {
       }
     }
 
+    // Signal WebSocket ready - iOS calls this after connecting WebSocket
+    if (request.method === "POST" && url.pathname.startsWith("/scan/ready/")) {
+      const jobId = url.pathname.split("/").pop();
+
+      try {
+        // Get current job state
+        const jobData = await env.SCAN_JOBS.get(jobId);
+
+        if (!jobData) {
+          return Response.json({
+            error: 'Job not found or expired'
+          }, {
+            status: 404,
+            headers: {
+              "Content-Type": "application/json",
+              "Access-Control-Allow-Origin": "*"
+            }
+          });
+        }
+
+        const job = JSON.parse(jobData);
+
+        // Update job state to mark WebSocket as ready
+        job.websocketReady = true;
+        job.websocketReadyTime = Date.now();
+
+        await env.SCAN_JOBS.put(jobId, JSON.stringify(job), { expirationTtl: 300 });
+
+        console.log(`[BookshelfAI] WebSocket ready for job ${jobId}`);
+
+        return Response.json({
+          success: true,
+          message: 'WebSocket connection confirmed, processing will begin'
+        }, {
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*"
+          }
+        });
+
+      } catch (error) {
+        console.error("[BookshelfAI] Ready signal error:", error);
+        return Response.json({
+          error: "Failed to process ready signal",
+          details: error.message
+        }, {
+          status: 500,
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*"
+          }
+        });
+      }
+    }
+
     return Response.json(
-      { error: "Not Found. Use GET / for test interface, POST /scan with image, or GET /scan/status/{jobId} to check progress." },
+      { error: "Not Found. Use GET / for test interface, POST /scan with image, GET /scan/status/{jobId}, or POST /scan/ready/{jobId}." },
       { status: 404 }
     );
   },
