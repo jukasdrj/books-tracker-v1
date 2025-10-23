@@ -1,16 +1,39 @@
 # Bookshelf Scanner WebSocket Debugging Report
 **Date:** October 23, 2025
 **Issue:** NSURLErrorDomain -1011 (Bad Server Response)
-**Status:** Partially Fixed - RPC issues resolved, WebSocket premature closure remains
+**Status:** ✅ RESOLVED - All issues fixed with server-side keep-alive pings
 
 ## Executive Summary
 
-The bookshelf scanner feature fails with `NSURLErrorDomain error -1011` when processing images. Investigation revealed two distinct issues:
+The bookshelf scanner feature was failing with `NSURLErrorDomain error -1011` when processing images. Investigation revealed two distinct issues, both now resolved:
 
 1. ✅ **FIXED:** Durable Object RPC configuration (Cloudflare Workers deployment issue)
-2. ❌ **ONGOING:** WebSocket closes prematurely at 30% progress before AI processing completes
+2. ✅ **RESOLVED:** WebSocket closes prematurely - Fixed with 30s keep-alive pings during AI processing
 
 ## Root Cause Analysis
+
+### ✅ RESOLVED: WebSocket Premature Closure
+
+**Solution Implemented:** Server-side keep-alive pings (Phase A)
+
+**Date Resolved:** October 23, 2025
+
+**Fix:** Added 30-second periodic progress updates during AI processing to prevent iOS (60s timeout) and Cloudflare (100s idle timeout) disconnections.
+
+**Code Changes:**
+- `bookshelf-ai-worker/src/index.js:167-181` - Keep-alive ping loop with `setInterval`
+- `WebSocketProgressManager.swift:293` - Added `keepAlive: Bool?` field to `ProgressData`
+- `JobModels.swift:43,55` - Added `keepAlive: Bool?` field to `JobProgress`
+- `BookshelfAIService.swift:202-206` - UI optimization to skip keep-alive re-renders
+
+**Verification:**
+- ✅ No more NSURLError -1011 failures
+- ✅ No more WebSocket code 1006 disconnections
+- ✅ Successful scans with 30+ books (40s AI processing)
+- ✅ Cloudflare logs show keep-alive pings every 30s
+- ✅ iOS logs show "🔁 Keep-alive ping received (skipping UI update)"
+
+---
 
 ### Issue 1: Durable Object RPC Error (FIXED)
 
