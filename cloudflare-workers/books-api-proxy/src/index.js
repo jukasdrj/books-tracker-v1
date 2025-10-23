@@ -1,5 +1,6 @@
 import { WorkerEntrypoint } from 'cloudflare:workers';
 import { handleGeneralSearch, handleAuthorSearch, handleTitleSearch, handleSubjectSearch, handleAdvancedSearch, handleISBNSearch } from './search-handlers.js';
+import { EnrichmentCoordinator } from './enrichment-coordinator.js';
 import {
   StructuredLogger,
   PerformanceTimer,
@@ -79,38 +80,21 @@ export class BooksAPIProxyWorker extends WorkerEntrypoint {
   }
 
   /**
-   * RPC Method: Push progress update for a job
-   * Called by enrichment/import workers
-   * @param {string} jobId - Job identifier
-   * @param {Object} progressData - Progress update data
-   * @returns {Promise<Object>} Success status
+   * RPC Method: Start batch enrichment with WebSocket progress
+   * Called by clients (iOS app) to enrich multiple works
+   * @param {string} jobId - Job identifier for WebSocket tracking
+   * @param {string[]} workIds - Array of work IDs to enrich
+   * @param {Object} options - Enrichment options
+   * @returns {Promise<Object>} Enrichment result
    */
-  async pushJobProgress(jobId, progressData) {
-    console.log('[BooksAPIProxy] pushJobProgress called', { jobId, progressData });
-    try {
-      const doId = this.env.PROGRESS_WEBSOCKET_DO.idFromName(jobId);
-      console.log('[BooksAPIProxy] Got DO ID', { doId: doId.toString() });
-      const stub = this.env.PROGRESS_WEBSOCKET_DO.get(doId);
-      console.log('[BooksAPIProxy] Got DO stub, calling pushProgress');
-      const result = await stub.pushProgress(progressData);
-      console.log('[BooksAPIProxy] pushProgress successful', { result });
-      return result;
-    } catch (error) {
-      console.error('[BooksAPIProxy] pushJobProgress failed', { error: error.message, stack: error.stack });
-      throw error;
-    }
-  }
+  async startBatchEnrichment(jobId, workIds, options = {}) {
+    const timer = new PerformanceTimer(this.logger, 'rpc_startBatchEnrichment');
 
-  /**
-   * RPC Method: Close WebSocket connection for a job
-   * @param {string} jobId - Job identifier
-   * @param {string} reason - Closure reason
-   * @returns {Promise<Object>} Success status
-   */
-  async closeJobConnection(jobId, reason) {
-    const doId = this.env.PROGRESS_WEBSOCKET_DO.idFromName(jobId);
-    const stub = this.env.PROGRESS_WEBSOCKET_DO.get(doId);
-    return await stub.closeConnection(reason);
+    const coordinator = new EnrichmentCoordinator(this.env, this.logger);
+    const result = await coordinator.startEnrichment(jobId, workIds, options);
+
+    await timer.end({ jobId, workIdsCount: workIds.length, success: result.success });
+    return result;
   }
 
   /**
