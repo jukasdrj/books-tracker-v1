@@ -16,11 +16,11 @@
  * @property {string|null} author - Author name (if detected)
  * @property {string|null} isbn - ISBN (if detected)
  * @property {number} confidence - Detection confidence (0.0-1.0)
- * @property {Object} boundingBox - Bounding box coordinates (normalized 0-1)
- * @property {number} boundingBox.x - X coordinate
- * @property {number} boundingBox.y - Y coordinate
- * @property {number} boundingBox.width - Width
- * @property {number} boundingBox.height - Height
+ * @property {Object} boundingBox - Bounding box coordinates (normalized 0-1, corner-based)
+ * @property {number} boundingBox.x1 - Top-left corner X coordinate
+ * @property {number} boundingBox.y1 - Top-left corner Y coordinate
+ * @property {number} boundingBox.x2 - Bottom-right corner X coordinate
+ * @property {number} boundingBox.y2 - Bottom-right corner Y coordinate
  */
 
 /**
