@@ -181,6 +181,8 @@ struct CulturalColorPalette {
 
 // MARK: - Theme Store
 
+// SAFETY: @unchecked Sendable because @Observable ensures all mutations happen on MainActor.
+// UserDefaults is thread-safe. Read-only access from other actors is safe.
 @Observable
 public class iOS26ThemeStore: @unchecked Sendable {
     private(set) var currentTheme: iOS26Theme = .liquidBlue

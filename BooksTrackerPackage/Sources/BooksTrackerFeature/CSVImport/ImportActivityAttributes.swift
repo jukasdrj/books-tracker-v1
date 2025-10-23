@@ -168,6 +168,8 @@ public struct CSVImportActivityAttributes: ActivityAttributes, Sendable {
 // MARK: - Activity Manager
 
 /// Manages Live Activity lifecycle for CSV imports
+// SAFETY: @unchecked Sendable because Activity API is thread-safe and provides
+// its own synchronization. Date is a value type. Singleton pattern controls access.
 @available(iOS 16.2, *)
 public final class CSVImportActivityManager: @unchecked Sendable {
 

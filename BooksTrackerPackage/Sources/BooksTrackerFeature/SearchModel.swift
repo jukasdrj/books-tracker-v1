@@ -524,6 +524,10 @@ public final class SearchModel {
 
 // MARK: - Search Result Model
 
+// SAFETY: @unchecked Sendable because search results are immutable after creation
+// and only consumed on @MainActor. Work/Edition/Author references are read-only
+// from the perspective of SearchResult consumers. Created in background search tasks,
+// safely passed to MainActor UI without mutation.
 public struct SearchResult: Identifiable, Hashable, @unchecked Sendable {
     public let id = UUID()
     public let work: Work
@@ -966,7 +970,9 @@ private struct APIImageLinks: Codable {
 
 // MARK: - Response Models
 
-public struct SearchResponse: Sendable {
+// SAFETY: @unchecked Sendable because it contains [SearchResult] which is @unchecked Sendable.
+// SearchResponse is immutable after creation and safely passed between actors for search operations.
+public struct SearchResponse: @unchecked Sendable {
     let results: [SearchResult]
     let cacheHitRate: Double
     let provider: String

@@ -4,6 +4,8 @@ import Foundation
 // MARK: - Image Cache Manager
 
 /// Shared image cache manager - handles the static cache limitation in generic types
+// SAFETY: @unchecked Sendable because NSCache is thread-safe and DispatchQueue provides
+// proper synchronization for all operations. Singleton pattern ensures controlled access.
 public final class ImageCacheManager: @unchecked Sendable {
     public static let shared = ImageCacheManager()
 

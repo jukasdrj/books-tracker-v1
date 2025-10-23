@@ -529,6 +529,8 @@ extension CameraManager {
 
 // MARK: - Photo Capture Delegate
 
+// SAFETY: @unchecked Sendable because continuation is used once then set to nil.
+// AVFoundation callbacks are thread-safe. Short-lived object for single photo capture.
 private final class PhotoCaptureDelegate: NSObject, AVCapturePhotoCaptureDelegate, @unchecked Sendable {
     private var continuation: CheckedContinuation<Data, Error>?
 

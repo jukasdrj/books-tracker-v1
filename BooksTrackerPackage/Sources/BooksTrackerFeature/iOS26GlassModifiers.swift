@@ -234,6 +234,8 @@ extension ButtonStyle where Self == GlassProminentButtonStyle {
 
 // MARK: - Type-erased Shape
 
+// SAFETY: @unchecked Sendable because this is immutable type erasure for SwiftUI shapes.
+// Closures capture shape values which are immutable after initialization. SwiftUI manages threading.
 struct AnyInsettableShape: InsettableShape, @unchecked Sendable {
     private let _path: (CGRect) -> Path
     private let _inset: (CGFloat) -> AnyInsettableShape
