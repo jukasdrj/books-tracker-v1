@@ -1,4 +1,5 @@
 import { GeminiProvider } from './geminiProvider.js';
+import { CloudflareProvider } from './cloudflareProvider.js';
 
 /**
  * Factory for creating AI provider instances based on configuration
@@ -24,9 +25,12 @@ export class AIProviderFactory {
                 console.log('[AIProviderFactory] Creating Gemini provider');
                 return new GeminiProvider(env.GEMINI_API_KEY);
 
-            // Future providers will be added here
-            // case 'cloudflare':
-            //     return new CloudflareProvider(env.AI);
+            case 'cloudflare':
+                if (!env.AI) {
+                    throw new Error('AI binding required for cloudflare provider');
+                }
+                console.log('[AIProviderFactory] Creating Cloudflare Workers AI provider');
+                return new CloudflareProvider(env.AI);
 
             default:
                 throw new Error(`Unknown AI provider: ${providerType}`);
@@ -38,6 +42,6 @@ export class AIProviderFactory {
      * @returns {Array<string>} Supported provider names
      */
     static getSupportedProviders() {
-        return ['gemini']; // Will expand to ['gemini', 'cloudflare']
+        return ['gemini', 'cloudflare'];
     }
 }
