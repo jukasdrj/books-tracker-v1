@@ -61,9 +61,20 @@ struct CSVImportEnrichmentTests {
         let queue = EnrichmentQueue.shared
         queue.clear()
 
-        // Create fake persistent IDs for testing
-        let id1 = PersistentIdentifier(id: UUID(), entityName: "Work", primaryKey: UUID())
-        let id2 = PersistentIdentifier(id: UUID(), entityName: "Work", primaryKey: UUID())
+        // Create test work items
+        let work1 = Work(title: "Test Book 1", authors: [], firstPublicationYear: 2024)
+        let work2 = Work(title: "Test Book 2", authors: [], firstPublicationYear: 2024)
+
+        // Get their persistent IDs after insertion into container
+        let container = try! ModelContainer(for: Work.self)
+        let context = ModelContext(container)
+
+        context.insert(work1)
+        context.insert(work2)
+        try! context.save()
+
+        let id1 = work1.persistentModelID
+        let id2 = work2.persistentModelID
 
         queue.enqueue(workID: id1)
         queue.enqueue(workID: id2)
@@ -84,9 +95,22 @@ struct CSVImportEnrichmentTests {
         let queue = EnrichmentQueue.shared
         queue.clear()
 
-        let id1 = PersistentIdentifier(id: UUID(), entityName: "Work", primaryKey: UUID())
-        let id2 = PersistentIdentifier(id: UUID(), entityName: "Work", primaryKey: UUID())
-        let id3 = PersistentIdentifier(id: UUID(), entityName: "Work", primaryKey: UUID())
+        // Create test work items
+        let work1 = Work(title: "Test Book 1", authors: [], firstPublicationYear: 2024)
+        let work2 = Work(title: "Test Book 2", authors: [], firstPublicationYear: 2024)
+        let work3 = Work(title: "Test Book 3", authors: [], firstPublicationYear: 2024)
+
+        let container = try! ModelContainer(for: Work.self)
+        let context = ModelContext(container)
+
+        context.insert(work1)
+        context.insert(work2)
+        context.insert(work3)
+        try! context.save()
+
+        let id1 = work1.persistentModelID
+        let id2 = work2.persistentModelID
+        let id3 = work3.persistentModelID
 
         queue.enqueue(workID: id1)
         queue.enqueue(workID: id2)
@@ -107,7 +131,15 @@ struct CSVImportEnrichmentTests {
         let queue = EnrichmentQueue.shared
         queue.clear()
 
-        let id1 = PersistentIdentifier(id: UUID(), entityName: "Work", primaryKey: UUID())
+        let work1 = Work(title: "Test Book 1", authors: [], firstPublicationYear: 2024)
+
+        let container = try! ModelContainer(for: Work.self)
+        let context = ModelContext(container)
+
+        context.insert(work1)
+        try! context.save()
+
+        let id1 = work1.persistentModelID
 
         queue.enqueue(workID: id1)
         queue.enqueue(workID: id1) // Duplicate
@@ -239,7 +271,15 @@ struct CSVImportEnrichmentTests {
         // Clear queue first
         EnrichmentQueue.shared.clear()
 
-        let id1 = PersistentIdentifier(id: UUID(), entityName: "Work", primaryKey: UUID())
+        let work1 = Work(title: "Test Book 1", authors: [], firstPublicationYear: 2024)
+
+        let container = try! ModelContainer(for: Work.self)
+        let context = ModelContext(container)
+
+        context.insert(work1)
+        try! context.save()
+
+        let id1 = work1.persistentModelID
 
         // Add item
         EnrichmentQueue.shared.enqueue(workID: id1)
