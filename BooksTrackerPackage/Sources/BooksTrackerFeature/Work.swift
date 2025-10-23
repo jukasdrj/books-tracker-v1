@@ -34,8 +34,37 @@ public final class Work {
     public var originalImagePath: String?
 
     /// Bounding box coordinates for cropping spine from original image
-    /// Format: CGRect(x, y, width, height) in image coordinates
-    public var boundingBox: CGRect?
+    /// Stored as separate components to avoid CGRect encoding issues in SwiftData
+    public var boundingBoxX: Double?
+    public var boundingBoxY: Double?
+    public var boundingBoxWidth: Double?
+    public var boundingBoxHeight: Double?
+
+    /// Computed property to access bounding box as CGRect
+    public var boundingBox: CGRect? {
+        get {
+            guard let x = boundingBoxX,
+                  let y = boundingBoxY,
+                  let width = boundingBoxWidth,
+                  let height = boundingBoxHeight else {
+                return nil
+            }
+            return CGRect(x: x, y: y, width: width, height: height)
+        }
+        set {
+            if let rect = newValue {
+                boundingBoxX = rect.origin.x
+                boundingBoxY = rect.origin.y
+                boundingBoxWidth = rect.size.width
+                boundingBoxHeight = rect.size.height
+            } else {
+                boundingBoxX = nil
+                boundingBoxY = nil
+                boundingBoxWidth = nil
+                boundingBoxHeight = nil
+            }
+        }
+    }
 
     // Metadata
     var dateCreated: Date = Date()

@@ -12,7 +12,7 @@ struct CSVImportTests {
     // MARK: - Test Data Paths
 
     private var testDataPath: String {
-        "/Users/justingardner/Downloads/xcode/books_tracker_v1/cloudflare-workers/personal-library-cache-warmer/csv-expansion"
+        "/Users/justingardner/Downloads/xcode/books-tracker-v1/cloudflare-workers/personal-library-cache-warmer/csv-expansion"
     }
 
     private var smallTestFile: URL {
