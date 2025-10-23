@@ -290,4 +290,5 @@ struct ProgressData: Codable, Sendable {
     let currentStatus: String
     let currentWorkId: String?
     let error: String?
+    let keepAlive: Bool?  // Optional: true for keep-alive pings, nil for normal updates
 }

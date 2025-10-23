@@ -37,4 +37,52 @@ struct WebSocketProgressManagerTests {
 
         #expect(!manager.isConnected)
     }
+
+    @Test("ProgressData decodes keepAlive field")
+    func testProgressDataDecodesKeepAlive() async throws {
+        let json = """
+        {
+            "type": "progress",
+            "jobId": "test-job-123",
+            "timestamp": 1729728000000,
+            "data": {
+                "progress": 0.3,
+                "processedItems": 1,
+                "totalItems": 3,
+                "currentStatus": "Processing with AI...",
+                "keepAlive": true
+            }
+        }
+        """
+
+        let data = json.data(using: .utf8)!
+        let decoder = JSONDecoder()
+        let message = try decoder.decode(WebSocketMessage.self, from: data)
+
+        #expect(message.data.keepAlive == true)
+        #expect(message.data.currentStatus == "Processing with AI...")
+    }
+
+    @Test("ProgressData handles missing keepAlive field")
+    func testProgressDataHandlesMissingKeepAlive() async throws {
+        let json = """
+        {
+            "type": "progress",
+            "jobId": "test-job-123",
+            "timestamp": 1729728000000,
+            "data": {
+                "progress": 0.5,
+                "processedItems": 2,
+                "totalItems": 3,
+                "currentStatus": "Enriching books..."
+            }
+        }
+        """
+
+        let data = json.data(using: .utf8)!
+        let decoder = JSONDecoder()
+        let message = try decoder.decode(WebSocketMessage.self, from: data)
+
+        #expect(message.data.keepAlive == nil)
+    }
 }
