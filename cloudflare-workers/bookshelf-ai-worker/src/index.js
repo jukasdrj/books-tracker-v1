@@ -1,15 +1,16 @@
 /**
  * Bookshelf AI Worker - Production Deployment
  *
- * Exposes an API endpoint that accepts bookshelf images and uses Gemini 2.5 Flash
+ * Exposes an API endpoint that accepts bookshelf images and uses AI vision models
  * to identify books, extract titles/authors, and return normalized bounding boxes.
  *
  * Architecture: Standalone worker with optional RPC export for books-api-proxy integration
+ * Supports multiple AI providers (Gemini, Cloudflare Workers AI) via AIProviderFactory
  */
 
-// AI model configuration
-const AI_MODEL = "gemini-2.5-flash-preview-05-20";
-const USER_AGENT = 'BooksTracker/3.0.0 (nerd@ooheynerds.com) BookshelfAIWorker/1.0.0';
+import { AIProviderFactory } from './providers/AIProviderFactory.js';
+
+// Global API key cache (populated from env.GEMINI_API_KEY binding on first request)
 let geminiApiKey;
 
 /**
@@ -36,13 +37,8 @@ export class BookshelfAIWorker {
         throw new Error(`Image too large. Max ${this.env.MAX_IMAGE_SIZE_MB || 10}MB`);
       }
 
-      // Get API key from global variable
-      if (!geminiApiKey) {
-        throw new Error("GEMINI_API_KEY not configured in secrets store");
-      }
-
-      // Process with Gemini AI
-      const result = await processImageWithAI(imageData, geminiApiKey);
+      // Process with AI provider (configured via env.AI_PROVIDER)
+      const result = await processImageWithAI(imageData, this.env);
 
       // Enrich high-confidence detections via books-api-proxy
       const enrichmentStartTime = Date.now();
@@ -66,7 +62,8 @@ export class BookshelfAIWorker {
           detectedCount: enrichedBooks.length,
           readableCount: enrichedBooks.filter(b => b.title && b.author).length,
           enrichedCount: enrichedBooks.filter(b => b.enrichment?.status === 'success').length,
-          model: this.env.AI_MODEL || AI_MODEL,
+          provider: result.metadata?.provider || 'unknown',
+          model: result.metadata?.model || 'unknown',
           timestamp: new Date().toISOString()
         }
       };
@@ -116,7 +113,7 @@ async function processBookshelfScan(jobId, imageData, env) {
       progress: 0.3,
       processedItems: 1,
       totalItems: 3,
-      currentStatus: 'Processing with Gemini AI...'
+      currentStatus: 'Processing with AI...'
     });
 
     const worker = new BookshelfAIWorker(env);
@@ -243,8 +240,13 @@ async function closeConnection(env, jobId, reason) {
  */
 export default {
   async fetch(request, env, ctx) {
-    if (!geminiApiKey) {
+    // Load GEMINI_API_KEY string value into global variable if not cached
+    if (!geminiApiKey && env.GEMINI_API_KEY) {
       geminiApiKey = await env.GEMINI_API_KEY.get();
+    }
+    // Store the API key string in env for provider factory
+    if (geminiApiKey) {
+      env.GEMINI_API_KEY = geminiApiKey;
     }
     const url = new URL(request.url);
 
@@ -257,11 +259,20 @@ export default {
 
     // Health check endpoint
     if (request.method === "GET" && url.pathname === "/health") {
-      return Response.json({
-        status: "healthy",
-        model: env.AI_MODEL || AI_MODEL,
-        timestamp: new Date().toISOString()
-      });
+      try {
+        const provider = AIProviderFactory.createProvider(env);
+        return Response.json({
+          status: "healthy",
+          provider: provider.getProviderName(),
+          timestamp: new Date().toISOString()
+        });
+      } catch (error) {
+        return Response.json({
+          status: "unhealthy",
+          error: error.message,
+          timestamp: new Date().toISOString()
+        }, { status: 500 });
+      }
     }
 
     // Process POST requests with image data
@@ -388,229 +399,15 @@ export default {
 };
 
 /**
- * Processes the image using the Gemini Vision API
- * @param {ArrayBuffer} image_data - The raw image data
- * @param {string} apiKey - The API key for the Gemini API
- * @returns {Promise<object>} The parsed JSON result from the AI model
+ * Process bookshelf image using configured AI provider
+ * @param {ArrayBuffer} imageData - Raw image data
+ * @param {Object} env - Worker environment bindings
+ * @returns {Promise<Object>} Scan results
  */
-async function processImageWithAI(image_data, apiKey) {
-
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${AI_MODEL}:generateContent?key=${apiKey}`;
-
-  // Convert ArrayBuffer to Base64
-  const image_base64 = arrayBufferToBase64(image_data);
-
-  // AI prompt for book detection
-  const system_prompt = `You are a book detection specialist. Analyze the provided image of a bookshelf. Your task is to identify every book spine visible.
-
-For each book you identify, perform the following actions:
-1. Extract the book's title.
-2. Extract the author's name.
-3. Determine the bounding box coordinates for the book's spine.
-4. Provide a confidence score (from 0.0 to 1.0) indicating how certain you are about the extracted title and author. A score of 1.0 means absolute certainty, while a score below 0.5 indicates a guess.
-5. Return your findings as a JSON object that strictly adheres to the provided schema.
-6. Analyze image quality issues and provide actionable suggestions ONLY if problems are detected.
-
-If the image has quality issues (blurry, poor lighting, bad angle, glare, too far, multiple shelves, or many unreadable books), populate a 'suggestions' array with objects identifying the specific problems.
-
-Otherwise, leave the 'suggestions' array empty or omit it entirely.
-
-Available suggestion types:
-- unreadable_books: Books detected but text unclear
-- low_confidence: Many books with confidence < 0.7
-- edge_cutoff: Books cut off at image edges
-- blurry_image: Image lacks sharpness/focus
-- glare_detected: Reflections obscuring book covers
-- distance_too_far: Camera too far from shelf
-- multiple_shelves: Multiple shelves in frame
-- lighting_issues: Insufficient or uneven lighting
-- angle_issues: Camera angle makes spines hard to read
-
-Only include suggestions when you detect issues. Perfect scans should have an empty suggestions array.
-
-If you can clearly identify a book's spine but the text is unreadable, you MUST still include it. In such cases, set 'title' and 'author' to null and the 'confidence' to 0.0.
-
-Here is an example of a good detection:
-{
-  "title": "The Hitchhiker's Guide to the Galaxy",
-  "author": "Douglas Adams",
-  "confidence": 0.95,
-  "boundingBox": { "x1": 0.1, "y1": 0.2, "x2": 0.15, "y2": 0.8 }
-}
-
-Here is an example of an unreadable book:
-{
-  "title": null,
-  "author": null,
-  "confidence": 0.0,
-  "boundingBox": { "x1": 0.2, "y1": 0.3, "x2": 0.25, "y2": 0.9 }
-}
-
-Here is an example response with suggestions:
-{
-  "books": [
-    { "title": "Example Book", "author": "Author", "confidence": 0.95, "boundingBox": {"x1": 0.1, "y1": 0.2, "x2": 0.15, "y2": 0.8} },
-    { "title": null, "author": null, "confidence": 0.0, "boundingBox": {"x1": 0.2, "y1": 0.3, "x2": 0.25, "y2": 0.9} }
-  ],
-  "suggestions": [
-    {
-      "type": "unreadable_books",
-      "severity": "medium",
-      "message": "2 books detected but text is unreadable. Try capturing from a more direct angle or with better lighting.",
-      "affectedCount": 2
-    }
-  ]
-}`;
-
-  // JSON schema for structured output
-  const schema = {
-    type: "OBJECT",
-    properties: {
-      books: {
-        type: "ARRAY",
-        items: {
-          type: "OBJECT",
-          properties: {
-            title: {
-              type: "STRING",
-              description: "The full title of the book.",
-              nullable: true
-            },
-            author: {
-              type: "STRING",
-              description: "The full name of the author.",
-              nullable: true
-            },
-            confidence: {
-              type: "NUMBER",
-              description: "Confidence score (0.0-1.0) for the extracted title/author."
-            },
-            boundingBox: {
-              type: "OBJECT",
-              description: "The normalized coordinates of the book spine in the image.",
-              properties: {
-                x1: { type: "NUMBER", description: "Top-left corner X coordinate (0-1)." },
-                y1: { type: "NUMBER", description: "Top-left corner Y coordinate (0-1)." },
-                x2: { type: "NUMBER", description: "Bottom-right corner X coordinate (0-1)." },
-                y2: { type: "NUMBER", description: "Bottom-right corner Y coordinate (0-1)." },
-              },
-              required: ["x1", "y1", "x2", "y2"],
-            },
-          },
-          required: ["boundingBox", "title", "author", "confidence"],
-        },
-      },
-      suggestions: {
-        type: "ARRAY",
-        description: "Optional actionable suggestions for improving scan quality (only present if issues detected)",
-        items: {
-          type: "OBJECT",
-          properties: {
-            type: {
-              type: "STRING",
-              description: "Category of suggestion",
-              enum: [
-                "unreadable_books",
-                "low_confidence",
-                "edge_cutoff",
-                "blurry_image",
-                "glare_detected",
-                "distance_too_far",
-                "multiple_shelves",
-                "lighting_issues",
-                "angle_issues"
-              ]
-            },
-            severity: {
-              type: "STRING",
-              description: "Severity level",
-              enum: ["low", "medium", "high"]
-            },
-            message: {
-              type: "STRING",
-              description: "User-friendly suggestion message"
-            },
-            affectedCount: {
-              type: "NUMBER",
-              description: "Number of books affected by this issue (optional)"
-            }
-          },
-          required: ["type", "severity", "message"]
-        }
-      }
-    },
-    required: ["books"],
-  };
-
-  const payload = {
-    contents: [
-      {
-        parts: [
-          { text: system_prompt },
-          {
-            inlineData: {
-              mimeType: "image/jpeg",
-              data: image_base64,
-            },
-          },
-        ],
-      },
-    ],
-    generationConfig: {
-      responseMimeType: "application/json",
-      responseSchema: schema,
-    },
-  };
-
-  // Call Gemini API with timeout
-  const controller = new AbortController();
-  const timeoutMs = 50000; // 50s timeout for large images
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-
-  try {
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "User-Agent": USER_AGENT
-      },
-      body: JSON.stringify(payload),
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Gemini API Error: ${response.status} ${response.statusText} - ${errorText}`);
-    }
-
-    const result = await response.json();
-
-    const candidate = result.candidates?.[0];
-    if (!candidate || !candidate.content?.parts?.[0]?.text) {
-      throw new Error("Invalid response structure from Gemini API.");
-    }
-
-    // Parse the JSON response from Gemini
-    return JSON.parse(candidate.content.parts[0].text);
-
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-/**
- * Utility to convert ArrayBuffer to Base64 string
- * @param {ArrayBuffer} buffer - The buffer to convert
- * @returns {string} The Base64 encoded string
- */
-function arrayBufferToBase64(buffer) {
-  let binary = '';
-  const bytes = new Uint8Array(buffer);
-  const len = bytes.byteLength;
-  for (let i = 0; i < len; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary);
+async function processImageWithAI(imageData, env) {
+    const provider = AIProviderFactory.createProvider(env);
+    console.log(`[Worker] Using AI provider: ${provider.getProviderName()}`);
+    return await provider.scanImage(imageData, env);
 }
 
 /**
@@ -743,7 +540,7 @@ const html = `
             <header class="text-center mb-6">
                 <h1 class="text-3xl md:text-4xl font-bold text-gray-900">📚 BooksTrack AI Scanner</h1>
                 <p class="text-gray-600 mt-2">Upload a bookshelf photo to identify books with AI</p>
-                <p class="text-sm text-gray-500 mt-1">Powered by Gemini 2.5 Flash</p>
+                <p class="text-sm text-gray-500 mt-1">Powered by AI Vision</p>
             </header>
 
             <main>
