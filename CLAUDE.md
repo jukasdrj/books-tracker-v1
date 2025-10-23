@@ -240,27 +240,28 @@ struct SearchView: View {
 ### Backend Architecture
 
 **Cloudflare Workers Ecosystem:**
-- **books-api-proxy**: Main search orchestrator (ISBNdb/OpenLibrary/Google Books)
+- **books-api-proxy**: Main search orchestrator + enrichment coordinator
+- **enrichment-worker**: Batch metadata enrichment (uses callback pattern for progress)
+- **external-apis-worker**: Direct API access (Google Books/OpenLibrary/ISBNdb)
+- **progress-websocket-durable-object**: Real-time WebSocket progress tracking
 - **personal-library-cache-warmer**: Intelligent caching with cron jobs
-- **isbndb-biography-worker**: Author biography enhancement
-- **google-books-worker**: Google Books API wrapper
-- **openlibrary-worker**: OpenLibrary API wrapper
+
+**Service Binding Architecture:**
+- Unidirectional flow: `books-api-proxy` → `enrichment-worker` → `external-apis-worker`
+- No circular dependencies (fixed October 2025)
+- RPC method calls for high performance
+- Callback pattern for real-time progress updates
 
 **API Endpoints:**
 - `/search/title` - Smart general search (6h cache)
 - `/search/isbn` - Dedicated ISBN lookup (7-day cache, ISBNdb-first)
-- `/search/advanced` - Multi-field filtering (title+author) - **Now orchestrates 3 providers: Google Books + OpenLibrary + ISBNdb**
+- `/search/advanced` - Multi-field filtering (title+author) - Orchestrates 3 providers
 - `/search/author` - Author bibliography
+- `/enrich-batch` - Batch metadata enrichment with WebSocket progress
 
-**Provider Orchestration (October 2025):**
-- **Parallel Execution**: All 3 providers queried simultaneously via `Promise.allSettled()`
-- **Graceful Degradation**: If any provider fails, others continue (resilient to API downtime)
-- **Smart Deduplication**: 90% similarity threshold merges duplicate results
-- **Provider Tags**: Response shows `orchestrated:google+openlibrary+isbndb` (or subset if providers fail)
+**Architecture Rule:** Workers communicate via RPC service bindings - **never** direct API calls from proxy worker. Always orchestrate through specialized workers. **Never** create circular dependencies.
 
-**Architecture Rule:** Workers communicate via RPC service bindings - **never** direct API calls from proxy worker. Always orchestrate through specialized workers.
-
-**API Documentation:** See [GitHub Issue #33](https://github.com/jukasdrj/books-tracker-v1/issues/33) for complete API contracts, RPC methods, and endpoint specifications.
+**Architecture Documentation:** See `cloudflare-workers/SERVICE_BINDING_ARCHITECTURE.md` for complete dependency graph, RPC method signatures, and deployment order.
 
 ## Development Standards
 
@@ -704,6 +705,67 @@ Button("Import CSV Library") { showingCSVImport = true }
 
 **Full Documentation:** See `docs/features/CSV_IMPORT.md`
 
+### Review Queue (Human-in-the-Loop)
+
+**Quick Start:**
+```swift
+// LibraryView - Review Queue button appears when books need review
+Button { showingReviewQueue.toggle() } label: {
+    Image(systemName: "exclamationmark.triangle")
+}
+.badge(reviewQueueCount)  // Red dot indicator
+.sheet(isPresented: $showingReviewQueue) {
+    ReviewQueueView()
+}
+```
+
+**Key Files:**
+- `ReviewQueueModel.swift` - State management, queue loading
+- `ReviewQueueView.swift` - Queue list UI
+- `CorrectionView.swift` - Edit interface with spine image cropping
+- `ImageCleanupService.swift` - Automatic temp file cleanup
+
+**Architecture:** Bookshelf scans with AI confidence < 60% are flagged for human review
+
+**Confidence Threshold:** 60% (balances automation vs accuracy)
+
+**Workflow:**
+1. **Detection:** Gemini AI scans bookshelf → confidence score per book
+2. **Import:** Books with `confidence < 0.60` get `reviewStatus = .needsReview`
+3. **Queue:** User sees orange triangle button with red badge in Library toolbar
+4. **Correction:** User taps book → sees cropped spine + edit fields
+5. **Save:** User edits or verifies → `reviewStatus = .userEdited` or `.verified`
+6. **Cleanup:** All books reviewed → image deleted on next app launch
+
+**Data Model:**
+```swift
+public enum ReviewStatus: String, Codable {
+    case verified       // AI or user confirmed
+    case needsReview    // Low confidence (< 60%)
+    case userEdited     // Human corrected
+}
+
+@Model
+public class Work {
+    public var reviewStatus: ReviewStatus = .verified
+    public var originalImagePath: String?  // Temp scan image
+    public var boundingBox: CGRect?        // Spine coordinates
+}
+```
+
+**Analytics Events:**
+- `review_queue_viewed` - Queue opened (properties: `queue_count`)
+- `review_queue_correction_saved` - User edits (properties: `had_title_change`, `had_author_change`)
+- `review_queue_verified_without_changes` - User verifies without edits
+
+**Image Cleanup:**
+- Runs automatically on app launch
+- Groups works by `originalImagePath`
+- Deletes image when all books are `.verified` or `.userEdited`
+- Clears Work references after deletion
+
+**Full Documentation:** See `docs/features/REVIEW_QUEUE.md`
+
 ## Debugging & Troubleshooting
 
 ### iOS Debugging Commands
@@ -816,6 +878,25 @@ TextField("Page Count", value: $pageCount, format: .number)
 - Always check existence: `modelContext.model(for: id) as? Type`
 - Validate queues/caches on app startup
 - Skip gracefully and clean up immediately
+
+**UIKit Image Rendering (Deprecated APIs):**
+- Always use `UIGraphicsImageRenderer` (iOS 10+), NEVER `UIGraphicsBeginImageContext`
+- Old pattern generates deprecation warnings and is error-prone
+```swift
+// ❌ WRONG: Deprecated iOS 2 API (manual context management)
+UIGraphicsBeginImageContextWithOptions(size, false, 1.0)
+image.draw(in: CGRect(origin: .zero, size: size))
+let result = UIGraphicsGetImageFromCurrentImageContext()
+UIGraphicsEndImageContext()
+
+// ✅ CORRECT: Modern automatic context management
+let renderer = UIGraphicsImageRenderer(size: size)
+let result = renderer.image { _ in
+    image.draw(in: CGRect(origin: .zero, size: size))
+}
+```
+- **Benefits:** Exception-safe, automatic cleanup, better performance, type-safe
+- **Lesson:** Deprecation warnings aren't cosmetic—fix them immediately for App Store readiness
 
 ## iOS 26 Liquid Glass Design System
 
