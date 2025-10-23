@@ -31,6 +31,10 @@ public struct DetectedBook: Identifiable, Sendable {
     /// Detection status for user review
     public var status: DetectionStatus
 
+    /// Path to original bookshelf scan image (temporary storage)
+    /// Used for correction UI to show cropped spine image
+    public var originalImagePath: String?
+
     public init(
         isbn: String? = nil,
         title: String? = nil,
@@ -38,7 +42,8 @@ public struct DetectedBook: Identifiable, Sendable {
         confidence: Double,
         boundingBox: CGRect,
         rawText: String,
-        status: DetectionStatus = .detected
+        status: DetectionStatus = .detected,
+        originalImagePath: String? = nil
     ) {
         self.isbn = isbn
         self.title = title
@@ -47,6 +52,7 @@ public struct DetectedBook: Identifiable, Sendable {
         self.boundingBox = boundingBox
         self.rawText = rawText
         self.status = status
+        self.originalImagePath = originalImagePath
     }
 }
 

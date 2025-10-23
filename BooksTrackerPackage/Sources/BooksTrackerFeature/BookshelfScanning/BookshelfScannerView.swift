@@ -370,6 +370,9 @@ class BookshelfScanModel {
     var currentProgress: Double = 0.0
     var currentStage: String = ""
 
+    // Original image storage for correction UI
+    public var lastSavedImagePath: String?
+
     enum ScanState: Equatable {
         case idle
         case processing
@@ -392,12 +395,38 @@ class BookshelfScanModel {
         return nil
     }
 
+    /// Saves original bookshelf image to temporary storage for correction UI
+    /// - Parameter image: The captured bookshelf image
+    /// - Returns: File path to saved image, or nil if saving failed
+    private func saveOriginalImage(_ image: UIImage) -> String? {
+        let tempDirectory = FileManager.default.temporaryDirectory
+        let filename = "bookshelf_scan_\(UUID().uuidString).jpg"
+        let fileURL = tempDirectory.appendingPathComponent(filename)
+
+        guard let imageData = image.jpegData(compressionQuality: 0.8) else {
+            print("⚠️ Failed to convert image to JPEG data")
+            return nil
+        }
+
+        do {
+            try imageData.write(to: fileURL)
+            print("✅ Saved original image to: \(fileURL.path)")
+            return fileURL.path
+        } catch {
+            print("❌ Failed to save original image: \(error)")
+            return nil
+        }
+    }
+
     /// Process captured image with WebSocket real-time progress tracking
     func processImage(_ image: UIImage) async {
         scanState = .processing
         currentProgress = 0.0
         currentStage = "Initializing..."
         let startTime = Date()
+
+        // Save original image first for correction UI
+        self.lastSavedImagePath = saveOriginalImage(image)
 
         do {
             // Use new WebSocket method for real-time progress updates
@@ -408,15 +437,22 @@ class BookshelfScanModel {
                 print("📸 WebSocket progress: \(Int(progress * 100))% - \(stage)")
             }
 
+            // Attach original image path to each detected book for correction UI
+            let booksWithImagePath = detectedBooks.map { book in
+                var updatedBook = book
+                updatedBook.originalImagePath = self.lastSavedImagePath
+                return updatedBook
+            }
+
             // Calculate statistics
-            detectedCount = detectedBooks.count
-            confirmedCount = detectedBooks.filter { $0.status == .detected || $0.status == .confirmed }.count
-            uncertainCount = detectedBooks.filter { $0.status == .uncertain }.count
+            detectedCount = booksWithImagePath.count
+            confirmedCount = booksWithImagePath.filter { $0.status == .detected || $0.status == .confirmed }.count
+            uncertainCount = booksWithImagePath.filter { $0.status == .uncertain }.count
 
             // Create scan result
             let processingTime = Date().timeIntervalSince(startTime)
             scanResult = ScanResult(
-                detectedBooks: detectedBooks,
+                detectedBooks: booksWithImagePath,
                 totalProcessingTime: processingTime,
                 suggestions: suggestions
             )
