@@ -26,6 +26,9 @@ public final class Work {
     var lastISBNDBSync: Date?       // When this work was last synced with ISBNDB
     var isbndbQuality: Int = 0      // Data quality score from ISBNDB (0-100)
 
+    // Review status for AI-detected books
+    public var reviewStatus: ReviewStatus = ReviewStatus.verified
+
     // Metadata
     var dateCreated: Date = Date()
     var lastModified: Date = Date()
