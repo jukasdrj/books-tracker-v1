@@ -27,67 +27,69 @@ export class GeminiProvider extends AIProvider {
             // Convert ArrayBuffer to Base64
             const base64Image = this.arrayBufferToBase64(imageData);
 
-            // AI prompt for book detection
-            const systemPrompt = `You are a book detection specialist. Analyze the provided image of a bookshelf. Your task is to identify every book spine visible.
+            // AI prompt for book detection (optimized for Gemini 2.5 Flash)
+            const systemPrompt = `You are an expert at analyzing bookshelf images and extracting book information with high precision.
 
-For each book you identify, perform the following actions:
-1. Extract the book's title.
-2. Extract the author's name.
-3. Determine the bounding box coordinates for the book's spine.
-4. Provide a confidence score (from 0.0 to 1.0) indicating how certain you are about the extracted title and author. A score of 1.0 means absolute certainty, while a score below 0.5 indicates a guess.
-5. Return your findings as a JSON object that strictly adheres to the provided schema.
-6. Analyze image quality issues and provide actionable suggestions ONLY if problems are detected.
+TASK: Systematically scan this bookshelf image from left to right, top to bottom. For each visible book spine:
 
-If the image has quality issues (blurry, poor lighting, bad angle, glare, too far, multiple shelves, or many unreadable books), populate a 'suggestions' array with objects identifying the specific problems.
+1. Extract the EXACT title as written (preserve ALL capitalization, punctuation, subtitles, series markers)
+2. Extract the EXACT author name (full first and last name, include middle initials if visible)
+3. If an ISBN-10 or ISBN-13 is visible on the spine, extract ALL digits exactly (ISBNs are typically near the bottom)
+4. Provide a confidence score (0.0-1.0) based on text clarity and your certainty
+5. Provide precise normalized bounding box coordinates (x1, y1, x2, y2) where:
+   - x1, y1 = top-left corner of book spine (0.0 = left/top edge, 1.0 = right/bottom edge)
+   - x2, y2 = bottom-right corner of book spine
+   - Coordinates must be normalized to image dimensions (0.0-1.0 range)
 
-Otherwise, leave the 'suggestions' array empty or omit it entirely.
+CONFIDENCE SCORING RUBRIC:
+- 0.95-1.0: Perfect clarity, absolutely certain of title and author
+- 0.85-0.94: Very clear text, minor ambiguity (e.g., small font or slight blur)
+- 0.70-0.84: Mostly clear, some guessing on author or subtitle
+- 0.50-0.69: Partially readable, significant uncertainty
+- 0.30-0.49: Barely readable, very low confidence
+- Below 0.30: Text is illegible or heavily obscured
 
-Available suggestion types:
-- unreadable_books: Books detected but text unclear
-- low_confidence: Many books with confidence < 0.7
-- edge_cutoff: Books cut off at image edges
-- blurry_image: Image lacks sharpness/focus
-- glare_detected: Reflections obscuring book covers
-- distance_too_far: Camera too far from shelf
-- multiple_shelves: Multiple shelves in frame
-- lighting_issues: Insufficient or uneven lighting
-- angle_issues: Camera angle makes spines hard to read
+CRITICAL RULES:
+- Include ONLY books where you can read at least the title
+- If author is not visible or unreadable, use null (do NOT guess)
+- If ISBN is not visible, use null (most books won't have visible ISBNs on spine)
+- Bounding boxes must tightly wrap ONLY the book spine (not shelf edges or neighboring books)
+- Books are typically tall vertical rectangles (height >> width)
+- Preserve exact capitalization (e.g., "The GREAT Gatsby" not "The Great Gatsby")
+- Include series markers if present (e.g., "Book Title (Series, #3)")
 
-Only include suggestions when you detect issues. Perfect scans should have an empty suggestions array.
+IMAGE QUALITY DIAGNOSTICS:
+After extracting all readable books, analyze the image for quality issues:
 
-If you can clearly identify a book's spine but the text is unreadable, you MUST still include it. In such cases, set 'title' and 'author' to null and the 'confidence' to 0.0.
+COMMON ISSUES TO DETECT:
+1. "unreadable_books" → Some spines are too small/blurry to read → severity: "medium"
+   Message: "X books have text too small or blurry to read clearly"
 
-Here is an example of a good detection:
-{
-  "title": "The Hitchhiker's Guide to the Galaxy",
-  "author": "Douglas Adams",
-  "confidence": 0.95,
-  "boundingBox": { "x1": 0.1, "y1": 0.2, "x2": 0.15, "y2": 0.8 }
-}
+2. "low_confidence" → Multiple books extracted with confidence <0.7 → severity: "medium"
+   Message: "Several book titles/authors are unclear due to image quality"
 
-Here is an example of an unreadable book:
-{
-  "title": null,
-  "author": null,
-  "confidence": 0.0,
-  "boundingBox": { "x1": 0.2, "y1": 0.3, "x2": 0.25, "y2": 0.9 }
-}
+3. "edge_cutoff" → Books cut off at image edges → severity: "low"
+   Message: "Some books are partially cut off at the edges of the photo"
 
-Here is an example response with suggestions:
-{
-  "books": [
-    { "title": "Example Book", "author": "Author", "confidence": 0.95, "boundingBox": {"x1": 0.1, "y1": 0.2, "x2": 0.15, "y2": 0.8} },
-    { "title": null, "author": null, "confidence": 0.0, "boundingBox": {"x1": 0.2, "y1": 0.3, "x2": 0.25, "y2": 0.9} }
-  ],
-  "suggestions": [
-    {
-      "type": "unreadable_books",
-      "severity": "medium",
-      "message": "2 books detected but text is unreadable. Try capturing from a more direct angle or with better lighting.",
-      "affectedCount": 2
-    }
-  ]
-}`;
+4. "blurry_image" → Overall motion blur or out-of-focus → severity: "high"
+   Message: "Image appears blurry or out of focus - try steadying the camera"
+
+5. "glare_detected" → Reflective glare obscuring text → severity: "high"
+   Message: "Glare is making some book spines hard to read - adjust lighting or angle"
+
+6. "distance_too_far" → Camera too far away, text illegible → severity: "high"
+   Message: "Camera is too far from the shelf - move closer for better text recognition"
+
+7. "multiple_shelves" → Multiple shelf rows visible (confusing layout) → severity: "low"
+   Message: "Multiple shelves detected - focus on one shelf per scan for best results"
+
+8. "lighting_issues" → Shadows or poor illumination → severity: "medium"
+   Message: "Lighting is uneven - try using more consistent light or avoiding shadows"
+
+9. "angle_issues" → Photo taken at an angle (not perpendicular) → severity: "low"
+   Message: "Photo is angled - try taking the photo more directly facing the shelf"
+
+IMPORTANT: Only include suggestions if you actually detect these issues. If the image quality is good, return an empty suggestions array []`;
 
             // JSON schema for structured output
             const schema = {
@@ -106,6 +108,11 @@ Here is an example response with suggestions:
                                 author: {
                                     type: "STRING",
                                     description: "The full name of the author.",
+                                    nullable: true
+                                },
+                                isbn: {
+                                    type: "STRING",
+                                    description: "ISBN-10 or ISBN-13 if visible on spine.",
                                     nullable: true
                                 },
                                 confidence: {
