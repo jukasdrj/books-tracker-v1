@@ -29,6 +29,14 @@ public final class Work {
     // Review status for AI-detected books
     public var reviewStatus: ReviewStatus = ReviewStatus.verified
 
+    /// Path to original bookshelf scan image (temporary storage)
+    /// Will be deleted after all books from scan are reviewed
+    public var originalImagePath: String?
+
+    /// Bounding box coordinates for cropping spine from original image
+    /// Format: CGRect(x, y, width, height) in image coordinates
+    public var boundingBox: CGRect?
+
     // Metadata
     var dateCreated: Date = Date()
     var lastModified: Date = Date()

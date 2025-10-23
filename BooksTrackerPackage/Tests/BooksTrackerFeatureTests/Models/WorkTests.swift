@@ -49,4 +49,21 @@ struct WorkTests {
         #expect(needsReview.count == 1)
         #expect(needsReview.first?.title == "Needs Review Book")
     }
+
+    @Test func workCanStoreOriginalImagePath() {
+        let work = Work(title: "Test Book")
+        work.originalImagePath = "/tmp/bookshelf_scan_123.jpg"
+
+        #expect(work.originalImagePath == "/tmp/bookshelf_scan_123.jpg")
+    }
+
+    @Test func workCanStoreBoundingBox() {
+        let work = Work(title: "Test Book")
+        work.boundingBox = CGRect(x: 10, y: 20, width: 100, height: 200)
+
+        #expect(work.boundingBox?.minX == 10)
+        #expect(work.boundingBox?.minY == 20)
+        #expect(work.boundingBox?.width == 100)
+        #expect(work.boundingBox?.height == 200)
+    }
 }
