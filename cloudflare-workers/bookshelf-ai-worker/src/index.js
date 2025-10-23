@@ -311,16 +311,26 @@ export default {
         // Generate unique job ID
         const jobId = crypto.randomUUID();
 
+        // Read provider preference from header (iOS sends this)
+        const requestedProvider = request.headers.get('X-AI-Provider') || env.AI_PROVIDER;
+
+        // Override env.AI_PROVIDER for this request only
+        const requestEnv = { ...env, AI_PROVIDER: requestedProvider };
+
+        // Log provider selection
+        console.log(`[Worker] Processing scan with provider: ${requestedProvider}`);
+
         // Store initial job state in KV
-        await env.SCAN_JOBS.put(jobId, JSON.stringify({
+        await requestEnv.SCAN_JOBS.put(jobId, JSON.stringify({
           stage: 'processing',
           startTime: Date.now(),
           imageSize: imageData.byteLength,
-          elapsedTime: 0
+          elapsedTime: 0,
+          provider: requestedProvider
         }), { expirationTtl: 300 }); // 5 min expiry (fallback)
 
-        // Start background processing (don't await)
-        ctx.waitUntil(processBookshelfScan(jobId, imageData, env));
+        // Start background processing (don't await) with request-specific env
+        ctx.waitUntil(processBookshelfScan(jobId, imageData, requestEnv));
 
         // Return immediately with job metadata
         return Response.json({
