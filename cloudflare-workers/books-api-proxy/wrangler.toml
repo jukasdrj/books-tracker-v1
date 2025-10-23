@@ -105,5 +105,6 @@ AGGRESSIVE_CACHING = "true"    # Enable aggressive caching strategies
 ENABLE_PERFORMANCE_LOGGING = "true"  # Detailed performance metrics
 ENABLE_CACHE_ANALYTICS = "true"      # Cache hit/miss tracking
 ENABLE_PROVIDER_METRICS = "true"     # Provider performance tracking
-LOG_LEVEL = "INFO"                   # Logging verbosity
+LOG_LEVEL = "DEBUG"                  # Logging verbosity (FORENSIC MODE)
+ENABLE_RATE_LIMIT_TRACKING = "true"  # Track API quota exhaustion
 STRUCTURED_LOGGING = "true"          # JSON structured logs
