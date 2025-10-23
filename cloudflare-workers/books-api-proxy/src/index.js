@@ -1,11 +1,24 @@
 import { WorkerEntrypoint } from 'cloudflare:workers';
 import { handleGeneralSearch, handleAuthorSearch, handleTitleSearch, handleSubjectSearch, handleAdvancedSearch, handleISBNSearch } from './search-handlers.js';
+import {
+  StructuredLogger,
+  PerformanceTimer,
+  CachePerformanceMonitor,
+  ProviderHealthMonitor
+} from '../../structured-logging-infrastructure.js';
 
 /**
  * Books API Proxy - RPC-enabled worker
  * Exposes both HTTP endpoints (for external clients) and RPC methods (for other workers)
  */
 export class BooksAPIProxyWorker extends WorkerEntrypoint {
+  constructor(ctx, env) {
+    super(ctx, env);
+    // Initialize structured logging (Phase B)
+    this.logger = new StructuredLogger('books-api-proxy', env);
+    this.cacheMonitor = new CachePerformanceMonitor(this.logger);
+    this.providerMonitor = new ProviderHealthMonitor(this.logger);
+  }
   /**
    * RPC Method: Search for books by general query
    * @param {string} query - Search query
@@ -13,13 +26,23 @@ export class BooksAPIProxyWorker extends WorkerEntrypoint {
    * @returns {Promise<Object>} Search results
    */
   async searchBooks(query, options = {}) {
+    const timer = new PerformanceTimer(this.logger, 'rpc_searchBooks');
     const { maxResults = 20, page = 0 } = options;
-    return await handleGeneralSearch(
+
+    const result = await handleGeneralSearch(
       { url: `?q=${encodeURIComponent(query)}&maxResults=${maxResults}&page=${page}` },
       this.env,
       this.ctx,
-      {}
+      {},
+      {
+        logger: this.logger,
+        cacheMonitor: this.cacheMonitor,
+        providerMonitor: this.providerMonitor
+      }
     );
+
+    await timer.end({ query, resultsCount: result.items?.length || 0 });
+    return result;
   }
 
   /**
@@ -63,9 +86,19 @@ export class BooksAPIProxyWorker extends WorkerEntrypoint {
    * @returns {Promise<Object>} Success status
    */
   async pushJobProgress(jobId, progressData) {
-    const doId = this.env.PROGRESS_WEBSOCKET_DO.idFromName(jobId);
-    const stub = this.env.PROGRESS_WEBSOCKET_DO.get(doId);
-    return await stub.pushProgress(progressData);
+    console.log('[BooksAPIProxy] pushJobProgress called', { jobId, progressData });
+    try {
+      const doId = this.env.PROGRESS_WEBSOCKET_DO.idFromName(jobId);
+      console.log('[BooksAPIProxy] Got DO ID', { doId: doId.toString() });
+      const stub = this.env.PROGRESS_WEBSOCKET_DO.get(doId);
+      console.log('[BooksAPIProxy] Got DO stub, calling pushProgress');
+      const result = await stub.pushProgress(progressData);
+      console.log('[BooksAPIProxy] pushProgress successful', { result });
+      return result;
+    } catch (error) {
+      console.error('[BooksAPIProxy] pushJobProgress failed', { error: error.message, stack: error.stack });
+      throw error;
+    }
   }
 
   /**
