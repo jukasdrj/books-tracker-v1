@@ -91,6 +91,15 @@ actor BookshelfAIService {
 
     private init() {}
 
+    // MARK: - Provider Selection
+
+    /// Read user-selected AI provider from UserDefaults
+    /// UserDefaults is thread-safe, safe to call from actor context
+    private func getSelectedProvider() -> AIProvider {
+        let raw = UserDefaults.standard.string(forKey: "aiProvider") ?? "gemini"
+        return AIProvider(rawValue: raw) ?? .gemini
+    }
+
     // MARK: - Public API
 
     /// Process bookshelf image and return detected books with suggestions.
@@ -126,58 +135,6 @@ actor BookshelfAIService {
 
     // MARK: - Progress Tracking
 
-    /// Process bookshelf image with progress tracking.
-    /// - Parameter image: UIImage to process
-    /// - Parameter progressHandler: A closure to handle progress updates.
-    /// - Returns: Tuple of detected books and suggestions
-    @available(*, deprecated, message: "Use processBookshelfImageWithWebSocket for real-time progress updates. Polling method will be removed in Q1 2026.")
-    func processBookshelfImageWithProgress(
-        _ image: UIImage,
-        progressHandler: @MainActor @escaping (Double, String) -> Void
-    ) async throws -> ([DetectedBook], [SuggestionViewModel]) {
-        // Step 1: Compress image to acceptable size
-        guard let imageData = compressImage(image, maxSizeBytes: maxImageSize) else {
-            throw BookshelfAIError.imageCompressionFailed
-        }
-
-        // Step 2: Start async scan job
-        let jobResponse = try await startScanJob(imageData)
-        let stages = jobResponse.stages
-
-        // Step 3: Poll for completion using the enhanced generic utility
-        let response = try await Utility.pollForCompletion(
-            check: {
-                let status = try await self.pollJobStatus(jobId: jobResponse.jobId)
-
-                if status.stage == "complete", let result = status.result {
-                    return .complete(result)
-                }
-
-                if status.stage == "error" {
-                    let error = BookshelfAIError.serverError(500, status.error ?? "Unknown error during scan")
-                    return .error(error)
-                }
-
-                let progress = self.calculateExpectedProgress(elapsed: status.elapsedTime, stages: stages)
-                return .inProgress(progress: progress, metadata: status.stage)
-            },
-            progressHandler: { progress, stage in
-                progressHandler(progress, stage)
-            },
-            interval: .seconds(2),
-            timeout: .seconds(90)
-        )
-
-        // Step 4: Convert to detected books and suggestions
-        let detectedBooks = response.books.compactMap { aiBook in
-            convertToDetectedBook(aiBook)
-        }
-
-        let suggestions = SuggestionGenerator.generateSuggestions(from: response)
-
-        return (detectedBooks, suggestions)
-    }
-
     /// Process bookshelf image with WebSocket real-time progress tracking.
     /// - Parameters:
     ///   - image: UIImage to process
@@ -188,15 +145,21 @@ actor BookshelfAIService {
         _ image: UIImage,
         progressHandler: @MainActor @escaping (Double, String) -> Void
     ) async throws(BookshelfAIError) -> ([DetectedBook], [SuggestionViewModel]) {
-        // Step 1: Compress image to acceptable size
-        guard let imageData = compressImage(image, maxSizeBytes: maxImageSize) else {
+        // Read user-selected provider (UserDefaults is thread-safe)
+        let provider = getSelectedProvider()
+
+        // Step 1: Apply provider-specific preprocessing
+        let config = provider.preprocessingConfig
+        let processedImage = image.resizeForAI(maxDimension: config.maxDimension)
+
+        guard let imageData = processedImage.jpegData(compressionQuality: config.jpegQuality) else {
             throw .imageCompressionFailed
         }
 
-        // Step 2: Start async scan job
+        // Step 2: Start async scan job with provider header
         let jobResponse: ScanJobResponse
         do {
-            jobResponse = try await startScanJob(imageData)
+            jobResponse = try await startScanJob(imageData, provider: provider)
         } catch {
             throw .networkError(error)
         }
@@ -375,10 +338,11 @@ actor BookshelfAIService {
 
     // MARK: - Progress Tracking Methods (Swift 6.2 Task Pattern)
 
-    private func startScanJob(_ imageData: Data) async throws -> ScanJobResponse {
+    private func startScanJob(_ imageData: Data, provider: AIProvider) async throws -> ScanJobResponse {
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
         request.setValue("image/jpeg", forHTTPHeaderField: "Content-Type")
+        request.setValue(provider.rawValue, forHTTPHeaderField: "X-AI-Provider")
         request.httpBody = imageData
         request.timeoutInterval = timeout // Use same timeout as uploadImage (70s for AI + enrichment)
 
@@ -450,6 +414,26 @@ actor BookshelfAIService {
         }
 
         throw BookshelfAIError.networkError(NSError(domain: "MaxRetries", code: -1))
+    }
+}
+
+// MARK: - UIImage Extensions
+
+extension UIImage {
+    /// Resize image for AI processing without upscaling
+    func resizeForAI(maxDimension: CGFloat) -> UIImage {
+        let scale = maxDimension / max(size.width, size.height)
+        if scale >= 1 { return self } // Don't upscale
+
+        let newSize = CGSize(
+            width: size.width * scale,
+            height: size.height * scale
+        )
+
+        let renderer = UIGraphicsImageRenderer(size: newSize)
+        return renderer.image { _ in
+            draw(in: CGRect(origin: .zero, size: newSize))
+        }
     }
 }
 
