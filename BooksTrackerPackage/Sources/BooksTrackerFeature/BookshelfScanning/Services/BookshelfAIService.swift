@@ -363,7 +363,7 @@ actor BookshelfAIService {
     }
 
     /// Convert AI response book to DetectedBook model.
-    nonisolated private func convertToDetectedBook(_ aiBook: BookshelfAIResponse.AIDetectedBook) -> DetectedBook? {
+    nonisolated internal func convertToDetectedBook(_ aiBook: BookshelfAIResponse.AIDetectedBook) -> DetectedBook? {
         // Calculate CGRect from normalized coordinates
         let boundingBox = CGRect(
             x: aiBook.boundingBox.x1,
