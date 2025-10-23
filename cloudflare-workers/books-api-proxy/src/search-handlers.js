@@ -1,15 +1,32 @@
 import { transformWorkToGoogleFormat, deduplicateGoogleBooksItems, filterGoogleBooksItems, filterPrimaryWorks } from './transformers.js';
 import { advancedDeduplication, isLikelyAuthorQuery } from './utils.js';
 
-export async function handleAuthorSearch(query, { maxResults, page }, env, ctx) {
+export async function handleAuthorSearch(query, { maxResults, page }, env, ctx, loggerContext = null) {
     const cacheKey = `author:${query.toLowerCase()}:${maxResults}:${page}`;
+
+    const cacheStartTime = Date.now();
     const cached = await env.CACHE.get(cacheKey, 'json');
+    const cacheTime = Date.now() - cacheStartTime;
+
     if (cached) {
         console.log(`Cache HIT for author search: ${query}`);
+        if (loggerContext?.cacheMonitor) {
+            await loggerContext.cacheMonitor.recordCacheOperation(
+                'get',
+                cacheKey,
+                true,
+                cacheTime,
+                JSON.stringify(cached).length
+            );
+        }
         return { ...cached, cached: true };
     }
 
     console.log(`Cache MISS for author search: ${query}. Fetching from OpenLibrary.`);
+    if (loggerContext?.cacheMonitor) {
+        await loggerContext.cacheMonitor.recordCacheOperation('get', cacheKey, false, cacheTime, 0);
+    }
+
     const startTime = Date.now();
 
     try {

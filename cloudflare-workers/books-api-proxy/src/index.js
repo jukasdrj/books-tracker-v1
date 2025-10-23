@@ -53,8 +53,23 @@ export class BooksAPIProxyWorker extends WorkerEntrypoint {
    * @returns {Promise<Object>} Author bibliography
    */
   async searchByAuthor(authorName, options = {}) {
+    const timer = new PerformanceTimer(this.logger, 'rpc_searchByAuthor');
     const { maxResults = 20, page = 0 } = options;
-    return await handleAuthorSearch(authorName, { maxResults, page }, this.env, this.ctx);
+
+    const result = await handleAuthorSearch(
+      authorName,
+      { maxResults, page },
+      this.env,
+      this.ctx,
+      {
+        logger: this.logger,
+        cacheMonitor: this.cacheMonitor,
+        providerMonitor: this.providerMonitor
+      }
+    );
+
+    await timer.end({ authorName, resultsCount: result.items?.length || 0 });
+    return result;
   }
 
   /**
