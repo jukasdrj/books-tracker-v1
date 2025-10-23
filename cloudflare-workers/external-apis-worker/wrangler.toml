@@ -5,6 +5,7 @@ compatibility_flags = ["nodejs_compat"]
 
 [vars]
 USER_AGENT = "BooksTracker/1.0 (nerd@ooheynerds.com) ExternalAPIsWorker/1.0.0"
+LOG_LEVEL = "DEBUG"  # Maximum provider interaction visibility
 
 [[kv_namespaces]]
 binding = "KV_CACHE"
