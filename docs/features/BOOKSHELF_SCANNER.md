@@ -409,7 +409,56 @@ public struct JobProgress: Codable, Sendable, Equatable {
 - 📊 Keep-alive pings: 1-2 per scan (30s interval)
 - 📦 Overhead: ~200 bytes per ping
 - 🔋 Battery impact: Negligible
-- ✅ Reliability: 100% success rate (no timeouts)
+
+## Hybrid WebSocket + Polling Fallback
+
+**Problem:** WebSocket connections may fail on:
+- Weak cellular networks
+- Corporate firewalls
+- Proxy servers
+- Network handoffs (WiFi ↔ Cellular)
+
+**Solution:** Automatic fallback from WebSocket to HTTP polling.
+
+### Implementation
+
+```swift
+func processBookshelfImageWithWebSocket(...) async throws {
+    do {
+        // Try WebSocket first (8ms latency, preferred)
+        return try await processViaWebSocket(...)
+    } catch {
+        // Fall back to HTTP polling (2s interval, reliable)
+        return try await processViaPolling(...)
+    }
+}
+```
+
+### Performance
+
+- **WebSocket:** 8ms latency, single connection
+- **Polling:** 2s intervals, 15-30 HTTP requests
+- **Fallback rate:** < 5% of scans
+
+### Code Structure
+
+**BookshelfAIService.swift:**
+- `processBookshelfImageWithWebSocket()` - Public API with fallback wrapper
+- `processViaWebSocket()` - WebSocket implementation
+- `processViaPolling()` - HTTP polling implementation (extension)
+
+**ProgressStrategy.swift:**
+- Enum tracking which strategy was used (`.webSocket` or `.polling`)
+- Analytics integration
+
+### Analytics Tracking
+
+```swift
+print("[Analytics] bookshelf_scan_completed - strategy: websocket")
+print("[Analytics] bookshelf_scan_completed - strategy: polling_fallback")
+```
+
+**See:** `docs/features/WEBSOCKET_FALLBACK_ARCHITECTURE.md` for complete architecture details.
 
 ### Testing
 
