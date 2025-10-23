@@ -255,11 +255,12 @@ public final class WebSocketProgressManager: ObservableObject {
             let decoder = JSONDecoder()
             let message = try decoder.decode(WebSocketMessage.self, from: data)
 
-            // Convert to JobProgress
+            // Convert to JobProgress, preserving keepAlive flag
             let progress = JobProgress(
                 totalItems: message.data.totalItems,
                 processedItems: message.data.processedItems,
-                currentStatus: message.data.currentStatus
+                currentStatus: message.data.currentStatus,
+                keepAlive: message.data.keepAlive  // Pass through keepAlive flag
             )
 
             // Call progress handler on MainActor

@@ -40,6 +40,7 @@ public struct JobProgress: Codable, Sendable, Equatable {
     public var processedItems: Int
     public var currentStatus: String
     public var estimatedTimeRemaining: TimeInterval?
+    public var keepAlive: Bool?  // Optional: true for server keep-alive pings, nil for normal updates
 
     public var fractionCompleted: Double {
         guard totalItems > 0 else { return 0 }
@@ -50,12 +51,14 @@ public struct JobProgress: Codable, Sendable, Equatable {
         totalItems: Int,
         processedItems: Int,
         currentStatus: String,
-        estimatedTimeRemaining: TimeInterval? = nil
+        estimatedTimeRemaining: TimeInterval? = nil,
+        keepAlive: Bool? = nil
     ) {
         self.totalItems = totalItems
         self.processedItems = processedItems
         self.currentStatus = currentStatus
         self.estimatedTimeRemaining = estimatedTimeRemaining
+        self.keepAlive = keepAlive
     }
 
     public static var zero: JobProgress {

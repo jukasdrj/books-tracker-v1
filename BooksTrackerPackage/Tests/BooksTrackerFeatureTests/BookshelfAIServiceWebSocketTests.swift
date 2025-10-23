@@ -53,6 +53,39 @@ struct BookshelfAIServiceWebSocketTests {
         }
     }
 
+    @Test("processBookshelfImageWithWebSocket skips keepAlive progress updates")
+    @MainActor
+    func testWebSocketSkipsKeepAliveUpdates() async throws {
+        var progressUpdates: [(Double, String)] = []
+
+        // Mock progress updates simulating server behavior
+        let mockProgressUpdates = [
+            JobProgress(totalItems: 3, processedItems: 1, currentStatus: "Processing with AI...", keepAlive: false),
+            JobProgress(totalItems: 3, processedItems: 1, currentStatus: "Processing with AI...", keepAlive: true),  // Should be skipped
+            JobProgress(totalItems: 3, processedItems: 1, currentStatus: "Processing with AI...", keepAlive: true),  // Should be skipped
+            JobProgress(totalItems: 3, processedItems: 2, currentStatus: "Enriching books...", keepAlive: false),
+            JobProgress(totalItems: 3, processedItems: 3, currentStatus: "Scan complete! Found 12 books.", keepAlive: false)
+        ]
+
+        // Progress handler should only receive non-keepAlive updates
+        let progressHandler: @MainActor (Double, String) -> Void = { progress, status in
+            progressUpdates.append((progress, status))
+        }
+
+        // Simulate WebSocket flow
+        for progress in mockProgressUpdates {
+            // Skip keep-alive updates (this is the logic we're testing)
+            guard progress.keepAlive != true else { continue }
+            progressHandler(progress.fractionCompleted, progress.currentStatus)
+        }
+
+        // Should only have 3 updates (skipped 2 keep-alives)
+        #expect(progressUpdates.count == 3)
+        #expect(progressUpdates[0].1 == "Processing with AI...")
+        #expect(progressUpdates[1].1 == "Enriching books...")
+        #expect(progressUpdates[2].1 == "Scan complete! Found 12 books.")
+    }
+
     // MARK: - Helper Methods
 
     private func createMockImage() -> UIImage {

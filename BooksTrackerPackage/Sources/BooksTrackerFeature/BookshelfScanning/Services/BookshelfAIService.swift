@@ -199,6 +199,12 @@ actor BookshelfAIService {
             Task { @MainActor in
                 // Set progress handler directly (WebSocket already connected and configured)
                 wsManager.setProgressHandler { jobProgress in
+                    // Skip UI updates for keep-alive pings (prevents redundant re-renders)
+                    guard jobProgress.keepAlive != true else {
+                        print("🔁 Keep-alive ping received (skipping UI update)")
+                        return
+                    }
+
                     // Convert JobProgress to (Double, String) for progress handler
                     progressHandler(jobProgress.fractionCompleted, jobProgress.currentStatus)
 
