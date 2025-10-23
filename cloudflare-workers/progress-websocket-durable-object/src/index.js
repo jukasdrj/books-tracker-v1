@@ -1,11 +1,12 @@
+import { DurableObject } from 'cloudflare:workers';
+
 /**
  * Durable Object for managing WebSocket connections per job
  * One instance per jobId - stores WebSocket connection and forwards progress messages
  */
-export class ProgressWebSocketDO {
+export class ProgressWebSocketDO extends DurableObject {
   constructor(state, env) {
-    this.state = state;
-    this.env = env;
+    super(state, env);
     this.webSocket = null;
     this.jobId = null;
   }
@@ -17,8 +18,15 @@ export class ProgressWebSocketDO {
     const url = new URL(request.url);
     const upgradeHeader = request.headers.get('Upgrade');
 
+    console.log('[ProgressDO] Incoming request', {
+      url: url.toString(),
+      upgradeHeader,
+      method: request.method
+    });
+
     // Validate WebSocket upgrade
     if (!upgradeHeader || upgradeHeader !== 'websocket') {
+      console.warn('[ProgressDO] Invalid upgrade header', { upgradeHeader });
       return new Response('Expected Upgrade: websocket', {
         status: 426,
         headers: {
@@ -31,8 +39,11 @@ export class ProgressWebSocketDO {
     // Extract jobId from query params
     const jobId = url.searchParams.get('jobId');
     if (!jobId) {
+      console.error('[ProgressDO] Missing jobId parameter');
       return new Response('Missing jobId parameter', { status: 400 });
     }
+
+    console.log(`[ProgressDO] Creating WebSocket for job ${jobId}`);
 
     // Create WebSocket pair
     const [client, server] = Object.values(new WebSocketPair());
@@ -43,6 +54,8 @@ export class ProgressWebSocketDO {
 
     // Accept connection
     this.webSocket.accept();
+
+    console.log(`[${this.jobId}] WebSocket connection accepted`);
 
     // Setup event handlers
     this.webSocket.addEventListener('message', (event) => {
@@ -74,8 +87,15 @@ export class ProgressWebSocketDO {
    * Called by background workers (enrichment, CSV import, etc.)
    */
   async pushProgress(progressData) {
+    console.log(`[ProgressDO] pushProgress called for job ${this.jobId}`, {
+      hasWebSocket: !!this.webSocket,
+      progressData
+    });
+
     if (!this.webSocket) {
-      throw new Error('No WebSocket connection available');
+      const error = new Error('No WebSocket connection available');
+      console.error(`[${this.jobId}] No WebSocket connection`, { error });
+      throw error;
     }
 
     const message = JSON.stringify({
@@ -87,6 +107,7 @@ export class ProgressWebSocketDO {
 
     try {
       this.webSocket.send(message);
+      console.log(`[${this.jobId}] Progress sent successfully`, { messageLength: message.length });
       return { success: true };
     } catch (error) {
       console.error(`[${this.jobId}] Failed to send message:`, error);
@@ -116,6 +137,24 @@ export class ProgressWebSocketDO {
 
 export default {
   async fetch(request, env) {
-    return new Response('Progress WebSocket Durable Object', { status: 200 });
+    const url = new URL(request.url);
+
+    // WebSocket upgrade for progress tracking
+    if (url.pathname.startsWith('/ws/progress')) {
+      const jobId = url.searchParams.get('jobId');
+
+      if (!jobId) {
+        return new Response('Missing jobId parameter', { status: 400 });
+      }
+
+      // Get Durable Object stub
+      const id = env.PROGRESS_WEBSOCKET_DO.idFromName(jobId);
+      const stub = env.PROGRESS_WEBSOCKET_DO.get(id);
+
+      // Forward request to Durable Object
+      return stub.fetch(request);
+    }
+
+    return new Response('Progress WebSocket Durable Object - Use /ws/progress?jobId=XXX to connect', { status: 200 });
   }
 };

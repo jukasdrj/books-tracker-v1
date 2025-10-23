@@ -1,7 +1,9 @@
 import SwiftUI
 
+#if os(iOS)
 #if canImport(AVFoundation)
 import AVFoundation
+#endif
 #if canImport(UIKit)
 import UIKit
 #endif
@@ -385,4 +387,4 @@ private struct PhotoReviewView: View {
     }
 }
 
-#endif  // canImport(AVFoundation)
+#endif  // os(iOS)

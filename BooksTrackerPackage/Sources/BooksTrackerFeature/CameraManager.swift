@@ -1,3 +1,4 @@
+#if os(iOS)
 @preconcurrency import AVFoundation
 import Vision
 import SwiftUI
@@ -557,3 +558,5 @@ private final class PhotoCaptureDelegate: NSObject, AVCapturePhotoCaptureDelegat
         self.continuation = nil
     }
 }
+
+#endif  // os(iOS)

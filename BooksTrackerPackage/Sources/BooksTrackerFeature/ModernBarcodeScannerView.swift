@@ -1,6 +1,10 @@
 import SwiftUI
 import AVFoundation
 
+#if canImport(UIKit)
+import UIKit
+#endif
+
 /// Modern barcode scanner view using Swift 6 concurrency patterns
 /// Replaces the legacy BarcodeScanner.swift with clean architecture
 @available(iOS 26.0, *)
@@ -102,6 +106,7 @@ struct ModernBarcodeScannerView: View {
             }
             .themedBackground()
             .navigationTitle("Scan ISBN")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -112,6 +117,7 @@ struct ModernBarcodeScannerView: View {
                     .foregroundColor(.white)
                 }
             }
+            #endif
         }
         .onAppear {
             checkCameraPermission()
@@ -335,8 +341,10 @@ struct ModernBarcodeScannerView: View {
         }
 
         // Haptic feedback
+        #if canImport(UIKit)
         let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
         impactFeedback.impactOccurred()
+        #endif
 
         // Brief processing state
         Task {
@@ -360,8 +368,10 @@ struct ModernBarcodeScannerView: View {
 
     private func toggleTorch() {
         // Haptic feedback
+        #if canImport(UIKit)
         let impactFeedback = UIImpactFeedbackGenerator(style: .light)
         impactFeedback.impactOccurred()
+        #endif
 
         // Toggle torch via camera manager
         Task {
@@ -388,8 +398,10 @@ struct ModernBarcodeScannerView: View {
 
     private func focusCamera() {
         // Haptic feedback
+        #if canImport(UIKit)
         let impactFeedback = UIImpactFeedbackGenerator(style: .light)
         impactFeedback.impactOccurred()
+        #endif
 
         // Temporary feedback
         withAnimation {
@@ -434,9 +446,11 @@ struct ModernBarcodeScannerView: View {
     }
 
     private func openSettings() {
+        #if canImport(UIKit)
         if let settingsURL = URL(string: UIApplication.openSettingsURLString) {
             UIApplication.shared.open(settingsURL)
         }
+        #endif
     }
 
     private func cleanup() {

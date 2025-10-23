@@ -1,7 +1,9 @@
 import SwiftUI
 
+#if os(iOS)
 #if canImport(AVFoundation)
 @preconcurrency import AVFoundation
+#endif
 #if canImport(UIKit)
 import UIKit
 #endif
@@ -154,9 +156,11 @@ final class BookshelfCameraViewModel {
 
     /// Open iOS Settings app to camera permissions.
     func openSettings() {
+        #if canImport(UIKit)
         guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
         UIApplication.shared.open(url)
+        #endif
     }
 }
 
-#endif  // canImport(AVFoundation)
+#endif  // os(iOS)

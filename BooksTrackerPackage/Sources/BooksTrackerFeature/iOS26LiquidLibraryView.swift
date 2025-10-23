@@ -46,7 +46,9 @@ public struct iOS26LiquidLibraryView: View {
     @State private var selectedLayout: LibraryLayout = .floatingGrid
     @State private var searchText = ""
     @State private var showingDiversityInsights = false
+    @State private var showingReviewQueue = false
     @State private var pendingEnrichmentCount = 0
+    @State private var reviewQueueCount = 0
     @State private var isEnriching = false
 
     // ✅ FIX 3: Performance optimizations
@@ -73,6 +75,7 @@ public struct iOS26LiquidLibraryView: View {
             .onAppear {
                 updateFilteredWorks()
                 pendingEnrichmentCount = EnrichmentQueue.shared.count()
+                updateReviewQueueCount()
             }
             .onReceive(NotificationCenter.default.publisher(for: .enrichmentStarted)) { _ in
                 isEnriching = true
@@ -84,6 +87,29 @@ public struct iOS26LiquidLibraryView: View {
             .navigationTitle("My Library")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
+                // Alert/Action items - Leading placement for prominence
+                ToolbarItem(placement: .navigationBarLeading) {
+                    if reviewQueueCount > 0 {
+                        Button {
+                            showingReviewQueue.toggle()
+                        } label: {
+                            Label {
+                                Text("Review Queue")
+                            } icon: {
+                                Image(systemName: "exclamationmark.triangle.badge.\(min(reviewQueueCount, 99))")
+                            }
+                        }
+                        .labelStyle(.iconOnly)
+                        .buttonStyle(GlassProminentButtonStyle(tint: .orange))
+                        .foregroundStyle(.white)
+                        .symbolEffect(.bounce, value: reviewQueueCount)
+                        .accessibilityLabel("Review Queue")
+                        .accessibilityValue("\(reviewQueueCount) book\(reviewQueueCount == 1 ? "" : "s") need review")
+                        .accessibilityHint("Opens queue to verify AI-detected book information")
+                    }
+                }
+
+                // Informational/Settings - Trailing placement for secondary actions
                 ToolbarItemGroup(placement: .navigationBarTrailing) {
                     Button {
                         showingDiversityInsights.toggle()
@@ -114,6 +140,13 @@ public struct iOS26LiquidLibraryView: View {
             // ✅ FIX 4: Navigation with Work objects (SwiftData PersistentIdentifier)
             .navigationDestination(for: Work.self) { work in
                 WorkDetailView(work: work)
+            }
+            .sheet(isPresented: $showingReviewQueue) {
+                ReviewQueueView()
+                    .onDisappear {
+                        // Refresh queue count when returning from review queue
+                        updateReviewQueueCount()
+                    }
             }
             .sheet(isPresented: $showingDiversityInsights) {
                 CulturalDiversityInsightsView(works: cachedFilteredWorks)
@@ -327,7 +360,7 @@ public struct iOS26LiquidLibraryView: View {
     private func updateFilteredWorks() {
         // ✅ FIX 5: Cached filtering and diversity calculation
         let filtered: [Work]
-        
+
         if searchText.isEmpty {
             filtered = Array(libraryWorks)
         } else {
@@ -336,11 +369,20 @@ public struct iOS26LiquidLibraryView: View {
                 work.authorNames.localizedCaseInsensitiveContains(searchText)
             }
         }
-        
+
         // Only update if actually changed
         if filtered.map(\.id) != cachedFilteredWorks.map(\.id) {
             cachedFilteredWorks = filtered
             cachedDiversityScore = calculateDiverseAuthors(for: filtered)
+        }
+    }
+
+    private func updateReviewQueueCount() {
+        // Count works needing human review - filter in memory since enum comparison not supported
+        let descriptor = FetchDescriptor<Work>()
+
+        if let allWorks = try? modelContext.fetch(descriptor) {
+            reviewQueueCount = allWorks.filter { $0.reviewStatus == .needsReview }.count
         }
     }
 

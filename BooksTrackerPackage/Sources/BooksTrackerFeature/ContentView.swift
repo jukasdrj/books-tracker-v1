@@ -54,9 +54,11 @@ public struct ContentView: View {
                 .tag(MainTab.settings)
             }
             .tint(themeStore.primaryColor)
+            #if os(iOS)
             .tabBarMinimizeBehavior(
                 voiceOverEnabled || reduceMotion ? .never : (featureFlags.enableTabBarMinimize ? .onScrollDown : .never)
             )
+            #endif
             .themedBackground()
             // Sample data disabled for production - empty library on first launch
             // .onAppear {
@@ -65,6 +67,10 @@ public struct ContentView: View {
             .task {
                 // Validate enrichment queue on app startup - remove stale persistent IDs
                 EnrichmentQueue.shared.validateQueue(in: modelContext)
+            }
+            .task {
+                // Clean up temporary scan images after all books reviewed
+                await ImageCleanupService.shared.cleanupReviewedImages(in: modelContext)
             }
             .task {
                 await handleNotifications()

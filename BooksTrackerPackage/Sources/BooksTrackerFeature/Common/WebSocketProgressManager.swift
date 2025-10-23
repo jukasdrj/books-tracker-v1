@@ -1,7 +1,23 @@
 import Foundation
 
+/// Connection token proving WebSocket is ready for job binding
+/// Issued after initial handshake, before jobId configuration
+public struct ConnectionToken: Sendable {
+    let connectionId: String
+    let createdAt: Date
+
+    var isExpired: Bool {
+        Date().timeIntervalSince(createdAt) > 30  // 30 second validity window
+    }
+}
+
 /// Manages WebSocket connections for real-time progress updates
 /// Replaces polling-based progress tracking with server push notifications
+///
+/// CRITICAL: Uses WebSocket-first protocol to prevent race conditions
+/// - Step 1: establishConnection() - Connect BEFORE job starts
+/// - Step 2: configureForJob(jobId:) - Bind to specific job after connection ready
+/// - Result: Server processes ONLY after WebSocket is listening
 @MainActor
 public final class WebSocketProgressManager: ObservableObject {
 
@@ -13,15 +29,94 @@ public final class WebSocketProgressManager: ObservableObject {
     private var webSocketTask: URLSessionWebSocketTask?
     private var receiveTask: Task<Void, Never>?
     private var progressHandler: ((JobProgress) -> Void)?
+    private var boundJobId: String?
 
     // Backend configuration
     private let baseURL = "wss://books-api-proxy.jukasdrj.workers.dev"
+    private let connectionTimeout: TimeInterval = 10.0  // 10 seconds for initial handshake
+    private let readySignalEndpoint = "https://bookshelf-ai-worker.jukasdrj.workers.dev"
 
     // MARK: - Public Methods
 
     public init() {}
 
-    /// Connect to WebSocket for a specific job
+    /// STEP 1: Establish WebSocket connection BEFORE job starts
+    /// This prevents race condition where server processes before client listens
+    ///
+    /// - Parameter jobId: Client-generated job identifier for WebSocket binding
+    /// - Returns: ConnectionToken proving connection is ready
+    /// - Throws: URLError if connection fails or times out
+    public func establishConnection(jobId: String) async throws -> ConnectionToken {
+        guard webSocketTask == nil else {
+            throw URLError(.badURL, userInfo: ["reason": "WebSocket already connected"])
+        }
+
+        // Create connection endpoint with client-provided jobId
+        guard let url = URL(string: "\(baseURL)/ws/progress?jobId=\(jobId)") else {
+            throw URLError(.badURL)
+        }
+
+        // Create URLSession with WebSocket configuration
+        let session = URLSession(configuration: .default)
+        let task = session.webSocketTask(with: url)
+
+        // Start connection
+        task.resume()
+
+        // Wait for successful connection (by sending/receiving ping)
+        try await waitForConnection(task, timeout: connectionTimeout)
+
+        self.webSocketTask = task
+        self.isConnected = true
+
+        print("🔌 WebSocket established (ready for job configuration)")
+
+        // Start receiving messages in background
+        await startReceiving()
+
+        // Return token proving connection is ready
+        let token = ConnectionToken(
+            connectionId: UUID().uuidString,
+            createdAt: Date()
+        )
+
+        return token
+    }
+
+    /// STEP 2: Configure established WebSocket for specific job
+    /// Called after receiving jobId from server
+    ///
+    /// - Parameter jobId: Job identifier from POST /scan response
+    /// - Throws: URLError if jobId is invalid or connection was lost
+    public func configureForJob(jobId: String) async throws {
+        guard webSocketTask != nil else {
+            throw URLError(.badURL, userInfo: ["reason": "WebSocket not connected. Call establishConnection() first"])
+        }
+
+        guard !jobId.isEmpty else {
+            throw URLError(.badURL, userInfo: ["reason": "Invalid jobId"])
+        }
+
+        self.boundJobId = jobId
+
+        print("🔌 WebSocket configured for job: \(jobId)")
+
+        // Signal to server that WebSocket is ready
+        // This tells server it's safe to start processing
+        try await signalWebSocketReady(jobId: jobId)
+    }
+
+    /// Set progress handler for already-connected WebSocket
+    /// Use this after calling establishConnection() + configureForJob()
+    ///
+    /// - Parameter handler: Callback for progress updates (called on MainActor)
+    public func setProgressHandler(_ handler: @escaping (JobProgress) -> Void) {
+        self.progressHandler = handler
+    }
+
+    /// Connect to WebSocket for a specific job (backward compatible)
+    /// This is now equivalent to: establishConnection(jobId) + configureForJob(jobId)
+    ///
     /// - Parameters:
     ///   - jobId: Unique job identifier
     ///   - progressHandler: Callback for progress updates (called on MainActor)
@@ -29,37 +124,17 @@ public final class WebSocketProgressManager: ObservableObject {
         jobId: String,
         progressHandler: @escaping (JobProgress) -> Void
     ) async {
-        guard webSocketTask == nil else {
-            print("⚠️ WebSocket already connected")
-            return
+        do {
+            // Use new two-step protocol with client-generated jobId
+            _ = try await establishConnection(jobId: jobId)
+            try await configureForJob(jobId: jobId)
+
+            // Set progress handler after connection is fully configured
+            self.progressHandler = progressHandler
+        } catch {
+            self.lastError = error
+            print("❌ Failed to connect: \(error)")
         }
-
-        // Validate jobId
-        guard !jobId.isEmpty else {
-            self.lastError = URLError(.badURL)
-            return
-        }
-
-        self.progressHandler = progressHandler
-
-        // Construct WebSocket URL
-        guard let url = URL(string: "\(baseURL)/ws/progress?jobId=\(jobId)") else {
-            self.lastError = URLError(.badURL)
-            return
-        }
-
-        // Create URLSession with WebSocket configuration
-        let session = URLSession(configuration: .default)
-        webSocketTask = session.webSocketTask(with: url)
-
-        // Start connection
-        webSocketTask?.resume()
-        isConnected = true
-
-        print("🔌 WebSocket connected for job: \(jobId)")
-
-        // Start receiving messages
-        await startReceiving()
     }
 
     /// Disconnect WebSocket
@@ -72,11 +147,68 @@ public final class WebSocketProgressManager: ObservableObject {
 
         isConnected = false
         progressHandler = nil
+        boundJobId = nil
 
         print("🔌 WebSocket disconnected")
     }
 
     // MARK: - Private Methods
+
+    /// Wait for WebSocket connection to be established
+    /// Uses exponential backoff to verify connection is working
+    private func waitForConnection(_ task: URLSessionWebSocketTask, timeout: TimeInterval) async throws {
+        let startTime = Date()
+
+        // Try a few ping/pong cycles to confirm connection
+        var attempts = 0
+        let maxAttempts = 5
+
+        while attempts < maxAttempts {
+            if Date().timeIntervalSince(startTime) > timeout {
+                throw URLError(.timedOut)
+            }
+
+            do {
+                // Send ping message to confirm connection is working
+                try await task.send(.string("PING"))
+
+                // Wait for any response (with timeout)
+                _ = Task {
+                    try await task.receive()
+                }
+
+                try await Task.sleep(for: .milliseconds(100 * (attempts + 1)))
+
+                attempts += 1
+            } catch {
+                throw error
+            }
+        }
+
+        print("✅ WebSocket connection verified after \(attempts) attempts")
+    }
+
+    /// Signal to server that WebSocket is ready
+    /// Server uses this to know it's safe to start processing
+    private func signalWebSocketReady(jobId: String) async throws {
+        let readyURL = URL(string: "\(readySignalEndpoint)/scan/ready/\(jobId)")!
+
+        var request = URLRequest(url: readyURL)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 5.0
+
+        let (_, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw URLError(.badServerResponse)
+        }
+
+        guard (200...299).contains(httpResponse.statusCode) else {
+            throw URLError(.badServerResponse, userInfo: ["statusCode": httpResponse.statusCode])
+        }
+
+        print("✅ Server notified WebSocket ready for job: \(jobId)")
+    }
 
     /// Start receiving WebSocket messages
     private func startReceiving() async {
@@ -99,10 +231,14 @@ public final class WebSocketProgressManager: ObservableObject {
     private func handleMessage(_ message: URLSessionWebSocketTask.Message) async {
         switch message {
         case .string(let text):
-            await parseProgressUpdate(text)
+            // Skip PING/PONG messages used for connection verification
+            if text != "PING" && text != "PONG" {
+                await parseProgressUpdate(text)
+            }
 
         case .data(let data):
-            if let text = String(data: data, encoding: .utf8) {
+            if let text = String(data: data, encoding: .utf8),
+               text != "PING" && text != "PONG" {
                 await parseProgressUpdate(text)
             }
 

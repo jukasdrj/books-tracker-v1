@@ -1,6 +1,10 @@
 import SwiftUI
 import SwiftData
 
+#if canImport(UIKit)
+import UIKit
+#endif
+
 // MARK: - iOS 26 HIG Compliance Documentation
 /*
  SearchView - 100% iOS 26 Human Interface Guidelines Compliant
@@ -835,8 +839,10 @@ public struct SearchView: View {
         #endif
 
         // HIG: Haptic feedback for user actions
+        #if canImport(UIKit)
         let impact = UIImpactFeedbackGenerator(style: .light)
         impact.impactOccurred()
+        #endif
     }
 
     /// HIG: Advanced search with multi-field criteria

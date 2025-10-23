@@ -542,6 +542,13 @@ class ScanResultsModel {
                 firstPublicationYear: nil
             )
 
+            // Set review status based on confidence threshold (0.60)
+            work.reviewStatus = detectedBook.needsReview ? .needsReview : .verified
+
+            // Store original image path and bounding box for correction UI
+            work.originalImagePath = detectedBook.originalImagePath
+            work.boundingBox = detectedBook.boundingBox
+
             modelContext.insert(work)
             addedWorkIDs.append(work.persistentModelID)
 

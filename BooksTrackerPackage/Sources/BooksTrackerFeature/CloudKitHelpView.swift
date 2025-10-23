@@ -179,6 +179,7 @@ public struct CloudKitHelpView: View {
                 .padding()
             }
             .navigationTitle("iCloud Sync")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -187,6 +188,7 @@ public struct CloudKitHelpView: View {
                     }
                 }
             }
+            #endif
             .background(backgroundView.ignoresSafeArea())
         }
     }
