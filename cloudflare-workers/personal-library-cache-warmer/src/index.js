@@ -5,12 +5,23 @@
  * author bibliography fetching during the cache warming process.
  */
 
+import {
+  StructuredLogger,
+  PerformanceTimer,
+  CachePerformanceMonitor
+} from '../../structured-logging-infrastructure.js';
+
 const CACHE_TTL = 86400 * 7; // 7 days
 
 export default {
   async scheduled(event, env, ctx) {
+    const logger = new StructuredLogger('cache-warmer', env);
+    const timer = new PerformanceTimer(logger, 'cron_scheduled');
+
     console.log(`CRON: Starting micro-batch processing`);
-    ctx.waitUntil(processMicroBatch(env, 25)); // Process 25 authors every 15 mins
+    await processMicroBatch(env, 25, logger); // Process 25 authors every 15 mins
+
+    await timer.end({ batchSize: 25, cronType: event.cron });
   },
   
   async fetch(request, env, ctx) {
@@ -99,7 +110,7 @@ export default {
 /**
  * Processes a micro-batch of authors from the library using RPC.
  */
-async function processMicroBatch(env, maxAuthors = 25) {
+async function processMicroBatch(env, maxAuthors = 25, logger = null) {
   console.log(`Processing micro-batch of up to ${maxAuthors} authors.`);
   
   const libraryData = await env.CACHE.get('current_library', 'json');
