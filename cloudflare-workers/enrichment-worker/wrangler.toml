@@ -5,3 +5,9 @@ compatibility_date = "2024-10-01"
 # Environment variables
 [vars]
 LOG_LEVEL = "DEBUG"  # Maximum enrichment visibility
+
+# Service binding to external-apis-worker for direct API access
+[[services]]
+binding = "EXTERNAL_APIS_WORKER"
+service = "external-apis-worker"
+entrypoint = "ExternalAPIsWorker"
