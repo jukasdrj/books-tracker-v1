@@ -41,3 +41,7 @@ crons = [
     "0 */4 * * *",   # Every 4 hours - Large batch processing (50 authors)
     "0 2 * * *"      # Daily - Cache verification and repair
 ]
+
+# Environment variables
+[vars]
+LOG_LEVEL = "DEBUG"  # Maximum cache warming visibility
