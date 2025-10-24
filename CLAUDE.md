@@ -113,14 +113,27 @@ struct BookDetailView: View {
 - `GET /search/isbn?isbn={isbn}` - ISBN lookup (7-day cache)
 - `POST /search/advanced` - Multi-field search (title + author + ISBN)
 - `POST /api/enrichment/start` - Batch enrichment with WebSocket progress
-- `POST /api/scan-bookshelf?jobId={uuid}` - AI bookshelf scan (Gemini 2.5 Flash)
+- `POST /api/scan-bookshelf?jobId={uuid}` - AI bookshelf scan with provider selection
 - `GET /ws/progress?jobId={uuid}` - WebSocket progress (unified for ALL jobs)
+
+**AI Provider Selection:**
+- iOS sends `X-AI-Provider` header (`gemini` or `cloudflare`)
+- Backend routes to appropriate provider module
+- **Gemini (Default):** Gemini 2.5 Flash - High accuracy, 25-40s processing (3072px/90% quality)
+- **Cloudflare (Fast):** Llama 3.2 11B Vision - Experimental fast mode, 3-8s processing (1536px/85% quality)
+- Missing header defaults to Gemini for backward compatibility
+
+**Performance Comparison:**
+| Provider    | Speed    | Accuracy | Image Size | Use Case                          |
+|-------------|----------|----------|------------|-----------------------------------|
+| Gemini      | 25-40s   | High (0.7-0.95) | 400-600KB | Best for ISBNs, small text |
+| Cloudflare  | 3-8s     | Good (0.6-0.85) | 150-300KB | Quick scans, quality suggestions |
 
 **Architecture:**
 - Single monolith worker with direct function calls (no RPC service bindings)
 - ProgressWebSocketDO for real-time status updates (all background jobs)
 - No circular dependencies, no polling endpoints
-- KV caching, R2 image storage, Gemini AI integration
+- KV caching, R2 image storage, multi-provider AI integration
 
 **Internal Structure:**
 ```
@@ -128,6 +141,7 @@ api-worker/
 ├── src/index.js                # Main router
 ├── durable-objects/            # WebSocket DO
 ├── services/                   # Business logic (AI, enrichment, APIs)
+├── providers/                  # AI provider modules (Gemini, Cloudflare)
 ├── handlers/                   # Request handlers (search)
 └── utils/                      # Shared utilities (cache)
 ```
@@ -231,9 +245,11 @@ public class CSVImportService {
 ### Features
 
 **Bookshelf AI Scanner:** See `docs/features/BOOKSHELF_SCANNER.md`
-- Gemini 2.5 Flash vision analysis
+- Multi-provider AI support (Gemini, Cloudflare Workers AI)
+- Provider selection in Settings with user-facing descriptions
 - WebSocket real-time progress (8ms latency!)
 - 60% confidence threshold for review queue
+- iOS preprocessing adapts per provider (3072px/90% for Gemini, 1536px/85% for Cloudflare)
 
 **CSV Import:** See `docs/features/CSV_IMPORT.md`
 - 100 books/min, <200MB memory
