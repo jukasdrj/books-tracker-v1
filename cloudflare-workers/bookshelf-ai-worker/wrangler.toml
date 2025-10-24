@@ -50,6 +50,13 @@ binding = "BOOKS_API_PROXY"
 service = "books-api-proxy"
 entrypoint = "BooksAPIProxyWorker"
 
+# Durable Object binding for WebSocket progress tracking
+# Allows real-time progress updates during AI processing
+[[durable_objects.bindings]]
+name = "PROGRESS_WEBSOCKET_DO"
+class_name = "ProgressWebSocketDO"
+script_name = "progress-websocket-durable-object"
+
 # Workers AI Binding (required for AI_PROVIDER="cloudflare")
 [ai]
 binding = "AI"

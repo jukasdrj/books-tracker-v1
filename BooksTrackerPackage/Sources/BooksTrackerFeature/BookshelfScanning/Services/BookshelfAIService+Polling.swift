@@ -29,13 +29,14 @@ extension BookshelfAIService {
         }
 
         // STEP 2: Upload image
-        let baseURL = "https://books-api-proxy.jukasdrj.workers.dev"
-        let uploadURL = URL(string: "\(baseURL)/bookshelf-scan/upload")!
+        // UNIFIED: Use bookshelf-ai-worker for all bookshelf AI operations
+        // Include jobId in URL for server-side job tracking (matches WebSocket flow)
+        let baseURL = "https://bookshelf-ai-worker.jukasdrj.workers.dev"
+        let uploadURL = URL(string: "\(baseURL)/scan?jobId=\(jobId)")!
         var uploadRequest = URLRequest(url: uploadURL)
         uploadRequest.httpMethod = "POST"
         uploadRequest.setValue("image/jpeg", forHTTPHeaderField: "Content-Type")
-        uploadRequest.setValue(provider.rawValue, forHTTPHeaderField: "X-Provider")
-        uploadRequest.setValue(jobId, forHTTPHeaderField: "X-Job-ID")
+        uploadRequest.setValue(provider.rawValue, forHTTPHeaderField: "X-AI-Provider")
         uploadRequest.httpBody = compressedData
 
         do {

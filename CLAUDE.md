@@ -106,18 +106,27 @@ struct BookDetailView: View {
 
 ### Backend Architecture
 
-**Workers:** books-api-proxy (orchestrator) → enrichment-worker → external-apis-worker
+**Workers:**
+- **books-api-proxy** - Orchestrator for book search/enrichment → enrichment-worker → external-apis-worker
+- **bookshelf-ai-worker** - Specialized AI vision processing (Gemini/Cloudflare) with WebSocket progress
 
 **Service Bindings:**
 - Unidirectional flow (no circular dependencies!)
 - RPC methods for performance
 - Callback pattern for progress updates
 
-**Endpoints:**
+**Book Search Endpoints (books-api-proxy):**
 - `/search/title` - General search (6h cache)
 - `/search/isbn` - ISBN lookup (7-day cache)
 - `/search/advanced` - Multi-field (orchestrates 3 providers)
-- `/enrich-batch` - Batch enrichment with WebSocket progress
+- `/api/enrichment/start` - Batch enrichment with WebSocket progress
+- `/ws/progress` - WebSocket for batch enrichment (Durable Object)
+
+**Bookshelf AI Endpoints (bookshelf-ai-worker):**
+- `POST /scan?jobId={uuid}` - Upload image for AI analysis (Gemini 2.5 Flash)
+- `GET /scan/status/{jobId}` - Poll for results (HTTP fallback)
+- `POST /scan/ready/{jobId}` - Signal WebSocket ready
+- `GET /ws/progress?jobId={uuid}` - WebSocket for real-time progress (Durable Object)
 
 **Rule:** Workers use RPC service bindings. Never create circular dependencies.
 

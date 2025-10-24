@@ -549,8 +549,48 @@ export default {
       }
     }
 
+    // WebSocket progress endpoint
+    if (request.method === "GET" && url.pathname === "/ws/progress") {
+      const jobId = url.searchParams.get('jobId');
+
+      if (!jobId) {
+        return Response.json({
+          error: 'Missing jobId parameter',
+          message: 'WebSocket connection requires jobId query parameter'
+        }, {
+          status: 400,
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*"
+          }
+        });
+      }
+
+      try {
+        // Get Durable Object stub for this jobId
+        const doId = env.PROGRESS_WEBSOCKET_DO.idFromName(jobId);
+        const stub = env.PROGRESS_WEBSOCKET_DO.get(doId);
+
+        // Forward WebSocket upgrade request to Durable Object
+        return await stub.fetch(request);
+
+      } catch (error) {
+        console.error("[BookshelfAI] WebSocket upgrade error:", error);
+        return Response.json({
+          error: "Failed to establish WebSocket connection",
+          details: error.message
+        }, {
+          status: 500,
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*"
+          }
+        });
+      }
+    }
+
     return Response.json(
-      { error: "Not Found. Use GET / for test interface, POST /scan with image, GET /scan/status/{jobId}, or POST /scan/ready/{jobId}." },
+      { error: "Not Found. Use GET / for test interface, POST /scan with image, GET /scan/status/{jobId}, POST /scan/ready/{jobId}, or WebSocket /ws/progress?jobId={jobId}." },
       { status: 404 }
     );
   },

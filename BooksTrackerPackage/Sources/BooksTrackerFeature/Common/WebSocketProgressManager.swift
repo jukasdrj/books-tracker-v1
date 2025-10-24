@@ -32,7 +32,8 @@ public final class WebSocketProgressManager: ObservableObject {
     private var boundJobId: String?
 
     // Backend configuration
-    private let baseURL = "wss://books-api-proxy.jukasdrj.workers.dev"
+    // UNIFIED: All bookshelf AI traffic goes to bookshelf-ai-worker (no split-brain routing)
+    private let baseURL = "wss://bookshelf-ai-worker.jukasdrj.workers.dev"
     private let connectionTimeout: TimeInterval = 10.0  // 10 seconds for initial handshake
     private let readySignalEndpoint = "https://bookshelf-ai-worker.jukasdrj.workers.dev"
 

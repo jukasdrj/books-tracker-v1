@@ -137,7 +137,7 @@ Live preview (AVCaptureVideoPreviewLayer)
     ↓
 Capture → Review sheet → "Use Photo"
     ↓
-Upload to Cloudflare Worker (bookshelf-ai-worker)
+Upload to bookshelf-ai-worker
     ↓
 Gemini 2.5 Flash AI analysis (25-40s)
     ↓
@@ -149,6 +149,29 @@ Add books to SwiftData library
 ```
 
 ## Backend Integration
+
+### Unified Architecture (October 2025)
+
+**All bookshelf AI traffic flows through `bookshelf-ai-worker.jukasdrj.workers.dev`:**
+
+**Endpoints:**
+- `POST /scan?jobId={uuid}` - Upload image for AI processing
+- `GET /scan/status/{jobId}` - Poll for job status (HTTP fallback)
+- `POST /scan/ready/{jobId}` - Signal WebSocket ready
+- `GET /ws/progress?jobId={uuid}` - WebSocket for real-time progress
+
+**Flow:**
+1. iOS generates `jobId = UUID().uuidString`
+2. WebSocket connects to `/ws/progress?jobId={uuid}` (preferred, 8ms latency)
+3. Image uploads to `/scan?jobId={uuid}` (triggers background processing)
+4. Real-time progress via WebSocket OR polling fallback every 2s
+5. Results retrieved when `stage === 'complete'`
+
+**Fallback Strategy:**
+- **Primary:** WebSocket (Durable Object) - Real-time, 8ms latency
+- **Fallback:** HTTP polling (KV storage) - Every 2s, 80s timeout
+
+**See:** `docs/features/WEBSOCKET_FALLBACK_ARCHITECTURE.md` for detailed flow diagrams.
 
 ### Enrichment Integration (Build 49 - October 2025)
 

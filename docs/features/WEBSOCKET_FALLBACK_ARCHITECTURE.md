@@ -1,12 +1,14 @@
 # WebSocket + Polling Fallback Architecture
 
-**Version:** 1.0.0
-**Date:** October 23, 2025
-**Status:** Production (Phase B)
+**Version:** 2.0.0 (Unified)
+**Date:** October 24, 2025
+**Status:** Production (Unified Architecture)
 
 ## Overview
 
 BooksTrack uses a hybrid WebSocket + HTTP polling strategy for bookshelf scanner progress tracking. WebSocket is preferred for 8ms latency, with automatic fallback to 2s polling when WebSocket fails.
+
+**All traffic flows through `bookshelf-ai-worker.jukasdrj.workers.dev`** - No split-brain routing between workers.
 
 ## Strategy Selection Flow
 
@@ -56,6 +58,29 @@ BooksTrack uses a hybrid WebSocket + HTTP polling strategy for bookshelf scanner
 - Survives network interruptions
 - No WebSocket-specific timeouts
 - Simpler debugging (standard HTTP)
+
+## Backend Endpoints (Unified Architecture)
+
+**All endpoints on `bookshelf-ai-worker.jukasdrj.workers.dev`:**
+
+| Endpoint | Method | Purpose | Used By |
+|----------|--------|---------|---------|
+| `/scan?jobId={uuid}` | POST | Upload image for AI processing | Both strategies |
+| `/scan/status/{jobId}` | GET | Poll job status | Polling fallback |
+| `/scan/ready/{jobId}` | POST | Signal WebSocket ready | WebSocket only |
+| `/ws/progress?jobId={uuid}` | GET (WS) | Real-time progress updates | WebSocket only |
+
+**iOS Client Endpoints:**
+
+```swift
+// WebSocketProgressManager.swift
+private let baseURL = "wss://bookshelf-ai-worker.jukasdrj.workers.dev"
+private let readySignalEndpoint = "https://bookshelf-ai-worker.jukasdrj.workers.dev"
+
+// BookshelfAIService+Polling.swift
+let baseURL = "https://bookshelf-ai-worker.jukasdrj.workers.dev"
+let uploadURL = URL(string: "\(baseURL)/scan?jobId=\(jobId)")!
+```
 
 ## Code Structure
 
@@ -107,8 +132,21 @@ print("[Analytics] bookshelf_scan_completed - strategy: polling_fallback")
 3. **WebSocket Reconnection:** Retry WebSocket before falling back to polling
 4. **Strategy Hints:** Allow user to force polling in Settings for debugging
 
+## Architecture History
+
+**Version 1.0.0 (Phase B - October 23, 2025):**
+- Initial WebSocket + polling implementation
+- Split-brain routing: WebSocket → books-api-proxy, Polling → bookshelf-ai-worker
+- Bug: Polling upload endpoint didn't exist (404 errors)
+
+**Version 2.0.0 (Unified - October 24, 2025):**
+- ✅ **Fixed:** All traffic unified to bookshelf-ai-worker
+- ✅ **Fixed:** Polling upload uses `/scan?jobId={uuid}` (matches WebSocket)
+- ✅ **Fixed:** WebSocket connects to bookshelf-ai-worker (added DO binding)
+- ✅ **Fixed:** Header changed from `X-Provider` → `X-AI-Provider` (backend compatibility)
+
 ---
 
-**Last Updated:** October 23, 2025
+**Last Updated:** October 24, 2025
 **Authors:** BooksTrack Engineering Team
-**Status:** Production (Phase B)
+**Status:** Production (Unified Architecture)
