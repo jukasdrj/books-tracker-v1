@@ -448,21 +448,28 @@ actor BookshelfAIService {
     // MARK: - Progress Tracking Methods (Swift 6.2 Task Pattern)
 
     private func startScanJob(_ imageData: Data, provider: AIProvider, jobId: String) async throws -> ScanJobResponse {
-        // Append jobId to URL for client-controlled WebSocket binding
-        let urlWithJob = URL(string: "\(endpoint.absoluteString)?jobId=\(jobId)")!
+        // Construct URL with jobId and provider query parameters
+        var components = URLComponents(url: endpoint, resolvingAgainstBaseURL: false)!
+        components.queryItems = [
+            URLQueryItem(name: "jobId", value: jobId),
+            URLQueryItem(name: "provider", value: provider.rawValue)
+        ]
 
-        var request = URLRequest(url: urlWithJob)
+        guard let urlWithParams = components.url else {
+            throw BookshelfAIError.invalidResponse
+        }
+
+        var request = URLRequest(url: urlWithParams)
         request.httpMethod = "POST"
         request.setValue("image/jpeg", forHTTPHeaderField: "Content-Type")
-        request.setValue(provider.rawValue, forHTTPHeaderField: "X-AI-Provider")
         request.httpBody = imageData
         request.timeoutInterval = timeout // Use same timeout as uploadImage (70s for AI + enrichment)
 
         // DIAGNOSTIC: Log outgoing request details
         print("[Diagnostic iOS Layer] === Outgoing Request for job \(jobId) ===")
         print("[Diagnostic iOS Layer] Provider enum value: \(provider.rawValue)")
-        print("[Diagnostic iOS Layer] X-AI-Provider header set to: \(request.value(forHTTPHeaderField: "X-AI-Provider") ?? "NOT SET")")
-        print("[Diagnostic iOS Layer] All headers: \(request.allHTTPHeaderFields ?? [:])")
+        print("[Diagnostic iOS Layer] Full URL: \(urlWithParams.absoluteString)")
+        print("[Diagnostic iOS Layer] Query items: \(components.queryItems ?? [])")
 
         let (data, response) = try await URLSession.shared.data(for: request)
 
