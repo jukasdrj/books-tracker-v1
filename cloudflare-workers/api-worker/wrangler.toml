@@ -63,7 +63,7 @@ binding = "GEMINI_API_KEY"
 store_id = "b0562ac16fde468c8af12717a6c88400"
 secret_name = "google_aistudio_key"
 
-# R2 Buckets (from books-api-proxy)
+# R2 Buckets (from books-api-proxy and bookshelf-ai-worker)
 [[r2_buckets]]
 binding = "API_CACHE_COLD"
 bucket_name = "personal-library-data"
@@ -71,6 +71,10 @@ bucket_name = "personal-library-data"
 [[r2_buckets]]
 binding = "LIBRARY_DATA"
 bucket_name = "personal-library-data"
+
+[[r2_buckets]]
+binding = "BOOKSHELF_IMAGES"
+bucket_name = "bookshelf-images"
 
 # Workers AI binding (from books-api-proxy and bookshelf-ai-worker)
 [ai]

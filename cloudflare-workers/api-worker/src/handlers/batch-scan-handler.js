@@ -3,6 +3,8 @@
  * Handles multiple photos in one job with sequential processing
  */
 
+import { scanImageWithGemini } from '../providers/gemini-provider.js';
+
 const MAX_PHOTOS_PER_BATCH = 5;
 const MAX_IMAGE_SIZE = 10_000_000; // 10MB per image
 
@@ -38,13 +40,35 @@ export async function handleBatchScan(request, env, ctx) {
       });
     }
 
-    // Validate image structure
+    // Validate R2 binding
+    if (!env.BOOKSHELF_IMAGES) {
+      console.error('R2 binding BOOKSHELF_IMAGES not configured');
+      return new Response(JSON.stringify({
+        error: 'Storage not configured'
+      }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Validate image structure and size
     for (const img of images) {
       if (typeof img.index !== 'number' || !img.data) {
         return new Response(JSON.stringify({
           error: 'Each image must have index and data fields'
         }), {
           status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Validate base64 image size (4/3 of decoded size due to base64 encoding)
+      const estimatedSize = (img.data.length * 3) / 4;
+      if (estimatedSize > MAX_IMAGE_SIZE) {
+        return new Response(JSON.stringify({
+          error: `Image ${img.index} exceeds maximum size of ${MAX_IMAGE_SIZE / 1_000_000}MB`
+        }), {
+          status: 413,
           headers: { 'Content-Type': 'application/json' }
         });
       }
@@ -154,13 +178,11 @@ async function processBatchPhotos(jobId, images, env, doStub) {
       });
 
       try {
-        // Call existing AI scanner service (reuse single-photo logic)
-        const { processWithGemini } = await import('../services/ai-scanner.js');
-
+        // Call Gemini provider directly (already imported at top)
         const r2Object = await env.BOOKSHELF_IMAGES.get(upload.r2Key);
         const imageBuffer = await r2Object.arrayBuffer();
 
-        const result = await processWithGemini(imageBuffer, env);
+        const result = await scanImageWithGemini(imageBuffer, env);
 
         photoResults.push({
           index: i,
