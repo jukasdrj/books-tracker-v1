@@ -230,6 +230,9 @@ public final class SyncCoordinator: ObservableObject {
                 workIds: workIds
             )
 
+            // Track the job ID for potential cancellation
+            EnrichmentQueue.shared.setCurrentJobId(jobId.id.uuidString)
+
             // Wait for WebSocket to receive all updates
             // Connection will close automatically when backend finishes
             try? await Task.sleep(for: .seconds(1))
@@ -241,8 +244,14 @@ public final class SyncCoordinator: ObservableObject {
             ]
             jobStatus[jobId] = .completed(log: log)
 
+            // Clear job ID when complete
+            EnrichmentQueue.shared.clearCurrentJobId()
+
         } catch {
             jobStatus[jobId] = .failed(error: error.localizedDescription)
+
+            // Clear job ID on error
+            EnrichmentQueue.shared.clearCurrentJobId()
         }
 
         // Cleanup
