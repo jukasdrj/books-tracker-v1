@@ -90,6 +90,44 @@ public final class BatchCaptureModel {
     public var canAddMore: Bool {
         capturedPhotos.count < CapturedPhoto.maxPhotosPerBatch
     }
+
+    /// Cancel the current batch processing
+    public func cancelBatch() async {
+        guard let progress = batchProgress else {
+            print("[BatchCapture] No batch in progress to cancel")
+            return
+        }
+
+        do {
+            // POST to cancel endpoint
+            let endpoint = URL(string: "https://api-worker.jukasdrj.workers.dev/api/scan-bookshelf/cancel")!
+
+            var request = URLRequest(url: endpoint)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+            let cancelPayload = ["jobId": progress.jobId]
+            request.httpBody = try JSONEncoder().encode(cancelPayload)
+
+            let (_, response) = try await URLSession.shared.data(for: request)
+
+            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
+                print("[BatchCapture] Batch canceled successfully")
+                progress.overallStatus = "canceled"
+                isSubmitting = false
+
+                // Disconnect WebSocket (actor-isolated call)
+                if let handler = wsHandler {
+                    await handler.disconnect()
+                }
+            } else {
+                print("[BatchCapture] Cancel request failed with status: \((response as? HTTPURLResponse)?.statusCode ?? -1)")
+            }
+
+        } catch {
+            print("[BatchCapture] Cancel batch failed: \(error)")
+        }
+    }
 }
 
 // MARK: - Batch Capture View
@@ -296,9 +334,11 @@ public struct BatchCaptureView: View {
             }
             .padding(.top, 16)
 
-            // Cancel button (placeholder for Task 6)
+            // Cancel button
             Button("Cancel Batch", role: .destructive) {
-                // Task 6: Wire up cancellation
+                Task {
+                    await model.cancelBatch()
+                }
             }
             .padding(.top)
         }
