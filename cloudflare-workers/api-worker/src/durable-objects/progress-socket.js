@@ -9,6 +9,7 @@ import { DurableObject } from 'cloudflare:workers';
 export class ProgressWebSocketDO extends DurableObject {
   constructor(state, env) {
     super(state, env);
+    this.storage = state.storage; // Durable Object storage for cancellation state
     this.webSocket = null;
     this.jobId = null;
   }
@@ -89,6 +90,14 @@ export class ProgressWebSocketDO extends DurableObject {
    * Called by background workers (enrichment, CSV import, etc.)
    */
   async pushProgress(progressData) {
+    // NEW: Check if job has been canceled before pushing
+    const isCanceled = (await this.storage.get("status")) === "canceled";
+    if (isCanceled) {
+      console.warn(`[${this.jobId}] Job is canceled, dropping progress message.`);
+      // Stop the worker by throwing an error
+      throw new Error("Job canceled by client");
+    }
+
     console.log(`[ProgressDO] pushProgress called for job ${this.jobId}`, {
       hasWebSocket: !!this.webSocket,
       progressData
@@ -118,6 +127,32 @@ export class ProgressWebSocketDO extends DurableObject {
   }
 
   /**
+   * NEW RPC Method: Cancel the job and close the connection
+   * Called by iOS client during library reset or explicit cancellation
+   */
+  async cancelJob(reason = "Job canceled by user") {
+    console.log(`[${this.jobId}] Received cancelJob request`);
+
+    // Set canceled status in durable storage
+    await this.storage.put("status", "canceled");
+
+    if (this.webSocket) {
+      this.webSocket.close(1001, reason); // 1001 = Going Away
+    }
+    this.cleanup();
+    return { success: true, status: "canceled" };
+  }
+
+  /**
+   * NEW RPC Method: Check if the job has been canceled
+   * Called by enrichment.js worker in processing loop
+   */
+  async isCanceled() {
+    const status = await this.storage.get("status");
+    return status === "canceled";
+  }
+
+  /**
    * RPC Method: Close WebSocket connection
    */
   async closeConnection(reason = 'Job completed') {
@@ -134,5 +169,7 @@ export class ProgressWebSocketDO extends DurableObject {
   cleanup() {
     this.webSocket = null;
     this.jobId = null;
+    // IMPORTANT: Do NOT clear "canceled" status from storage
+    // Worker needs to check cancellation state after socket closes
   }
 }
