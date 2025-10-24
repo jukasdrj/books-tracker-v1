@@ -180,6 +180,17 @@ export class ProgressWebSocketDO extends DurableObject {
   async initBatch({ jobId, totalPhotos, status }) {
     console.log(`[ProgressDO] initBatch called for job ${jobId}`, { totalPhotos, status });
 
+    // I2: Type validation
+    if (typeof jobId !== 'string' || jobId.trim().length === 0) {
+      throw new Error('jobId must be a non-empty string');
+    }
+    if (typeof totalPhotos !== 'number' || totalPhotos < 1 || totalPhotos > 5) {
+      throw new Error('totalPhotos must be a number between 1 and 5');
+    }
+
+    // C2: Clear legacy state to prevent key collisions
+    await this.storage.delete('status');
+
     // Initialize batch state with photo array
     const photos = Array.from({ length: totalPhotos }, (_, i) => ({
       index: i,
@@ -218,10 +229,20 @@ export class ProgressWebSocketDO extends DurableObject {
   async updatePhoto({ photoIndex, status, booksFound, error }) {
     console.log(`[ProgressDO] updatePhoto called`, { photoIndex, status, booksFound, error });
 
+    // I2: Type validation
+    if (typeof photoIndex !== 'number') {
+      throw new Error('photoIndex must be a number');
+    }
+
     const batchState = await this.storage.get('batchState');
     if (!batchState || batchState.type !== 'batch') {
       console.error('[ProgressDO] Batch job not found');
       return { error: 'Batch job not found' };
+    }
+
+    // C3: Array bounds validation
+    if (photoIndex < 0 || photoIndex >= batchState.photos.length) {
+      return { error: `Invalid photo index: ${photoIndex}` };
     }
 
     // Update photo state
@@ -269,6 +290,11 @@ export class ProgressWebSocketDO extends DurableObject {
    */
   async completeBatch({ status, totalBooks, photoResults, books }) {
     console.log(`[ProgressDO] completeBatch called`, { status, totalBooks });
+
+    // I2: Type validation
+    if (typeof totalBooks !== 'number') {
+      throw new Error('totalBooks must be a number');
+    }
 
     const batchState = await this.storage.get('batchState');
     if (!batchState) {

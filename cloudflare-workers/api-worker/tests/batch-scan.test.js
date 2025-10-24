@@ -4,10 +4,12 @@
  * Tests the batch bookshelf scanning endpoint that accepts multiple photos
  * and processes them sequentially with WebSocket progress updates.
  *
- * Run with: npm test -- batch-scan.test.js
+ * SETUP: Start dev server first
+ *   cd cloudflare-workers/api-worker
+ *   npm run dev
  *
- * Note: These tests require the worker to be running locally:
- * npm run dev (in another terminal)
+ * Then run tests in separate terminal:
+ *   npm test -- batch-scan.test.js
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
