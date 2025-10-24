@@ -428,9 +428,10 @@ public struct SettingsView: View {
                 try modelContext.save()
 
                 // 7. CRITICAL: Give CloudKit time to process deletions (if on device)
-                // Without this, CloudKit might restore from cache before processing deletes
+                // Without this, CloudKit might restore from iCloud before processing local deletes
+                // CloudKit sync is asynchronous - 3s gives time for local deletes to propagate to cloud
                 // The UI will automatically refresh via SwiftData queries after this delay
-                try await Task.sleep(for: .milliseconds(500))
+                try await Task.sleep(for: .milliseconds(3000))
 
                 // 8. Trigger UI refresh by posting notification
                 // This causes views with @Query to refetch and show empty state

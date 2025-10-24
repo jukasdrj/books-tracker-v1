@@ -38,8 +38,13 @@ public struct iOS26LiquidLibraryView: View {
     ) private var allWorks: [Work]
 
     // Computed property to get only works in user's library
+    // CRITICAL: Safe access after library reset - UserLibraryEntry might be deleted but Work still exists during CloudKit sync
     private var libraryWorks: [Work] {
-        allWorks.filter { $0.userEntry != nil }
+        allWorks.filter { work in
+            // Try to access userEntry safely - if it's been deleted, SwiftData will throw/return nil
+            guard let entries = work.userLibraryEntries else { return false }
+            return !entries.isEmpty
+        }
     }
     
     // ✅ FIX 2: Simplified state management
