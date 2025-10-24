@@ -34,6 +34,15 @@ public struct ContentView: View {
                     Label("Search", systemImage: selectedTab == .search ? "magnifyingglass.circle.fill" : "magnifyingglass")
                 }
                 .tag(MainTab.search)
+
+                // Shelf Tab
+                NavigationStack {
+                    BookshelfScannerView()
+                }
+                .tabItem {
+                    Label("Shelf", systemImage: selectedTab == .shelf ? "viewfinder.circle.fill" : "viewfinder")
+                }
+                .tag(MainTab.shelf)
                 
                 // Insights Tab
                 NavigationStack {
@@ -293,6 +302,7 @@ extension Notification.Name {
 enum MainTab: String, CaseIterable {
     case library = "library"
     case search = "search"
+    case shelf = "shelf"
     case insights = "insights"
     case settings = "settings"
 
@@ -300,6 +310,7 @@ enum MainTab: String, CaseIterable {
         switch self {
         case .library: return "Library"
         case .search: return "Search"
+        case .shelf: return "Shelf"
         case .insights: return "Insights"
         case .settings: return "Settings"
         }
