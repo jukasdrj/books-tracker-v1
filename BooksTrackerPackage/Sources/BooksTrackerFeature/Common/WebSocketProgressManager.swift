@@ -32,10 +32,10 @@ public final class WebSocketProgressManager: ObservableObject {
     private var boundJobId: String?
 
     // Backend configuration
-    // UNIFIED: All bookshelf AI traffic goes to bookshelf-ai-worker (no split-brain routing)
-    private let baseURL = "wss://bookshelf-ai-worker.jukasdrj.workers.dev"
+    // UNIFIED: All WebSocket progress tracking goes to api-worker (monolith architecture)
+    private let baseURL = "wss://api-worker.jukasdrj.workers.dev"
     private let connectionTimeout: TimeInterval = 10.0  // 10 seconds for initial handshake
-    private let readySignalEndpoint = "https://bookshelf-ai-worker.jukasdrj.workers.dev"
+    private let readySignalEndpoint = "https://api-worker.jukasdrj.workers.dev"
 
     // MARK: - Public Methods
 
@@ -189,26 +189,13 @@ public final class WebSocketProgressManager: ObservableObject {
         print("✅ WebSocket connection verified after \(attempts) attempts")
     }
 
-    /// Signal to server that WebSocket is ready
-    /// Server uses this to know it's safe to start processing
+    /// Signal to server that WebSocket is ready (DEPRECATED - not needed in monolith)
+    /// The unified api-worker doesn't require a separate ready signal.
+    /// WebSocket connection is sufficient to start processing.
     private func signalWebSocketReady(jobId: String) async throws {
-        let readyURL = URL(string: "\(readySignalEndpoint)/scan/ready/\(jobId)")!
-
-        var request = URLRequest(url: readyURL)
-        request.httpMethod = "POST"
-        request.timeoutInterval = 5.0
-
-        let (_, response) = try await URLSession.shared.data(for: request)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw URLError(.badServerResponse)
-        }
-
-        guard (200...299).contains(httpResponse.statusCode) else {
-            throw URLError(.badServerResponse, userInfo: ["statusCode": httpResponse.statusCode])
-        }
-
-        print("✅ Server notified WebSocket ready for job: \(jobId)")
+        // In the monolith architecture, the WebSocket connection itself signals readiness
+        // No separate HTTP endpoint needed - this method is a no-op but kept for compatibility
+        print("✅ WebSocket ready for job: \(jobId) (no separate signal needed in monolith)")
     }
 
     /// Start receiving WebSocket messages

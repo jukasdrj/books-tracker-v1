@@ -574,7 +574,7 @@ public struct SearchResult: Identifiable, Hashable, @unchecked Sendable {
 // MARK: - API Service
 
 public actor BookSearchAPIService {
-    private let baseURL = "https://books-api-proxy.jukasdrj.workers.dev"
+    private let baseURL = "https://api-worker.jukasdrj.workers.dev"
     private let urlSession: URLSession
 
     public init() {

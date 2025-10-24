@@ -11,7 +11,7 @@ public final class EnrichmentService {
 
     // MARK: - Properties
 
-    private let baseURL = "https://books-api-proxy.jukasdrj.workers.dev"
+    private let baseURL = "https://api-worker.jukasdrj.workers.dev"
     private let urlSession: URLSession
     private let batchSize = 5 // Process 5 books at a time
     private let throttleDelay: TimeInterval = 0.5 // 500ms between requests

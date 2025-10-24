@@ -1,10 +1,12 @@
 import Foundation
 import UIKit
 
-/// Extension for HTTP polling fallback
+/// Extension for HTTP polling fallback (DEPRECATED - WebSocket-only now)
+/// This entire file is deprecated and will be removed in future versions.
+/// The monolith refactor eliminates polling in favor of WebSocket-only progress updates.
 extension BookshelfAIService {
 
-    /// Process bookshelf image using HTTP polling (fallback when WebSocket fails)
+    /// Process bookshelf image using HTTP polling (DEPRECATED - WebSocket-only now)
     /// - Parameters:
     ///   - image: UIImage to process
     ///   - jobId: Pre-generated job identifier
@@ -12,6 +14,7 @@ extension BookshelfAIService {
     ///   - progressHandler: Closure for progress updates (called every 2s)
     /// - Returns: Tuple of detected books and suggestions
     /// - Throws: BookshelfAIError for failures
+    @available(*, deprecated, message: "Polling removed - WebSocket-only architecture")
     internal func processViaPolling(
         image: UIImage,
         jobId: String,
@@ -29,10 +32,9 @@ extension BookshelfAIService {
         }
 
         // STEP 2: Upload image
-        // UNIFIED: Use bookshelf-ai-worker for all bookshelf AI operations
-        // Include jobId in URL for server-side job tracking (matches WebSocket flow)
-        let baseURL = "https://bookshelf-ai-worker.jukasdrj.workers.dev"
-        let uploadURL = URL(string: "\(baseURL)/scan?jobId=\(jobId)")!
+        // UPDATED: Use unified api-worker endpoint
+        let baseURL = "https://api-worker.jukasdrj.workers.dev"
+        let uploadURL = URL(string: "\(baseURL)/api/scan-bookshelf?jobId=\(jobId)")!
         var uploadRequest = URLRequest(url: uploadURL)
         uploadRequest.httpMethod = "POST"
         uploadRequest.setValue("image/jpeg", forHTTPHeaderField: "Content-Type")

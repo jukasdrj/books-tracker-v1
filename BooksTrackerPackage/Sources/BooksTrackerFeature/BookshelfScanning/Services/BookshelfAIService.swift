@@ -81,7 +81,7 @@ public struct BookshelfAIResponse: Codable, Sendable {
 actor BookshelfAIService {
     // MARK: - Configuration
 
-    private let endpoint = URL(string: "https://bookshelf-ai-worker.jukasdrj.workers.dev/scan")!
+    private let endpoint = URL(string: "https://api-worker.jukasdrj.workers.dev/api/scan-bookshelf")!
     private let timeout: TimeInterval = 70.0 // 70 seconds for AI processing + enrichment (Gemini: 25-40s, enrichment: 5-10s)
     private let maxImageSize: Int = 10_000_000 // 10MB max (matches worker limit)
 
@@ -492,40 +492,14 @@ actor BookshelfAIService {
         return stages.last?.progress ?? 1.0
     }
 
-    /// Poll job status from server (used by BookshelfScanJob)
+    /// Poll job status from server (DEPRECATED - WebSocket-only now)
+    /// This method is retained for backward compatibility but should not be used.
+    /// All progress updates come via WebSocket on /ws/progress endpoint.
+    @available(*, deprecated, message: "Polling removed - use WebSocket for all progress updates")
     func pollJobStatus(jobId: String) async throws -> JobStatusResponse {
-        let statusURL = URL(string: "https://bookshelf-ai-worker.jukasdrj.workers.dev/scan/status/\(jobId)")!
-
-        // Retry logic (3 attempts)
-        var retries = 3
-
-        while retries > 0 {
-            do {
-                let (data, response) = try await URLSession.shared.data(from: statusURL)
-
-                guard let httpResponse = response as? HTTPURLResponse else {
-                    throw BookshelfAIError.invalidResponse
-                }
-
-                // Handle 404 gracefully (job expired)
-                if httpResponse.statusCode == 404 {
-                    throw BookshelfAIError.serverError(404, "Scan job expired")
-                }
-
-                guard (200...299).contains(httpResponse.statusCode) else {
-                    throw BookshelfAIError.serverError(httpResponse.statusCode, "Status check failed")
-                }
-
-                return try JSONDecoder().decode(JobStatusResponse.self, from: data)
-
-            } catch {
-                retries -= 1
-                if retries == 0 { throw error }
-                try await Task.sleep(for: .seconds(2))
-            }
-        }
-
-        throw BookshelfAIError.networkError(NSError(domain: "MaxRetries", code: -1))
+        // Polling endpoints no longer exist on api-worker
+        // This is kept for compilation but will always fail
+        throw BookshelfAIError.serverError(410, "Polling endpoints removed - use WebSocket")
     }
 }
 

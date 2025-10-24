@@ -3,7 +3,7 @@ import Foundation
 /// API client for triggering backend enrichment jobs
 actor EnrichmentAPIClient {
 
-    private let baseURL = "https://books-api-proxy.jukasdrj.workers.dev"
+    private let baseURL = "https://api-worker.jukasdrj.workers.dev"
 
     struct EnrichmentResult: Codable, Sendable {
         let success: Bool
