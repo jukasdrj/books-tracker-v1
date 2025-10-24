@@ -27,4 +27,11 @@ public final class AIProviderSettings: @unchecked Sendable {
         let raw = UserDefaults.standard.string(forKey: "aiProvider") ?? "gemini"
         self.selectedProvider = AIProvider(rawValue: raw) ?? .gemini
     }
+
+    /// Reset AI provider settings to default values
+    /// Called during library reset to restore clean state
+    public func resetToDefaults() {
+        selectedProvider = .gemini  // Default to proven accuracy
+        print("✅ AIProviderSettings reset to defaults (provider: gemini)")
+    }
 }
