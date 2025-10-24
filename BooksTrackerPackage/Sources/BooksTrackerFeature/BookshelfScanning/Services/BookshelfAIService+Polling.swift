@@ -1,4 +1,5 @@
 import Foundation
+#if os(iOS)
 import UIKit
 
 /// Extension for HTTP polling fallback (DEPRECATED - WebSocket-only now)
@@ -123,4 +124,6 @@ extension BookshelfAIService {
         }
     }
 }
+
+#endif  // os(iOS)
 
