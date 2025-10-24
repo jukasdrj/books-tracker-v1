@@ -14,6 +14,8 @@ public final class EnrichmentQueue {
     private var queue: [EnrichmentQueueItem] = []
     private var processing: Bool = false
     private var currentTask: Task<Void, Never>?
+    // Track current backend job ID for cancellation
+    private var currentJobId: String?
 
     // Persistence
     private let queueStorageKey = "EnrichmentQueueStorage"
@@ -267,6 +269,21 @@ public final class EnrichmentQueue {
     /// Check if currently processing
     public func isProcessing() -> Bool {
         return processing
+    }
+
+    /// Set the current backend job ID (called when starting enrichment)
+    public func setCurrentJobId(_ jobId: String) {
+        currentJobId = jobId
+    }
+
+    /// Get the current backend job ID (used for cancellation)
+    public func getCurrentJobId() -> String? {
+        return currentJobId
+    }
+
+    /// Clear the current job ID (called when job completes)
+    public func clearCurrentJobId() {
+        currentJobId = nil
     }
 
     // MARK: - Persistence
