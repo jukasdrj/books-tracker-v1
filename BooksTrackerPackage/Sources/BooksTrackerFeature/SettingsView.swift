@@ -151,10 +151,10 @@ public struct SettingsView: View {
                 Text("Import books from CSV, enrich metadata, or reset your entire library. Resetting is permanent and cannot be undone.")
             }
 
-            // MARK: - Experimental Features Section
+            // MARK: - AI Features Section
 
             Section {
-                Picker("AI Provider", selection: Binding(
+                Picker("AI Model for Bookshelf Scan", selection: Binding(
                     get: { aiSettings.selectedProvider },
                     set: { aiSettings.selectedProvider = $0 }
                 )) {
@@ -238,9 +238,9 @@ public struct SettingsView: View {
                 }
                 .tint(themeStore.primaryColor)
             } header: {
-                Text("Experimental Features")
+                Text("AI Features")
             } footer: {
-                Text("Beta features are under development and may not work on all devices. Your feedback helps improve BooksTrack!")
+                Text("Choose your preferred AI model for bookshelf scanning. Gemini offers highest accuracy, while Cloudflare models prioritize speed.")
             }
 
             // MARK: - iCloud Sync Section
