@@ -229,6 +229,27 @@ public class CSVImportService {
 3. Add dependencies in `BooksTrackerPackage/Package.swift`
 4. Add tests in `BooksTrackerPackage/Tests/`
 
+### Library Reset
+
+**Comprehensive Reset (Settings → Reset Library):**
+- Cancels in-flight backend enrichment jobs (prevents resource waste)
+- Stops local enrichment processing
+- Deletes all SwiftData models (Works, Editions, Authors, UserLibraryEntries)
+- Clears enrichment queue
+- Resets AI provider to Gemini
+- Resets feature flags to defaults
+- Clears search history
+
+**Backend Cancellation Flow:**
+1. iOS calls `EnrichmentQueue.shared.cancelBackendJob()`
+2. POST to `/api/enrichment/cancel` with jobId
+3. Worker calls `doStub.cancelJob()` on ProgressWebSocketDO
+4. DO sets "canceled" status in Durable Object storage
+5. Enrichment loop checks `doStub.isCanceled()` before each book
+6. If canceled, sends final status update and breaks loop
+
+**Critical:** Backend jobs are tracked via `currentJobId` in EnrichmentQueue. Always call `setCurrentJobId()` when starting enrichment and `clearCurrentJobId()` when complete.
+
 ### Barcode Scanning
 
 ```swift
