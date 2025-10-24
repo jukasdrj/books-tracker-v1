@@ -270,6 +270,11 @@ public final class EnrichmentService {
         }
 
         work.touch()
+
+        // CRITICAL: Save model context immediately to convert temporary IDs to permanent IDs
+        // This prevents crash if UI accesses the model before next save cycle
+        // Fatal error occurs when: Edition created → temporary ID → UI accesses → context invalidated → crash
+        try? modelContext.save()
     }
 }
 
