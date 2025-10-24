@@ -418,7 +418,7 @@ public struct SettingsView: View {
     // MARK: - Actions
 
     private func resetLibrary() {
-        // ✅ COMPREHENSIVE RESET: Clear all library data and queues
+        // ✅ COMPREHENSIVE RESET: Clear all library data, queues, and settings
 
         do {
             // 1. Cancel ongoing enrichment processing
@@ -457,11 +457,15 @@ public struct SettingsView: View {
             // 6. Clear search history from UserDefaults
             UserDefaults.standard.removeObject(forKey: "RecentBookSearches")
 
+            // 7. NEW: Reset app-level settings to default values
+            aiSettings.resetToDefaults()
+            featureFlags.resetToDefaults()
+
             // Success haptic feedback
             let generator = UINotificationFeedbackGenerator()
             generator.notificationOccurred(.success)
 
-            print("✅ Library reset complete - All works, editions, authors, and queue cleared")
+            print("✅ Library reset complete - All works, settings, and queue cleared")
 
         } catch {
             print("❌ Failed to reset library: \(error)")
