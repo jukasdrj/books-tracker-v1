@@ -285,6 +285,7 @@ extension Notification.Name {
     static let enrichmentStarted = Notification.Name("EnrichmentStarted")
     static let enrichmentProgress = Notification.Name("EnrichmentProgress")
     static let enrichmentCompleted = Notification.Name("EnrichmentCompleted")
+    static let libraryWasReset = Notification.Name("LibraryWasReset")
 }
 
 // MARK: - Tab Navigation

@@ -427,13 +427,14 @@ public struct SettingsView: View {
                 // 6. Save changes to SwiftData
                 try modelContext.save()
 
-                // 7. CRITICAL: Reset model context to clear all cached objects
-                // This ensures deleted objects are truly removed from memory
-                modelContext.reset()
-
-                // 8. Give CloudKit time to process deletions (if on device)
+                // 7. CRITICAL: Give CloudKit time to process deletions (if on device)
                 // Without this, CloudKit might restore from cache before processing deletes
+                // The UI will automatically refresh via SwiftData queries after this delay
                 try await Task.sleep(for: .milliseconds(500))
+
+                // 8. Trigger UI refresh by posting notification
+                // This causes views with @Query to refetch and show empty state
+                NotificationCenter.default.post(name: .libraryWasReset, object: nil)
 
                 // 9. Clear search history from UserDefaults
                 UserDefaults.standard.removeObject(forKey: "RecentBookSearches")
