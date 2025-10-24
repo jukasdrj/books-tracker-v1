@@ -597,6 +597,95 @@ actor BookshelfAIService {
         // This is kept for compilation but will always fail
         throw BookshelfAIError.serverError(410, "Polling endpoints removed - use WebSocket")
     }
+
+    // MARK: - Batch Scanning
+
+    /// Submit batch of photos for processing
+    public func submitBatch(jobId: String, photos: [CapturedPhoto]) async throws -> BatchSubmissionResponse {
+        let batchRequest = try await createBatchRequest(jobId: jobId, photos: photos)
+
+        let endpoint = URL(string: "https://api-worker.jukasdrj.workers.dev/api/scan-bookshelf/batch")!
+
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 120.0 // 2 minutes for upload
+
+        let encoder = JSONEncoder()
+        request.httpBody = try encoder.encode(batchRequest)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw BookshelfAIError.invalidResponse
+        }
+
+        guard httpResponse.statusCode == 202 else { // Accepted
+            let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
+            throw BookshelfAIError.serverError(httpResponse.statusCode, errorMessage)
+        }
+
+        let decoder = JSONDecoder()
+        let submissionResponse = try decoder.decode(BatchSubmissionResponse.self, from: data)
+
+        return submissionResponse
+    }
+
+    /// Create batch request payload with compressed images
+    internal func createBatchRequest(jobId: String, photos: [CapturedPhoto]) async throws -> BatchScanRequest {
+        var images: [BatchScanRequest.ImageData] = []
+
+        for (index, photo) in photos.enumerated() {
+            // Compress image
+            let compressed = try await compressImage(photo.image, maxSizeKB: 500)
+
+            guard let jpegData = compressed.jpegData(compressionQuality: 0.9) else {
+                throw BookshelfAIError.imageCompressionFailed
+            }
+
+            let base64 = jpegData.base64EncodedString()
+
+            images.append(BatchScanRequest.ImageData(index: index, data: base64))
+        }
+
+        return BatchScanRequest(jobId: jobId, images: images)
+    }
+
+    /// Compress image to target size (reuse existing logic)
+    public func compressImage(_ image: UIImage, maxSizeKB: Int) async throws -> UIImage {
+        let maxBytes = maxSizeKB * 1024
+        let targetSize = CGSize(width: 3072, height: 3072)
+
+        // Resize to target dimensions
+        let renderer = UIGraphicsImageRenderer(size: targetSize)
+        let resized = renderer.image { context in
+            image.draw(in: CGRect(origin: .zero, size: targetSize))
+        }
+
+        // Compress with quality adjustment to hit target size
+        var compression: CGFloat = 0.9
+        var imageData = resized.jpegData(compressionQuality: compression)
+
+        while let data = imageData, data.count > maxBytes && compression > 0.5 {
+            compression -= 0.1
+            imageData = resized.jpegData(compressionQuality: compression)
+        }
+
+        guard let finalData = imageData, let finalImage = UIImage(data: finalData) else {
+            throw BookshelfAIError.imageCompressionFailed
+        }
+
+        return finalImage
+    }
+}
+
+// MARK: - Batch Response Models
+
+/// Response from batch submission endpoint
+public struct BatchSubmissionResponse: Codable, Sendable {
+    public let jobId: String
+    public let totalPhotos: Int
+    public let status: String
 }
 
 // MARK: - UIImage Extensions

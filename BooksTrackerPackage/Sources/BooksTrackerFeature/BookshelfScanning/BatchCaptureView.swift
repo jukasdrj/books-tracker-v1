@@ -14,6 +14,7 @@ public final class BatchCaptureModel {
     public var showingCamera = true
     public var isSubmitting = false
     public var batchProgress: BatchProgress?
+    private var wsHandler: BatchWebSocketHandler?
 
     public init() {}
 
@@ -45,10 +46,39 @@ public final class BatchCaptureModel {
         isSubmitting = true
 
         let jobId = UUID().uuidString
-        batchProgress = BatchProgress(jobId: jobId, totalPhotos: capturedPhotos.count)
+        let progress = BatchProgress(jobId: jobId, totalPhotos: capturedPhotos.count)
+        self.batchProgress = progress
 
-        // Actual submission happens in Task 5 (BookshelfAIService integration)
-        // For now, just set up the state
+        do {
+            // Submit batch to backend
+            let service = await BookshelfAIService.shared
+            let response = try await service.submitBatch(jobId: jobId, photos: capturedPhotos)
+
+            print("[BatchCapture] Batch submitted: \(response.jobId), \(response.totalPhotos) photos")
+
+            // Connect WebSocket for progress updates
+            let handler = BatchWebSocketHandler(jobId: jobId) { [weak self] updatedProgress in
+                self?.batchProgress = updatedProgress
+            }
+            self.wsHandler = handler
+
+            // Connect WebSocket in background
+            Task {
+                do {
+                    try await handler.connect()
+                } catch {
+                    print("[BatchCapture] WebSocket connection failed: \(error)")
+                }
+            }
+
+            // Clear captured photos from memory after upload
+            capturedPhotos.removeAll()
+
+        } catch {
+            print("[BatchCapture] Batch submission failed: \(error)")
+            isSubmitting = false
+            // TODO: Show error alert to user
+        }
     }
 
     /// Delete a specific photo
