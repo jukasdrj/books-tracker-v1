@@ -114,6 +114,7 @@ struct BookDetailView: View {
 - `POST /search/advanced` - Multi-field search (title + author + ISBN)
 - `POST /api/enrichment/start` - Batch enrichment with WebSocket progress
 - `POST /api/scan-bookshelf?jobId={uuid}` - AI bookshelf scan with Gemini 2.0 Flash
+- `POST /api/scan-bookshelf/batch` - Batch scan (max 5 photos, parallel upload → sequential processing)
 - `GET /ws/progress?jobId={uuid}` - WebSocket progress (unified for ALL jobs)
 
 **AI Provider (Gemini Only):**
@@ -291,6 +292,13 @@ public class CSVImportService {
 - 60% confidence threshold for review queue
 - iOS preprocessing (3072px @ 90% quality, 400-600KB)
 
+**Batch Bookshelf Scanning:** See `docs/features/BATCH_BOOKSHELF_SCANNING.md`
+- Capture up to 5 photos in one session
+- Parallel upload → sequential Gemini processing
+- Real-time per-photo progress via WebSocket
+- Automatic deduplication by ISBN
+- Cancel mid-batch with partial results
+
 **CSV Import:** See `docs/features/CSV_IMPORT.md`
 - 100 books/min, <200MB memory
 - Auto-detects Goodreads/LibraryThing/StoryGraph
@@ -354,7 +362,7 @@ Text("Publisher").foregroundColor(.tertiary)
 📄 CLAUDE.md                 ← This file (quick reference)
 📄 MCP_SETUP.md             ← XcodeBuildMCP workflows
 📄 CHANGELOG.md             ← Victory stories + debugging sagas
-📁 docs/features/           ← Deep dives (BOOKSHELF_SCANNER, CSV_IMPORT, REVIEW_QUEUE)
+📁 docs/features/           ← Deep dives (BOOKSHELF_SCANNER, BATCH_BOOKSHELF_SCANNING, CSV_IMPORT, REVIEW_QUEUE)
 📁 cloudflare-workers/      ← SERVICE_BINDING_ARCHITECTURE.md (RPC + deployment)
 📁 .claude/commands/        ← Slash commands (/gogo, /build, /test, /sim)
 ```
