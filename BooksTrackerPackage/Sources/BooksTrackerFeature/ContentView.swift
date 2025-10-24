@@ -40,7 +40,7 @@ public struct ContentView: View {
                     BookshelfScannerView()
                 }
                 .tabItem {
-                    Label("Shelf", systemImage: selectedTab == .shelf ? "viewfinder.circle.fill" : "viewfinder")
+                    Label("Shelf", systemImage: selectedTab == .shelf ? "books.vertical.on.book.fill" : "books.vertical.on.book")
                 }
                 .tag(MainTab.shelf)
                 

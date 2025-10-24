@@ -6,7 +6,6 @@ import BooksTrackerFeature
 struct BooksTrackerApp: App {
     @State private var themeStore = iOS26ThemeStore()
     @State private var featureFlags = FeatureFlags.shared
-    @State private var aiSettings = AIProviderSettings.shared
 
     // MARK: - SwiftData Configuration
 
@@ -73,7 +72,6 @@ struct BooksTrackerApp: App {
                 .iOS26ThemeStore(themeStore)
                 .modelContainer(modelContainer)
                 .environment(featureFlags)
-                .environment(aiSettings)
         }
     }
 }
