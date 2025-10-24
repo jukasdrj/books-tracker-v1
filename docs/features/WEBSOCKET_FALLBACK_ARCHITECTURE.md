@@ -1,8 +1,8 @@
 # WebSocket + Polling Fallback Architecture
 
-**Version:** 2.0.0 (Unified)
+**Version:** 3.0.0 (Blocking Processing)
 **Date:** October 24, 2025
-**Status:** Production (Unified Architecture)
+**Status:** Production (Fixed IoContext Timeout)
 
 ## Overview
 
@@ -145,8 +145,29 @@ print("[Analytics] bookshelf_scan_completed - strategy: polling_fallback")
 - ✅ **Fixed:** WebSocket connects to bookshelf-ai-worker (added DO binding)
 - ✅ **Fixed:** Header changed from `X-Provider` → `X-AI-Provider` (backend compatibility)
 
+**Version 3.0.0 (Blocking Processing - October 24, 2025):**
+- ✅ **Fixed:** IoContext timeout - changed from `ctx.waitUntil()` to blocking `await`
+- ✅ **Fixed:** Progress updates now push to Durable Object (not books-api-proxy RPC)
+- ✅ **Fixed:** Keep-alive pings working (10s interval prevents timeout)
+- ✅ **Verified:** 13-book scan completed successfully in 50 seconds
+- ⚠️ **Known Issue:** WebSocket progress updates not reaching iOS client (polling works)
+
+**Architecture Change:**
+```javascript
+// OLD: Background processing (gets cancelled after 30s inactivity)
+ctx.waitUntil(processBookshelfScan(jobId, imageData, requestEnv));
+return Response.json({ jobId }, { status: 202 });
+
+// NEW: Blocking processing (keeps HTTP connection open)
+await processBookshelfScan(jobId, imageData, requestEnv);
+return Response.json({ jobId }, { status: 202 });
+```
+
+**Why This Works:**
+Cloudflare Workers' `ctx.waitUntil()` is designed for quick cleanup tasks (<30s). Long-running AI processing (25-40s) triggers IoContext timeout when no network requests occur for ~30s. By blocking the main request handler with `await`, the HTTP connection stays open and prevents context cancellation.
+
 ---
 
 **Last Updated:** October 24, 2025
 **Authors:** BooksTrack Engineering Team
-**Status:** Production (Unified Architecture)
+**Status:** Production (Blocking Processing, Polling Fallback Working)

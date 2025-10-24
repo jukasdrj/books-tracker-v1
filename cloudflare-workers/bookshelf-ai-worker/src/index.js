@@ -161,9 +161,9 @@ async function processBookshelfScan(jobId, imageData, env) {
       elapsedTime: Math.floor((Date.now() - startTime) / 1000)
     });
 
-    // Keep-alive ping to prevent WebSocket timeout during long AI processing
-    // Cloudflare idle timeout: 100s, iOS URLSession timeout: 60s
-    // Send ping every 30s to stay well under both limits
+    // Keep-alive ping to prevent Cloudflare IoContext timeout during long AI processing
+    // Cloudflare IoContext inactivity timeout: ~30s
+    // Send ping every 10s to maintain activity and prevent cancellation
     const keepAlivePingInterval = setInterval(async () => {
       try {
         await pushProgress(env, jobId, {
@@ -178,7 +178,7 @@ async function processBookshelfScan(jobId, imageData, env) {
         console.error(`[BookshelfAI] Keep-alive ping failed for job ${jobId}:`, error);
         // Don't clear interval on ping failure - retry on next interval
       }
-    }, 30000);  // 30 seconds
+    }, 10000);  // 10 seconds - frequent enough to prevent IoContext timeout
 
     let result;
     try {
@@ -276,16 +276,33 @@ async function updateJobState(env, jobId, updates) {
 }
 
 /**
- * Pushes progress update via books-api-proxy WebSocket
- * @param {Object} env - Worker environment with BOOKS_API_PROXY binding
+ * Pushes progress update via Durable Object WebSocket and KV for polling fallback
+ * @param {Object} env - Worker environment with PROGRESS_WEBSOCKET_DO binding
  * @param {string} jobId - Job identifier for WebSocket connection
  * @param {Object} progressData - Progress data (progress, processedItems, totalItems, currentStatus)
  */
 async function pushProgress(env, jobId, progressData) {
   try {
-    // Call books-api-proxy RPC method to push progress
-    if (env.BOOKS_API_PROXY && env.BOOKS_API_PROXY.pushJobProgress) {
-      await env.BOOKS_API_PROXY.pushJobProgress(jobId, progressData);
+    // Push to Durable Object for WebSocket delivery (unified architecture)
+    if (env.PROGRESS_WEBSOCKET_DO) {
+      try {
+        const doId = env.PROGRESS_WEBSOCKET_DO.idFromName(jobId);
+        const stub = env.PROGRESS_WEBSOCKET_DO.get(doId);
+        await stub.pushProgress(progressData);
+        console.log(`[BookshelfAI] Progress pushed to WebSocket DO for job ${jobId}`);
+      } catch (wsError) {
+        // WebSocket might not be connected - that's okay, polling will handle it
+        console.log(`[BookshelfAI] WebSocket push failed (client may be using polling): ${wsError.message}`);
+      }
+    }
+
+    // ALSO update KV for polling fallback
+    const current = await env.SCAN_JOBS.get(jobId);
+    if (current) {
+      const job = JSON.parse(current);
+      job.progress = progressData;
+      job.lastUpdated = Date.now();
+      await env.SCAN_JOBS.put(jobId, JSON.stringify(job), { expirationTtl: 300 });
     }
   } catch (error) {
     console.error(`[BookshelfAI] Failed to push progress for job ${jobId}:`, error);
@@ -294,15 +311,18 @@ async function pushProgress(env, jobId, progressData) {
 }
 
 /**
- * Closes WebSocket connection via books-api-proxy
- * @param {Object} env - Worker environment with BOOKS_API_PROXY binding
+ * Closes WebSocket connection via Durable Object
+ * @param {Object} env - Worker environment with PROGRESS_WEBSOCKET_DO binding
  * @param {string} jobId - Job identifier for WebSocket connection
  * @param {string} reason - Reason for closing connection
  */
 async function closeConnection(env, jobId, reason) {
   try {
-    if (env.BOOKS_API_PROXY && env.BOOKS_API_PROXY.closeJobConnection) {
-      await env.BOOKS_API_PROXY.closeJobConnection(jobId, reason);
+    if (env.PROGRESS_WEBSOCKET_DO) {
+      const doId = env.PROGRESS_WEBSOCKET_DO.idFromName(jobId);
+      const stub = env.PROGRESS_WEBSOCKET_DO.get(doId);
+      await stub.closeConnection(reason);
+      console.log(`[BookshelfAI] WebSocket closed for job ${jobId}: ${reason}`);
     }
   } catch (error) {
     console.error(`[BookshelfAI] Failed to close connection for job ${jobId}:`, error);
@@ -404,10 +424,12 @@ export default {
           provider: requestedProvider
         }), { expirationTtl: 300 }); // 5 min expiry (fallback)
 
-        // Start background processing (don't await) with request-specific env
-        ctx.waitUntil(processBookshelfScan(jobId, imageData, requestEnv));
+        // BLOCKING APPROACH: Process synchronously to avoid IoContext timeout
+        // This keeps the HTTP connection open and prevents waitUntil cancellation
+        // Background processing with ctx.waitUntil() gets cancelled after 30s of inactivity
+        await processBookshelfScan(jobId, imageData, requestEnv);
 
-        // Return immediately with job metadata
+        // Return job metadata (scan is already complete, but polling will retrieve results from KV)
         return Response.json({
           jobId: jobId,
           stages: [
@@ -417,7 +439,7 @@ export default {
           ],
           estimatedRange: [40, 70]  // Time range instead of precise number
         }, {
-          status: 202, // 202 Accepted (async processing)
+          status: 202, // 202 Accepted (processing complete, client should poll for results)
           headers: {
             "Content-Type": "application/json",
             "Access-Control-Allow-Origin": "*" // Enable CORS for iOS app
