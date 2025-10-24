@@ -4,6 +4,7 @@ import * as enrichment from './services/enrichment.js';
 import * as aiScanner from './services/ai-scanner.js';
 import * as bookSearch from './handlers/book-search.js';
 import { handleAdvancedSearch } from './handlers/search-handlers.js';
+import { handleBatchScan } from './handlers/batch-scan-handler.js';
 
 // Export the Durable Object class for Cloudflare Workers runtime
 export { ProgressWebSocketDO };
@@ -135,6 +136,11 @@ export default {
     // ========================================================================
     // AI Scanner Endpoint
     // ========================================================================
+
+    // POST /api/scan-bookshelf/batch - Batch AI bookshelf scanner with WebSocket progress
+    if (url.pathname === '/api/scan-bookshelf/batch' && request.method === 'POST') {
+      return handleBatchScan(request, env, ctx);
+    }
 
     // POST /api/scan-bookshelf - AI bookshelf scanner with WebSocket progress
     if (url.pathname === '/api/scan-bookshelf' && request.method === 'POST') {
@@ -448,6 +454,7 @@ export default {
           'POST /api/enrichment/start - Start batch enrichment job',
           'POST /api/enrichment/cancel - Cancel in-flight enrichment job (body: {jobId})',
           'POST /api/scan-bookshelf?jobId={id} - AI bookshelf scanner (upload image with Content-Type: image/*)',
+          'POST /api/scan-bookshelf/batch - Batch AI scanner (body: {jobId, images: [{index, data}]})',
           'GET /ws/progress?jobId={id} - WebSocket progress updates',
           '/external/google-books?q={query}&maxResults={n}',
           '/external/google-books-isbn?isbn={isbn}',
