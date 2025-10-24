@@ -40,8 +40,23 @@ MAX_SCAN_FILE_SIZE = "10485760"
 binding = "CACHE"
 id = "b9cade63b6db48fd80c109a013f38fdb"
 
+[[kv_namespaces]]
+binding = "KV_CACHE"
+id = "b9cade63b6db48fd80c109a013f38fdb"
+
 # Note: SCAN_JOBS KV namespace (5d4b89403bbb4be1949b1ee30df5353e) is intentionally
 # excluded - we're eliminating the polling system in favor of WebSocket-only
+
+# Secrets Store (for API keys from external-apis-worker)
+[[secrets_store_secrets]]
+binding = "GOOGLE_BOOKS_API_KEY"
+store_id = "b0562ac16fde468c8af12717a6c88400"
+secret_name = "Google_books_hardoooe"
+
+[[secrets_store_secrets]]
+binding = "ISBNDB_API_KEY"
+store_id = "b0562ac16fde468c8af12717a6c88400"
+secret_name = "ISBNDB_API_KEY"
 
 # R2 Buckets (from books-api-proxy)
 [[r2_buckets]]
