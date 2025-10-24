@@ -150,28 +150,39 @@ Add books to SwiftData library
 
 ## Backend Integration
 
-### Unified Architecture (October 2025)
+### Monolith Architecture (October 2025)
 
-**All bookshelf AI traffic flows through `bookshelf-ai-worker.jukasdrj.workers.dev`:**
+**All bookshelf AI traffic flows through unified `api-worker.jukasdrj.workers.dev`:**
 
-**Endpoints:**
-- `POST /scan?jobId={uuid}` - Upload image for AI processing
-- `GET /scan/status/{jobId}` - Poll for job status (HTTP fallback)
-- `POST /scan/ready/{jobId}` - Signal WebSocket ready
-- `GET /ws/progress?jobId={uuid}` - WebSocket for real-time progress
+**Endpoint:**
+- `POST /api/scan-bookshelf?jobId={uuid}` - Upload image for AI processing
+- `GET /ws/progress?jobId={uuid}` - WebSocket for real-time progress (unified for ALL jobs)
 
 **Flow:**
 1. iOS generates `jobId = UUID().uuidString`
-2. WebSocket connects to `/ws/progress?jobId={uuid}` (preferred, 8ms latency)
-3. Image uploads to `/scan?jobId={uuid}` (triggers background processing)
-4. Real-time progress via WebSocket OR polling fallback every 2s
-5. Results retrieved when `stage === 'complete'`
+2. iOS connects to WebSocket: `/ws/progress?jobId={uuid}`
+3. iOS uploads image to `/api/scan-bookshelf?jobId={uuid}` (triggers background processing)
+4. Worker processes image with Gemini AI (internal function call)
+5. Worker enriches detected books via internal search functions (no RPC!)
+6. Real-time progress pushed via WebSocket (8ms latency)
+7. iOS displays results in real-time
 
-**Fallback Strategy:**
-- **Primary:** WebSocket (Durable Object) - Real-time, 8ms latency
-- **Fallback:** HTTP polling (KV storage) - Every 2s, 80s timeout
+**Architecture Changes:**
+- **No polling endpoints** - Removed `/scan/status/{jobId}`, `/scan/ready/{jobId}`
+- **WebSocket-only status** - Single ProgressWebSocketDO handles all background jobs
+- **Direct function calls** - AI scanner internally calls search handlers (no RPC service bindings)
 
-**See:** `docs/features/WEBSOCKET_FALLBACK_ARCHITECTURE.md` for detailed flow diagrams.
+**Internal Processing Flow:**
+```
+api-worker/api/scan-bookshelf
+    ↓
+services/ai-scanner.js
+    ├─→ callGeminiVision() - External API call to Gemini
+    └─→ handlers/search-handlers.js - Direct function call (no network!)
+            └─→ services/external-apis.js - Google Books + OpenLibrary
+```
+
+**See:** `cloudflare-workers/SERVICE_BINDING_ARCHITECTURE.md` for monolith architecture details.
 
 ### Enrichment Integration (Build 49 - October 2025)
 

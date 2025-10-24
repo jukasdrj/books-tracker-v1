@@ -106,31 +106,35 @@ struct BookDetailView: View {
 
 ### Backend Architecture
 
-**Workers:**
-- **books-api-proxy** - Orchestrator for book search/enrichment → enrichment-worker → external-apis-worker
-- **bookshelf-ai-worker** - Specialized AI vision processing (Gemini/Cloudflare) with WebSocket progress
+**Worker:** `api-worker` (Cloudflare Worker monolith)
 
-**Service Bindings:**
-- Unidirectional flow (no circular dependencies!)
-- RPC methods for performance
-- Callback pattern for progress updates
+**Endpoints:**
+- `GET /search/title?q={query}` - Book search (6h cache)
+- `GET /search/isbn?isbn={isbn}` - ISBN lookup (7-day cache)
+- `POST /search/advanced` - Multi-field search (title + author + ISBN)
+- `POST /api/enrichment/start` - Batch enrichment with WebSocket progress
+- `POST /api/scan-bookshelf?jobId={uuid}` - AI bookshelf scan (Gemini 2.5 Flash)
+- `GET /ws/progress?jobId={uuid}` - WebSocket progress (unified for ALL jobs)
 
-**Book Search Endpoints (books-api-proxy):**
-- `/search/title` - General search (6h cache)
-- `/search/isbn` - ISBN lookup (7-day cache)
-- `/search/advanced` - Multi-field (orchestrates 3 providers)
-- `/api/enrichment/start` - Batch enrichment with WebSocket progress
-- `/ws/progress` - WebSocket for batch enrichment (Durable Object)
+**Architecture:**
+- Single monolith worker with direct function calls (no RPC service bindings)
+- ProgressWebSocketDO for real-time status updates (all background jobs)
+- No circular dependencies, no polling endpoints
+- KV caching, R2 image storage, Gemini AI integration
 
-**Bookshelf AI Endpoints (bookshelf-ai-worker):**
-- `POST /scan?jobId={uuid}` - Upload image for AI analysis (Gemini 2.5 Flash)
-- `GET /scan/status/{jobId}` - Poll for results (HTTP fallback)
-- `POST /scan/ready/{jobId}` - Signal WebSocket ready
-- `GET /ws/progress?jobId={uuid}` - WebSocket for real-time progress (Durable Object)
+**Internal Structure:**
+```
+api-worker/
+├── src/index.js                # Main router
+├── durable-objects/            # WebSocket DO
+├── services/                   # Business logic (AI, enrichment, APIs)
+├── handlers/                   # Request handlers (search)
+└── utils/                      # Shared utilities (cache)
+```
 
-**Rule:** Workers use RPC service bindings. Never create circular dependencies.
+**Rule:** All background jobs report via WebSocket. No polling. All services communicate via direct function calls.
 
-**See:** `cloudflare-workers/SERVICE_BINDING_ARCHITECTURE.md` for dependency graph + deployment order.
+**See:** `cloudflare-workers/SERVICE_BINDING_ARCHITECTURE.md` for monolith architecture details. Previous distributed architecture archived in `cloudflare-workers/_archived/`.
 
 ## Development Standards
 

@@ -1,213 +1,341 @@
-# Cloudflare Workers Service Binding Architecture
+# Cloudflare Workers Architecture (Monolith)
 
 **Last Updated:** October 23, 2025
+**Status:** Monolith refactor completed
 
 ## Overview
 
-BooksTrack uses Cloudflare Workers RPC service bindings for efficient worker-to-worker communication. This document describes the current architecture after the circular dependency fix.
+BooksTrack backend has been consolidated into a single monolith worker (`api-worker`) to eliminate circular dependencies, reduce network latency, and unify status reporting.
 
-## Worker Dependency Graph
+**Previous Architecture:** 5 distributed workers with RPC service bindings (archived in `_archived/`)
+
+**Current Architecture:** Single worker with direct function calls
+
+## Current Architecture
+
+### Single Worker: api-worker
+
+All backend logic runs in one Cloudflare Worker process. No service bindings. No circular dependencies.
+
+**Worker URL:** `https://api-worker.jukasdrj.workers.dev`
+
+### Components
 
 ```
-                           ┌─────────────────────┐
-                           │  iOS App (Client)   │
-                           └──────────┬──────────┘
-                                      │
-                                      │ HTTPS/WebSocket
-                                      ▼
-                           ┌──────────────────────┐
-                           │  books-api-proxy     │
-                           │  (Main Orchestrator) │
-                           └──┬────────┬──────┬───┘
-                              │        │      │
-            ┌─────────────────┘        │      └────────────────────┐
-            │                          │                           │
-            │ RPC                      │ RPC                       │ DO
-            ▼                          ▼                           ▼
-┌───────────────────────┐  ┌──────────────────────┐  ┌──────────────────────┐
-│ enrichment-worker     │  │ external-apis-worker │  │ progress-websocket-  │
-│                       │  │                      │  │ durable-object       │
-└───────┬───────────────┘  └──────────────────────┘  └──────────────────────┘
-        │                           ▲
-        │ RPC                       │
-        └───────────────────────────┘
-                (no circular dependency!)
+api-worker/
+├── src/
+│   ├── index.js                          # Main router & request handling
+│   ├── durable-objects/
+│   │   └── progress-socket.js            # ProgressWebSocketDO
+│   ├── services/
+│   │   ├── external-apis.js              # Google Books, OpenLibrary
+│   │   ├── enrichment.js                 # Batch book enrichment
+│   │   └── ai-scanner.js                 # Gemini AI bookshelf scanning
+│   ├── handlers/
+│   │   ├── search-handlers.js            # Advanced search logic
+│   │   └── book-search.js                # Title/ISBN search
+│   └── utils/
+│       └── cache.js                      # KV caching utilities
 ```
 
-## Service Bindings
+### Component Roles
 
-### books-api-proxy
+**Main Router (`src/index.js`):**
+- HTTP request routing
+- WebSocket connection delegation to Durable Object
+- Endpoint handlers
 
-**Binds To:**
-- `ENRICHMENT_WORKER` → `enrichment-worker` (RPC)
-- `EXTERNAL_APIS_WORKER` → `external-apis-worker` (RPC)
-- `PROGRESS_WEBSOCKET_DO` → `progress-websocket-durable-object` (Durable Object)
+**Durable Object (`src/durable-objects/progress-socket.js`):**
+- WebSocket connection management
+- Real-time progress updates for ALL background jobs
+- Single source of truth for job status
 
-**Exposes:** `BooksAPIProxyWorker` entrypoint with RPC methods:
-- `searchBooks(query, options)` - General search
-- `searchByAuthor(authorName, options)` - Author bibliography
-- `searchByISBN(isbn, options)` - ISBN lookup
-- `advancedSearch(criteria, options)` - Multi-criteria search
-- `startBatchEnrichment(jobId, workIds, options)` - Batch enrichment with WebSocket progress
+**Services (`src/services/`):**
+- Business logic modules
+- Direct function calls (no RPC)
+- Internal communication via shared `env` and `doStub` parameters
 
-### enrichment-worker
+**Handlers (`src/handlers/`):**
+- Request processing logic
+- Search orchestration
+- Response formatting
 
-**Binds To:**
-- `EXTERNAL_APIS_WORKER` → `external-apis-worker` (RPC)
+**Utils (`src/utils/`):**
+- Shared utilities
+- KV cache management
+- Helper functions
 
-**Exposes:** `EnrichmentWorker` entrypoint with RPC methods:
-- `enrichBatch(jobId, workIds, progressCallback, options)` - Batch enrichment with callback
+## API Endpoints
 
-**Critical Design:** Does NOT bind back to `books-api-proxy`. Uses callback pattern for progress updates.
+### Book Search
+- `GET /search/title?q={query}` - General book search (6h cache)
+- `GET /search/isbn?isbn={isbn}` - ISBN lookup (7-day cache)
+- `POST /search/advanced` - Multi-field search (title + author + ISBN)
 
-### external-apis-worker
+### Background Jobs
+- `POST /api/enrichment/start` - Batch book enrichment with WebSocket progress
+- `POST /api/scan-bookshelf?jobId={uuid}` - AI bookshelf scan with WebSocket progress
 
-**Binds To:** None (leaf node in dependency tree)
+### Status Updates
+- `GET /ws/progress?jobId={uuid}` - WebSocket for real-time progress (unified for ALL jobs)
 
-**Exposes:** `ExternalAPIsWorker` entrypoint with RPC methods:
-- `searchBooks(query, options)` - Query Google Books + OpenLibrary + ISBNdb
-- `searchByISBN(isbn, options)` - ISBN-specific search
-- `searchByAuthor(authorName, options)` - Author-specific search
+### Health
+- `GET /health` - Health check and endpoint listing
 
-## Progress Update Flow (Fixed Architecture)
+## Status Reporting Architecture
 
-### Before (Circular Dependency - BROKEN):
-```
-Client → books-api-proxy → enrichment-worker → books-api-proxy (❌ CIRCULAR!)
-                                                     ↓
-                                          progress-websocket-DO
-```
+### Unified WebSocket System
 
-### After (Callback Pattern - FIXED):
-```
-Client → books-api-proxy (EnrichmentCoordinator)
-              ├─→ enrichment-worker.enrichBatch(jobId, workIds, callback, options)
-              │       └─→ calls callback(progressData) for each work
-              │
-              └─→ callback pushes to progress-websocket-DO
-```
+**Single Durable Object:** `ProgressWebSocketDO`
 
-**Key Innovation:** The `books-api-proxy` creates a progress callback function that captures the Durable Object stub. The enrichment worker calls this callback without knowing about WebSocket implementation.
+All background jobs (enrichment, AI scanning, etc.) report status via WebSocket. No polling endpoints.
 
-## RPC Method Signatures
+**Flow:**
+1. Client generates unique `jobId`
+2. Client connects to `/ws/progress?jobId={uuid}`
+3. Client triggers background job (enrichment or AI scan)
+4. Worker processes job and pushes progress via Durable Object stub
+5. Client receives real-time updates via WebSocket
+6. Worker closes WebSocket when job completes
 
-### books-api-proxy.startBatchEnrichment
-
+**Example:**
 ```javascript
-/**
- * Start batch enrichment with WebSocket progress
- * @param {string} jobId - Unique job identifier for WebSocket tracking
- * @param {string[]} workIds - Array of ISBNs or "title|author" strings
- * @param {Object} options - { maxRetries: 3, timeout: 30000 }
- * @returns {Promise<Object>} { success, processedCount, totalCount, enrichedWorks }
- */
-async startBatchEnrichment(jobId, workIds, options)
+// Get DO stub for this job
+const doId = env.PROGRESS_WEBSOCKET_DO.idFromName(jobId);
+const doStub = env.PROGRESS_WEBSOCKET_DO.get(doId);
+
+// Start background job with DO stub for progress updates
+ctx.waitUntil(enrichment.enrichBatch(jobId, workIds, env, doStub));
+
+// Inside enrichment service
+await doStub.pushProgress({
+  progress: 0.5,
+  currentStatus: 'Enriched 5/10 books',
+  jobId
+});
 ```
 
-### enrichment-worker.enrichBatch
+## Internal Communication Patterns
 
+### Direct Function Calls
+
+All services communicate via direct function imports. No network calls between modules.
+
+**Example:**
 ```javascript
-/**
- * Enrich batch of works with progress callback
- * @param {string} jobId - Job identifier
- * @param {string[]} workIds - Work identifiers (ISBN or title|author)
- * @param {Function} progressCallback - async (progressData) => void
- * @param {Object} options - Enrichment configuration
- * @returns {Promise<Object>} { success, processedCount, totalCount, enrichedWorks }
- */
-async enrichBatch(jobId, workIds, progressCallback, options)
+// src/services/ai-scanner.js
+import { handleAdvancedSearch } from '../handlers/search-handlers.js';
+
+// Direct function call (no RPC!)
+const searchResults = await handleAdvancedSearch({
+  title: detectedBook.title,
+  author: detectedBook.author,
+  isbn: detectedBook.isbn
+}, env);
 ```
 
-### external-apis-worker.searchBooks
+### Shared Dependencies
 
+Services receive shared dependencies as function parameters:
+
+- `env` - Worker environment bindings (KV, R2, AI, secrets)
+- `doStub` - ProgressWebSocketDO stub for status updates
+- `ctx` - Execution context for `waitUntil()` (background tasks)
+
+**Example:**
 ```javascript
-/**
- * Search multiple providers (Google Books + OpenLibrary + ISBNdb)
- * @param {string} query - Search query
- * @param {Object} options - { maxResults: 20, page: 0, includeMetadata: true }
- * @returns {Promise<Object>} { items: [...], totalResults, provider, orchestrated }
- */
-async searchBooks(query, options)
+export async function processBookshelfScan(jobId, imageData, env, doStub) {
+  // Access secrets
+  const geminiKey = env.GEMINI_API_KEY;
+
+  // Push progress
+  await doStub.pushProgress({ progress: 0.1, currentStatus: 'Starting...', jobId });
+
+  // Call external API
+  const result = await callGeminiVision(imageData, env);
+
+  // Enrich via internal function
+  const enriched = await handleAdvancedSearch({ title: result.title }, env);
+}
 ```
 
-## Deployment Order
+## Deployment
 
-When deploying workers with service bindings, deploy in dependency order:
+### Single Worker Deployment
 
 ```bash
-# 1. Deploy leaf workers first (no dependencies)
-cd cloudflare-workers/external-apis-worker
-npm run deploy
-
-cd ../progress-websocket-durable-object
-npm run deploy
-
-# 2. Deploy workers that depend on leaf workers
-cd ../enrichment-worker
-npm run deploy
-
-# 3. Deploy root orchestrator last
-cd ../books-api-proxy
+cd cloudflare-workers/api-worker
 npm run deploy
 ```
 
-## Testing Service Bindings
+**No deployment order required!** Single worker, no dependencies.
 
-### Test External APIs Worker
+### Environment Variables
 
-```bash
-curl "https://external-apis-worker.jukasdrj.workers.dev/search?q=Harry%20Potter"
-```
+**Secrets (via `wrangler secret put`):**
+- `GOOGLE_BOOKS_API_KEY` - Google Books API authentication
+- `GEMINI_API_KEY` - Gemini AI authentication
 
-### Test Enrichment via Proxy (RPC)
+**Vars (in `wrangler.toml`):**
+- `OPENLIBRARY_BASE_URL` - OpenLibrary API base URL
+- `CONFIDENCE_THRESHOLD` - AI detection confidence threshold (0.6)
+- `MAX_SCAN_FILE_SIZE` - Maximum upload size in bytes (10485760 = 10MB)
 
-```javascript
-// From books-api-proxy context
-const result = await env.ENRICHMENT_WORKER.enrichBatch(
-  'test-job-123',
-  ['9780439708180', '9780439064873'],
-  async (progress) => console.log('Progress:', progress),
-  {}
-);
-```
+### Bindings
 
-### Test Full WebSocket Flow
+**KV Namespaces:**
+- `CACHE` - Response caching for search APIs
 
-1. Connect to WebSocket: `wss://books-api-proxy.jukasdrj.workers.dev/ws/progress?jobId=test-123`
-2. Call RPC: `env.BOOKS_API_PROXY.startBatchEnrichment('test-123', [...])`
-3. Observe real-time progress messages in WebSocket
+**R2 Buckets:**
+- `BOOKSHELF_IMAGES` - Uploaded bookshelf photos (optional)
 
-## Debugging
+**AI:**
+- `AI` - Cloudflare AI binding (if using Cloudflare AI instead of Gemini)
 
-### Check Service Binding Health
+**Durable Objects:**
+- `PROGRESS_WEBSOCKET_DO` → `ProgressWebSocketDO` class
 
-```bash
-# Verify bindings are configured
-wrangler tail books-api-proxy --format pretty | grep "ENRICHMENT_WORKER"
-wrangler tail enrichment-worker --format pretty | grep "EXTERNAL_APIS_WORKER"
+## Previous Architecture (Archived)
 
-# Test RPC calls
-wrangler tail books-api-proxy --format pretty | grep "rpc_"
-```
+The previous distributed architecture with 5 workers and RPC service bindings is archived in `_archived/` for reference.
 
-### Common Issues
+**Archived Workers:**
+- `books-api-proxy` - Main orchestrator
+- `enrichment-worker` - Batch enrichment service
+- `bookshelf-ai-worker` - AI vision processing
+- `external-apis-worker` - External API integrations
+- `progress-websocket-durable-object` - WebSocket DO (standalone)
 
-**Error: "BOOKS_API_PROXY is not defined"**
-- Cause: Circular dependency still exists
-- Fix: Verify `enrichment-worker/wrangler.toml` has NO `BOOKS_API_PROXY` binding
+**Why Consolidated:**
+- Eliminated circular dependency risk
+- Reduced network latency (0ms between services vs 3+ network hops)
+- Simplified deployment (1 worker vs 5)
+- Unified status reporting (single Durable Object instead of dual polling/push)
+- Easier debugging and monitoring
 
-**Error: "Service binding not found"**
-- Cause: Workers deployed out of order
-- Fix: Redeploy in dependency order (external-apis → enrichment → books-api-proxy)
-
-**Error: "RPC method not found"**
-- Cause: Entrypoint class missing or method not exported
-- Fix: Verify `export class WorkerName` and method is public
+**See:** `_archived/README.md` for migration details.
 
 ## Architecture Principles
 
-1. **No Circular Dependencies:** Workers form a directed acyclic graph (DAG)
-2. **Callback for Progress:** Use function callbacks, not reverse RPC calls
-3. **Leaf Workers Are Pure:** external-apis-worker has zero dependencies
-4. **Orchestrator Manages State:** books-api-proxy owns WebSocket and coordination
-5. **RPC Over HTTP:** Internal communication uses service bindings, not fetch()
+1. **No Network Calls Between Services:** All communication via direct function calls
+2. **Single Status System:** WebSocket-only progress updates via ProgressWebSocketDO
+3. **Shared Dependencies:** Services receive `env` and `doStub` as parameters
+4. **Background Jobs via waitUntil:** Long-running tasks use `ctx.waitUntil()` pattern
+5. **No Polling Endpoints:** Removed `/scan/status/{jobId}`, `/scan/ready/{jobId}`, etc.
+
+## Testing
+
+### Local Development
+
+```bash
+cd cloudflare-workers/api-worker
+npx wrangler dev
+```
+
+### Health Check
+
+```bash
+curl https://api-worker.jukasdrj.workers.dev/health
+```
+
+Expected response:
+```json
+{
+  "status": "ok",
+  "worker": "api-worker",
+  "version": "1.0.0",
+  "endpoints": [
+    "/search/title",
+    "/search/isbn",
+    "/search/advanced",
+    "/api/scan-bookshelf",
+    "/api/enrichment/start",
+    "/ws/progress"
+  ]
+}
+```
+
+### Search Endpoints
+
+```bash
+# Title search
+curl "https://api-worker.jukasdrj.workers.dev/search/title?q=hamlet"
+
+# ISBN search
+curl "https://api-worker.jukasdrj.workers.dev/search/isbn?isbn=9780743273565"
+
+# Advanced search
+curl -X POST https://api-worker.jukasdrj.workers.dev/search/advanced \
+  -H "Content-Type: application/json" \
+  -d '{"title":"1984","author":"Orwell"}'
+```
+
+### WebSocket Flow
+
+1. Connect to WebSocket:
+```bash
+wscat -c "wss://api-worker.jukasdrj.workers.dev/ws/progress?jobId=test-123"
+```
+
+2. Trigger background job (in another terminal):
+```bash
+curl -X POST https://api-worker.jukasdrj.workers.dev/api/enrichment/start \
+  -H "Content-Type: application/json" \
+  -d '{"jobId":"test-123","workIds":["9780439708180"]}'
+```
+
+3. Observe real-time progress in WebSocket terminal
+
+## Monitoring
+
+### Production Logs
+
+```bash
+cd cloudflare-workers/api-worker
+wrangler tail --format pretty
+```
+
+### Metrics to Monitor
+
+- Response times (search endpoints < 500ms)
+- WebSocket latency (< 50ms)
+- Cache hit rate (> 60% target)
+- Error rate (< 1% target)
+- Background job completion rate
+
+### Common Debugging Patterns
+
+**Check for direct function calls (not RPC):**
+```bash
+wrangler tail --format pretty | grep -v "rpc_"
+```
+
+Expected: No RPC-related logs (all internal calls are direct)
+
+**Verify WebSocket connections:**
+```bash
+wrangler tail --format pretty | grep "WebSocket"
+```
+
+Expected: Connection opens, progress updates, connection closes
+
+**Monitor cache performance:**
+```bash
+wrangler tail --format pretty | grep "Cache"
+```
+
+Expected: Cache HIT/SET logs with TTL values
+
+## Migration Notes
+
+**Breaking Changes from Distributed Architecture:**
+- Old worker URLs deprecated (`books-api-proxy.jukasdrj.workers.dev`, etc.)
+- Polling endpoints removed (`/scan/status/{jobId}`, `/scan/ready/{jobId}`)
+- `SCAN_JOBS` KV namespace deleted (WebSocket-only status)
+
+**iOS App Updates Required:**
+- Update API base URLs to `api-worker.jukasdrj.workers.dev`
+- Remove polling-based status checks
+- Unify WebSocket connection logic for all background jobs
+
+**See:** `docs/plans/2025-10-23-cloudflare-workers-monolith-refactor.md` for full migration plan.
