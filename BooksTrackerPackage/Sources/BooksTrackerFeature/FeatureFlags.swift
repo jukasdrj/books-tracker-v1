@@ -28,4 +28,11 @@ public final class FeatureFlags: Sendable {
     public static let shared = FeatureFlags()
 
     private init() {}
+
+    /// Reset all feature flags to default values
+    /// Called during library reset to restore clean state
+    public func resetToDefaults() {
+        enableTabBarMinimize = true  // Default enabled
+        print("✅ FeatureFlags reset to defaults (tabBarMinimize: true)")
+    }
 }
