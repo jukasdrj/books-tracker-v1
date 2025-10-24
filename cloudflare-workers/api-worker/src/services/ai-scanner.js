@@ -6,16 +6,19 @@
  */
 
 import { handleAdvancedSearch } from '../handlers/search-handlers.js';
+import { scanImageWithGemini } from '../providers/gemini-provider.js';
+import { scanImageWithCloudflare } from '../providers/cloudflare-provider.js';
 
 /**
  * Process bookshelf image scan with AI vision
  *
  * @param {string} jobId - Unique job identifier
  * @param {ArrayBuffer} imageData - Raw image data
+ * @param {Request} request - Request object with X-AI-Provider header
  * @param {Object} env - Worker environment bindings
  * @param {Object} doStub - ProgressWebSocketDO stub for status updates
  */
-export async function processBookshelfScan(jobId, imageData, env, doStub) {
+export async function processBookshelfScan(jobId, imageData, request, env, doStub) {
   const startTime = Date.now();
 
   try {
@@ -37,15 +40,29 @@ export async function processBookshelfScan(jobId, imageData, env, doStub) {
       jobId
     });
 
-    // Call Gemini AI vision analysis
-    const geminiResponse = await callGeminiVision(imageData, env);
-    const detectedBooks = parseGeminiResponse(geminiResponse);
+    // NEW: Provider selection based on request header
+    // NOTE: Header is passed from index.js via additional parameter
+    const provider = request?.headers?.get('X-AI-Provider') || 'gemini';
+    console.log(`[AI Scanner] Using provider: ${provider}`);
+
+    let scanResult;
+    if (provider === 'cloudflare') {
+      scanResult = await scanImageWithCloudflare(imageData, env);
+    } else {
+      // Default to Gemini for backward compatibility
+      scanResult = await scanImageWithGemini(imageData, env);
+    }
+
+    const detectedBooks = scanResult.books;
+    const suggestions = scanResult.suggestions || [];
+
+    console.log(`[AI Scanner] ${detectedBooks.length} books detected via ${provider} (${scanResult.metadata.processingTimeMs}ms)`);
 
     await doStub.pushProgress({
       progress: 0.5,
       processedItems: 1,
       totalItems: 3,
-      currentStatus: `Detected ${detectedBooks.length} books, enriching data...`,
+      currentStatus: `Detected ${detectedBooks.length} books via ${provider}, enriching data...`,
       jobId,
       detectedBooks
     });
@@ -139,137 +156,4 @@ export async function processBookshelfScan(jobId, imageData, env, doStub) {
     // Close WebSocket connection
     await doStub.closeConnection(1000, 'Scan complete');
   }
-}
-
-/**
- * Call Gemini AI vision API to analyze bookshelf image
- * @param {ArrayBuffer} imageData - Raw image data
- * @param {Object} env - Worker environment with GEMINI_API_KEY
- * @returns {Promise<Object>} Gemini API response
- */
-async function callGeminiVision(imageData, env) {
-  // Handle both secrets store (has .get() method) and direct env var
-  const apiKey = env.GEMINI_API_KEY?.get
-    ? await env.GEMINI_API_KEY.get()
-    : env.GEMINI_API_KEY;
-
-  if (!apiKey) {
-    throw new Error('GEMINI_API_KEY not configured');
-  }
-
-  // Convert ArrayBuffer to base64
-  const base64Image = arrayBufferToBase64(imageData);
-
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{
-          parts: [
-            {
-              text: `Analyze this bookshelf image and extract all visible book titles and authors. Return a JSON array with this exact format:
-[
-  {
-    "title": "Book Title",
-    "author": "Author Name",
-    "confidence": 0.95,
-    "boundingBox": {
-      "x1": 0.1,
-      "y1": 0.2,
-      "x2": 0.3,
-      "y2": 0.4
-    }
-  }
-]
-
-Guidelines:
-- confidence: 0.0-1.0 (how certain you are about the text)
-- boundingBox: normalized coordinates (0.0-1.0) for the book spine
-- Only include books where you can read at least the title
-- Skip decorative items, bookends, or non-book objects`
-            },
-            {
-              inline_data: {
-                mime_type: 'image/jpeg',
-                data: base64Image
-              }
-            }
-          ]
-        }],
-        generationConfig: {
-          temperature: 0.1,  // Low temperature for factual extraction
-          topK: 1,
-          topP: 1,
-          maxOutputTokens: 2048
-        }
-      })
-    }
-  );
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
-  }
-
-  return response.json();
-}
-
-/**
- * Parse Gemini API response to extract book list
- * @param {Object} geminiData - Gemini API response
- * @returns {Array} Array of detected books with title, author, confidence, boundingBox
- */
-function parseGeminiResponse(geminiData) {
-  try {
-    const text = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) {
-      console.error('[AI Scanner] Gemini returned empty response');
-      return [];
-    }
-
-    // Extract JSON from markdown code block if present
-    const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-    const jsonText = jsonMatch ? jsonMatch[1] : text;
-
-    const books = JSON.parse(jsonText);
-
-    if (!Array.isArray(books)) {
-      console.error('[AI Scanner] Gemini response is not an array');
-      return [];
-    }
-
-    // Validate and normalize book data
-    return books.map(book => ({
-      title: book.title || '',
-      author: book.author || '',
-      confidence: Math.max(0, Math.min(1, parseFloat(book.confidence) || 0.5)),
-      boundingBox: {
-        x1: Math.max(0, Math.min(1, parseFloat(book.boundingBox?.x1) || 0)),
-        y1: Math.max(0, Math.min(1, parseFloat(book.boundingBox?.y1) || 0)),
-        x2: Math.max(0, Math.min(1, parseFloat(book.boundingBox?.x2) || 1)),
-        y2: Math.max(0, Math.min(1, parseFloat(book.boundingBox?.y2) || 1))
-      }
-    })).filter(book => book.title.length > 0);
-
-  } catch (error) {
-    console.error('[AI Scanner] Failed to parse Gemini response:', error);
-    console.error('[AI Scanner] Raw response:', geminiData);
-    return [];
-  }
-}
-
-/**
- * Convert ArrayBuffer to base64 string
- * @param {ArrayBuffer} buffer - Raw binary data
- * @returns {string} Base64 encoded string
- */
-function arrayBufferToBase64(buffer) {
-  const bytes = new Uint8Array(buffer);
-  let binary = '';
-  for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary);
 }
