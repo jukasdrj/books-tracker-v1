@@ -113,21 +113,25 @@ struct BookDetailView: View {
 - `GET /search/isbn?isbn={isbn}` - ISBN lookup (7-day cache)
 - `POST /search/advanced` - Multi-field search (title + author + ISBN)
 - `POST /api/enrichment/start` - Batch enrichment with WebSocket progress
-- `POST /api/scan-bookshelf?jobId={uuid}` - AI bookshelf scan with provider selection
+- `POST /api/scan-bookshelf?jobId={uuid}&provider={model}` - AI bookshelf scan with model selection
 - `GET /ws/progress?jobId={uuid}` - WebSocket progress (unified for ALL jobs)
 
 **AI Provider Selection:**
-- iOS sends `X-AI-Provider` header (`gemini` or `cloudflare`)
-- Backend routes to appropriate provider module
-- **Gemini (Default):** Gemini 2.5 Flash - High accuracy, 25-40s processing (3072px/90% quality)
-- **Cloudflare (Fast):** Llama 3.2 11B Vision - Experimental fast mode, 3-8s processing (1536px/85% quality)
-- Missing header defaults to Gemini for backward compatibility
+- iOS sends `?provider={model}` query parameter (`gemini-flash`, `cf-llava-1.5-7b`, `cf-uform-gen2-qwen-500m`, `cf-llama-3.2-11b-vision`)
+- Backend routes to appropriate provider module and model
+- **Gemini Flash (Default):** Gemini 2.0 Flash - High accuracy, 25-40s processing (3072px/90% quality)
+- **LLaVA 1.5:** Cloudflare Workers AI - Balanced, 5-12s processing (2048px/87% quality)
+- **Qwen/UForm (Fast):** Cloudflare Workers AI - Fastest mode, 3-8s processing (1536px/85% quality)
+- **Llama 3.2 Vision (Accurate):** Cloudflare Workers AI - High accuracy, 8-15s processing (2560px/88% quality)
+- Missing parameter defaults to Gemini Flash for backward compatibility
 
 **Performance Comparison:**
-| Provider    | Speed    | Accuracy | Image Size | Use Case                          |
-|-------------|----------|----------|------------|-----------------------------------|
-| Gemini      | 25-40s   | High (0.7-0.95) | 400-600KB | Best for ISBNs, small text |
-| Cloudflare  | 3-8s     | Good (0.6-0.85) | 150-300KB | Quick scans, quality suggestions |
+| Provider       | Speed    | Accuracy         | Image Size | Use Case                          |
+|----------------|----------|------------------|------------|-----------------------------------|
+| Gemini Flash   | 25-40s   | High (0.7-0.95)  | 400-600KB  | Best for ISBNs, small text       |
+| LLaVA 1.5      | 5-12s    | Good (0.6-0.85)  | 250-400KB  | Balanced speed/accuracy          |
+| Qwen/UForm     | 3-8s     | Fair (0.5-0.75)  | 150-300KB  | Quick scans, testing             |
+| Llama Vision   | 8-15s    | High (0.65-0.90) | 300-500KB  | Large shelves, quality           |
 
 **Architecture:**
 - Single monolith worker with direct function calls (no RPC service bindings)

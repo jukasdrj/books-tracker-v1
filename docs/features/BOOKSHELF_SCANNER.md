@@ -7,7 +7,7 @@
 
 ## Overview
 
-The Bookshelf Scanner uses device camera + Gemini 2.5 Flash AI to analyze photos of bookshelves and automatically extract book titles/authors for library import.
+The Bookshelf Scanner uses device camera + multi-model AI (Gemini Flash, LLaVA, Qwen, Llama Vision) to analyze photos of bookshelves and automatically extract book titles/authors for library import. Users can choose between 4 AI models optimizing for speed vs accuracy.
 
 ## Quick Start
 
@@ -137,11 +137,15 @@ Live preview (AVCaptureVideoPreviewLayer)
     ↓
 Capture → Review sheet → "Use Photo"
     ↓
-Upload to bookshelf-ai-worker
+Upload to api-worker with selected AI model
     ↓
-Gemini 2.5 Flash AI analysis (25-40s)
+AI analysis (3-40s depending on model):
+  - Gemini Flash: 25-40s (highest accuracy)
+  - LLaVA 1.5: 5-12s (balanced)
+  - Qwen/UForm: 3-8s (fastest)
+  - Llama 3.2 Vision: 8-15s (accurate)
     ↓
-Backend enrichment via books-api-proxy RPC (5-10s)
+Backend enrichment via direct function calls (5-10s)
     ↓
 ScanResultsView → Review results
     ↓
