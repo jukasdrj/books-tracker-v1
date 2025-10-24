@@ -35,6 +35,43 @@ export async function enrichBatch(jobId, workIds, env, doStub) {
 
     // Process each work
     for (const workId of workIds) {
+      // --- NEW CANCELLATION CHECK ---
+      // Before processing the next item, check if the DO has been canceled
+      let canceled = false;
+      try {
+        canceled = await doStub.isCanceled();
+      } catch (e) {
+        // An error here (e.g., "Job canceled by client") also means we should stop
+        console.warn(`[${jobId}] Stopping batch, DO stub threw: ${e.message}`);
+        canceled = true;
+      }
+
+      if (canceled) {
+        console.log(`[${jobId}] Cancellation detected. Stopping enrichment batch.`);
+        // Send cancellation status to client
+        await doStub.pushProgress({
+          progress: processedCount / totalCount,
+          processedItems: processedCount,
+          totalItems: totalCount,
+          currentStatus: 'Enrichment canceled by user',
+          jobId,
+          result: {
+            success: false,
+            canceled: true,
+            processedCount: processedCount,
+            totalCount: totalCount,
+            enrichedCount: enrichedWorks.length,
+            errorCount: errors.length
+          }
+        }).catch(() => {
+          // Ignore error - socket might already be closed
+          console.log(`[${jobId}] Could not send cancel status (socket closed)`);
+        });
+        // Break the loop to stop processing
+        break;
+      }
+      // --- END CANCELLATION CHECK ---
+
       try {
         // Enrich single work using internal function call (NO RPC!)
         const result = await enrichWorkWithAPIs(workId, env);
