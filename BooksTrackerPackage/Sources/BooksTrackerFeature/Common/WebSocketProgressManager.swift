@@ -243,12 +243,57 @@ public final class WebSocketProgressManager: ObservableObject {
             let decoder = JSONDecoder()
             let message = try decoder.decode(WebSocketMessage.self, from: data)
 
-            // Convert to JobProgress, preserving keepAlive flag
+            // Convert to JobProgress, preserving keepAlive flag and scan result
             let progress = JobProgress(
                 totalItems: message.data.totalItems,
                 processedItems: message.data.processedItems,
                 currentStatus: message.data.currentStatus,
-                keepAlive: message.data.keepAlive  // Pass through keepAlive flag
+                keepAlive: message.data.keepAlive,  // Pass through keepAlive flag
+                scanResult: message.data.result.map { scanData in
+                    // Convert ScanResultData to ScanResultPayload
+                    ScanResultPayload(
+                        totalDetected: scanData.totalDetected,
+                        approved: scanData.approved,
+                        needsReview: scanData.needsReview,
+                        books: scanData.books.map { book in
+                            ScanResultPayload.BookPayload(
+                                title: book.title,
+                                author: book.author,
+                                isbn: book.isbn,
+                                confidence: book.confidence,
+                                boundingBox: ScanResultPayload.BookPayload.BoundingBoxPayload(
+                                    x1: book.boundingBox.x1,
+                                    y1: book.boundingBox.y1,
+                                    x2: book.boundingBox.x2,
+                                    y2: book.boundingBox.y2
+                                ),
+                                enrichment: book.enrichment.map { enr in
+                                    ScanResultPayload.BookPayload.EnrichmentPayload(
+                                        status: enr.status,
+                                        apiData: enr.apiData.map { api in
+                                            ScanResultPayload.BookPayload.EnrichmentPayload.APIDataPayload(
+                                                title: api.title,
+                                                authors: api.authors,
+                                                isbn: api.isbn,
+                                                coverUrl: api.coverUrl,
+                                                publisher: api.publisher,
+                                                publicationYear: api.publicationYear
+                                            )
+                                        },
+                                        provider: enr.provider,
+                                        cachedResult: enr.cachedResult
+                                    )
+                                }
+                            )
+                        },
+                        metadata: ScanResultPayload.ScanMetadataPayload(
+                            processingTime: scanData.metadata.processingTime,
+                            enrichedCount: scanData.metadata.enrichedCount,
+                            timestamp: scanData.metadata.timestamp,
+                            modelUsed: scanData.metadata.modelUsed
+                        )
+                    )
+                }
             )
 
             // Call progress handler on MainActor
@@ -280,4 +325,53 @@ struct ProgressData: Codable, Sendable {
     let currentWorkId: String?
     let error: String?
     let keepAlive: Bool?  // Optional: true for keep-alive pings, nil for normal updates
+    let result: ScanResultData?  // Optional: present in final completion message
+}
+
+/// Scan result embedded in final WebSocket message
+struct ScanResultData: Codable, Sendable {
+    let totalDetected: Int
+    let approved: Int
+    let needsReview: Int
+    let books: [BookData]
+    let metadata: ScanMetadata
+
+    struct BookData: Codable, Sendable {
+        let title: String
+        let author: String
+        let isbn: String?
+        let confidence: Double
+        let boundingBox: BoundingBox
+        let enrichment: Enrichment?
+
+        struct BoundingBox: Codable, Sendable {
+            let x1: Double
+            let y1: Double
+            let x2: Double
+            let y2: Double
+        }
+
+        struct Enrichment: Codable, Sendable {
+            let status: String
+            let apiData: APIData?
+            let provider: String?
+            let cachedResult: Bool?
+
+            struct APIData: Codable, Sendable {
+                let title: String?
+                let authors: [String]?
+                let isbn: String?
+                let coverUrl: String?
+                let publisher: String?
+                let publicationYear: Int?
+            }
+        }
+    }
+
+    struct ScanMetadata: Codable, Sendable {
+        let processingTime: Int
+        let enrichedCount: Int
+        let timestamp: String
+        let modelUsed: String
+    }
 }

@@ -196,23 +196,41 @@ actor BookshelfAIService {
 
                     // Check for completion
                     if jobProgress.currentStatus.lowercased().contains("complete") {
-                        Task {
-                            do {
-                                let finalStatus = try await self.pollJobStatus(jobId: jobId)
+                        // Result is now embedded in WebSocket message!
+                        if let scanResult = jobProgress.scanResult {
+                            print("✅ Scan complete with \(scanResult.totalDetected) books (\(scanResult.approved) approved, \(scanResult.needsReview) review)")
+                            wsManager.disconnect()
 
-                                if let response = finalStatus.result {
-                                    wsManager.disconnect()
+                            // Convert scan result to detected books
+                            let detectedBooks = scanResult.books.compactMap { bookPayload in
+                                self.convertPayloadToDetectedBook(bookPayload)
+                            }
 
-                                    let detectedBooks = response.books.compactMap { aiBook in
-                                        self.convertToDetectedBook(aiBook)
+                            // Generate suggestions (using metadata from scan result)
+                            let suggestions = self.generateSuggestionsFromPayload(scanResult)
+
+                            continuation.resume(returning: .success((detectedBooks, suggestions)))
+                        } else {
+                            // Fallback: try polling (shouldn't happen with new backend)
+                            print("⚠️ Scan complete but no result in WebSocket message, attempting fallback...")
+                            Task {
+                                do {
+                                    let finalStatus = try await self.pollJobStatus(jobId: jobId)
+
+                                    if let response = finalStatus.result {
+                                        wsManager.disconnect()
+
+                                        let detectedBooks = response.books.compactMap { aiBook in
+                                            self.convertToDetectedBook(aiBook)
+                                        }
+                                        let suggestions = SuggestionGenerator.generateSuggestions(from: response)
+
+                                        continuation.resume(returning: .success((detectedBooks, suggestions)))
                                     }
-                                    let suggestions = SuggestionGenerator.generateSuggestions(from: response)
-
-                                    continuation.resume(returning: .success((detectedBooks, suggestions)))
+                                } catch {
+                                    wsManager.disconnect()
+                                    continuation.resume(returning: .failure(.networkError(error)))
                                 }
-                            } catch {
-                                wsManager.disconnect()
-                                continuation.resume(returning: .failure(.networkError(error)))
                             }
                         }
                     }
@@ -443,6 +461,73 @@ actor BookshelfAIService {
             rawText: rawText.isEmpty ? "Unreadable spine" : rawText,
             status: status
         )
+    }
+
+    /// Convert WebSocket payload book to DetectedBook model.
+    nonisolated internal func convertPayloadToDetectedBook(_ bookPayload: ScanResultPayload.BookPayload) -> DetectedBook? {
+        // Calculate CGRect from normalized coordinates
+        let boundingBox = CGRect(
+            x: bookPayload.boundingBox.x1,
+            y: bookPayload.boundingBox.y1,
+            width: bookPayload.boundingBox.x2 - bookPayload.boundingBox.x1,
+            height: bookPayload.boundingBox.y2 - bookPayload.boundingBox.y1
+        )
+
+        // Determine status from enrichment
+        let status: DetectionStatus
+        if let enrichment = bookPayload.enrichment {
+            switch enrichment.status.uppercased() {
+            case "SUCCESS":
+                status = .detected
+            case "NOT_FOUND", "ERROR":
+                status = .uncertain
+            default:
+                status = bookPayload.confidence >= 0.7 ? .detected : .uncertain
+            }
+        } else {
+            status = bookPayload.confidence >= 0.7 ? .detected : .uncertain
+        }
+
+        // Generate raw text
+        let rawText = "\(bookPayload.title) by \(bookPayload.author)"
+
+        return DetectedBook(
+            isbn: bookPayload.isbn,
+            title: bookPayload.title,
+            author: bookPayload.author,
+            confidence: bookPayload.confidence,
+            boundingBox: boundingBox,
+            rawText: rawText,
+            status: status
+        )
+    }
+
+    /// Generate suggestions from scan result payload
+    nonisolated internal func generateSuggestionsFromPayload(_ scanResult: ScanResultPayload) -> [SuggestionViewModel] {
+        var suggestions: [SuggestionViewModel] = []
+
+        // Low confidence warning
+        if scanResult.needsReview > 0 {
+            suggestions.append(SuggestionViewModel(
+                type: "low_confidence",
+                severity: "warning",
+                message: "\(scanResult.needsReview) books need manual review (low confidence)",
+                affectedCount: scanResult.needsReview
+            ))
+        }
+
+        // No enrichment found
+        let unenriched = scanResult.totalDetected - scanResult.metadata.enrichedCount
+        if unenriched > 0 {
+            suggestions.append(SuggestionViewModel(
+                type: "no_enrichment",
+                severity: "info",
+                message: "\(unenriched) books could not be enriched with metadata",
+                affectedCount: unenriched
+            ))
+        }
+
+        return suggestions
     }
 
     // MARK: - Progress Tracking Methods (Swift 6.2 Task Pattern)

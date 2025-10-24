@@ -41,6 +41,7 @@ public struct JobProgress: Codable, Sendable, Equatable {
     public var currentStatus: String
     public var estimatedTimeRemaining: TimeInterval?
     public var keepAlive: Bool?  // Optional: true for server keep-alive pings, nil for normal updates
+    public var scanResult: ScanResultPayload?  // Optional: present in final completion message for scan jobs
 
     public var fractionCompleted: Double {
         guard totalItems > 0 else { return 0 }
@@ -52,13 +53,15 @@ public struct JobProgress: Codable, Sendable, Equatable {
         processedItems: Int,
         currentStatus: String,
         estimatedTimeRemaining: TimeInterval? = nil,
-        keepAlive: Bool? = nil
+        keepAlive: Bool? = nil,
+        scanResult: ScanResultPayload? = nil
     ) {
         self.totalItems = totalItems
         self.processedItems = processedItems
         self.currentStatus = currentStatus
         self.estimatedTimeRemaining = estimatedTimeRemaining
         self.keepAlive = keepAlive
+        self.scanResult = scanResult
     }
 
     public static var zero: JobProgress {
@@ -67,5 +70,54 @@ public struct JobProgress: Codable, Sendable, Equatable {
             processedItems: 0,
             currentStatus: "Starting..."
         )
+    }
+}
+
+// MARK: - Scan Result Payload
+/// Scan result data embedded in WebSocket completion message
+public struct ScanResultPayload: Codable, Sendable, Equatable {
+    public let totalDetected: Int
+    public let approved: Int
+    public let needsReview: Int
+    public let books: [BookPayload]
+    public let metadata: ScanMetadataPayload
+
+    public struct BookPayload: Codable, Sendable, Equatable {
+        public let title: String
+        public let author: String
+        public let isbn: String?
+        public let confidence: Double
+        public let boundingBox: BoundingBoxPayload
+        public let enrichment: EnrichmentPayload?
+
+        public struct BoundingBoxPayload: Codable, Sendable, Equatable {
+            public let x1: Double
+            public let y1: Double
+            public let x2: Double
+            public let y2: Double
+        }
+
+        public struct EnrichmentPayload: Codable, Sendable, Equatable {
+            public let status: String
+            public let apiData: APIDataPayload?
+            public let provider: String?
+            public let cachedResult: Bool?
+
+            public struct APIDataPayload: Codable, Sendable, Equatable {
+                public let title: String?
+                public let authors: [String]?
+                public let isbn: String?
+                public let coverUrl: String?
+                public let publisher: String?
+                public let publicationYear: Int?
+            }
+        }
+    }
+
+    public struct ScanMetadataPayload: Codable, Sendable, Equatable {
+        public let processingTime: Int
+        public let enrichedCount: Int
+        public let timestamp: String
+        public let modelUsed: String
     }
 }
