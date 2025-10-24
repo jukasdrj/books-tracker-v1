@@ -31,7 +31,7 @@ export async function processBookshelfScan(jobId, imageData, request, env, doStu
       jobId
     });
 
-    // Stage 2: AI processing (30% → 70% progress)
+    // Stage 2: Provider selection and AI processing
     await doStub.pushProgress({
       progress: 0.3,
       processedItems: 1,
@@ -40,29 +40,49 @@ export async function processBookshelfScan(jobId, imageData, request, env, doStu
       jobId
     });
 
-    // NEW: Provider selection based on request header
-    // NOTE: Header is passed from index.js via additional parameter
-    const provider = request?.headers?.get('X-AI-Provider') || 'gemini';
-    console.log(`[AI Scanner] Using provider: ${provider}`);
+    // Parse provider from query parameter (format: "cf-llava-1.5-7b")
+    const url = new URL(request.url);
+    const providerParam = url.searchParams.get('provider') || 'gemini-flash';
 
+    console.log(`[AI Scanner] Job ${jobId} - Provider parameter: ${providerParam}`);
+
+    // Map provider parameter to model identifier
     let scanResult;
-    if (provider === 'cloudflare') {
-      scanResult = await scanImageWithCloudflare(imageData, env);
-    } else {
-      // Default to Gemini for backward compatibility
-      scanResult = await scanImageWithGemini(imageData, env);
+    let modelIdentifier;
+
+    switch (providerParam) {
+      case 'cf-llava-1.5-7b':
+        modelIdentifier = '@cf/llava-hf/llava-1.5-7b-hf';
+        scanResult = await scanImageWithCloudflare(imageData, env, modelIdentifier);
+        break;
+
+      case 'cf-uform-gen2-qwen-500m':
+        modelIdentifier = '@cf/unum/uform-gen2-qwen-500m';
+        scanResult = await scanImageWithCloudflare(imageData, env, modelIdentifier);
+        break;
+
+      case 'cf-llama-3.2-11b-vision':
+        modelIdentifier = '@cf/meta/llama-3.2-11b-vision-instruct';
+        scanResult = await scanImageWithCloudflare(imageData, env, modelIdentifier);
+        break;
+
+      case 'gemini-flash':
+      default:
+        // Default to Gemini for backward compatibility
+        scanResult = await scanImageWithGemini(imageData, env);
+        break;
     }
 
     const detectedBooks = scanResult.books;
     const suggestions = scanResult.suggestions || [];
 
-    console.log(`[AI Scanner] ${detectedBooks.length} books detected via ${provider} (${scanResult.metadata.processingTimeMs}ms)`);
+    console.log(`[AI Scanner] ${detectedBooks.length} books detected via ${providerParam} (${scanResult.metadata.processingTimeMs}ms)`);
 
     await doStub.pushProgress({
       progress: 0.5,
       processedItems: 1,
       totalItems: 3,
-      currentStatus: `Detected ${detectedBooks.length} books via ${provider}, enriching data...`,
+      currentStatus: `Detected ${detectedBooks.length} books, enriching data...`,
       jobId,
       detectedBooks
     });
@@ -133,7 +153,8 @@ export async function processBookshelfScan(jobId, imageData, request, env, doStu
         metadata: {
           processingTime,
           enrichedCount: enrichedBooks.filter(b => b.enrichment?.status === 'success').length,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          modelUsed: providerParam  // Include model in metadata
         }
       }
     });
