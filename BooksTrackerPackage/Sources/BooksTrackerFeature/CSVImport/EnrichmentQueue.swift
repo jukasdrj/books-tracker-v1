@@ -266,6 +266,43 @@ public final class EnrichmentQueue {
         processing = false
     }
 
+    /// Cancel the backend enrichment job
+    /// Sends cancellation request to Cloudflare Worker
+    public func cancelBackendJob() async {
+        guard let jobId = currentJobId else {
+            print("⚠️ No active backend job to cancel")
+            return
+        }
+
+        print("🛑 Canceling backend job: \(jobId)")
+
+        do {
+            let url = URL(string: "https://books-api-proxy.jukasdrj.workers.dev/api/enrichment/cancel")!
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+            let body = ["jobId": jobId]
+            request.httpBody = try JSONEncoder().encode(body)
+
+            let (_, response) = try await URLSession.shared.data(for: request)
+
+            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
+                print("✅ Backend job canceled successfully: \(jobId)")
+            } else {
+                print("⚠️ Backend job cancellation returned non-200 status")
+            }
+
+            // Clear the job ID
+            clearCurrentJobId()
+
+        } catch {
+            print("❌ Failed to cancel backend job: \(error)")
+            // Still clear the job ID - best effort
+            clearCurrentJobId()
+        }
+    }
+
     /// Check if currently processing
     public func isProcessing() -> Bool {
         return processing
