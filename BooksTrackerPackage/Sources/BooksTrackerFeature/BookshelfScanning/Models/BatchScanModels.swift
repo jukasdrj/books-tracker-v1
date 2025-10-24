@@ -4,7 +4,8 @@ import SwiftUI
 // MARK: - Captured Photo
 
 /// Represents a captured photo in a batch scan session
-public struct CapturedPhoto: Identifiable, Sendable {
+@MainActor
+public struct CapturedPhoto: Identifiable {
     public let id: UUID
     public let image: UIImage
     public let timestamp: Date
@@ -52,7 +53,7 @@ public struct PhotoProgress: Identifiable, Sendable {
 /// Overall progress for a batch scan job
 @Observable
 @MainActor
-public final class BatchProgress: Sendable {
+public final class BatchProgress {
     public let jobId: String
     public let totalPhotos: Int
     public var photos: [PhotoProgress]
@@ -123,61 +124,111 @@ public final class BatchProgress: Sendable {
 // MARK: - Batch Request
 
 /// Request payload for batch scan endpoint
-struct BatchScanRequest: Codable {
-    let jobId: String
-    let images: [ImageData]
+public struct BatchScanRequest: Codable {
+    public let jobId: String
+    public let images: [ImageData]
 
-    struct ImageData: Codable {
-        let index: Int
-        let data: String // Base64 encoded
+    public struct ImageData: Codable {
+        public let index: Int
+        public let data: String // Base64 encoded
+
+        public init(index: Int, data: String) {
+            self.index = index
+            self.data = data
+        }
+    }
+
+    public init(jobId: String, images: [ImageData]) {
+        self.jobId = jobId
+        self.images = images
     }
 }
 
 // MARK: - Batch WebSocket Messages
 
 /// WebSocket message types for batch scanning
-enum BatchWebSocketMessage: Codable {
+public enum BatchWebSocketMessage: Codable {
     case batchInit(BatchInitMessage)
     case batchProgress(BatchProgressMessage)
     case batchComplete(BatchCompleteMessage)
 
-    struct BatchInitMessage: Codable {
-        let type: String
-        let jobId: String
-        let totalPhotos: Int
-        let status: String
-    }
+    public struct BatchInitMessage: Codable {
+        public let type: String
+        public let jobId: String
+        public let totalPhotos: Int
+        public let status: String
 
-    struct BatchProgressMessage: Codable {
-        let type: String
-        let jobId: String
-        let currentPhoto: Int
-        let totalPhotos: Int
-        let photoStatus: String
-        let booksFound: Int
-        let totalBooksFound: Int
-        let photos: [PhotoProgressData]
-
-        struct PhotoProgressData: Codable {
-            let index: Int
-            let status: String
-            let booksFound: Int?
-            let error: String?
+        public init(type: String, jobId: String, totalPhotos: Int, status: String) {
+            self.type = type
+            self.jobId = jobId
+            self.totalPhotos = totalPhotos
+            self.status = status
         }
     }
 
-    struct BatchCompleteMessage: Codable {
-        let type: String
-        let jobId: String
-        let totalBooks: Int
-        let photoResults: [PhotoResult]
-        let books: [AIDetectedBook]
+    public struct BatchProgressMessage: Codable {
+        public let type: String
+        public let jobId: String
+        public let currentPhoto: Int
+        public let totalPhotos: Int
+        public let photoStatus: String
+        public let booksFound: Int
+        public let totalBooksFound: Int
+        public let photos: [PhotoProgressData]
 
-        struct PhotoResult: Codable {
-            let index: Int
-            let status: String
-            let booksFound: Int?
-            let error: String?
+        public struct PhotoProgressData: Codable {
+            public let index: Int
+            public let status: String
+            public let booksFound: Int?
+            public let error: String?
+
+            public init(index: Int, status: String, booksFound: Int? = nil, error: String? = nil) {
+                self.index = index
+                self.status = status
+                self.booksFound = booksFound
+                self.error = error
+            }
+        }
+
+        public init(type: String, jobId: String, currentPhoto: Int, totalPhotos: Int, photoStatus: String, booksFound: Int, totalBooksFound: Int, photos: [PhotoProgressData]) {
+            self.type = type
+            self.jobId = jobId
+            self.currentPhoto = currentPhoto
+            self.totalPhotos = totalPhotos
+            self.photoStatus = photoStatus
+            self.booksFound = booksFound
+            self.totalBooksFound = totalBooksFound
+            self.photos = photos
+        }
+    }
+
+    public struct BatchCompleteMessage: Codable {
+        public let type: String
+        public let jobId: String
+        public let totalBooks: Int
+        public let photoResults: [PhotoResult]
+        public let books: [AIDetectedBook]
+
+        public struct PhotoResult: Codable {
+            public let index: Int
+            public let status: String
+            public let booksFound: Int?
+            public let error: String?
+
+            public init(index: Int, status: String, booksFound: Int? = nil, error: String? = nil) {
+                self.index = index
+                self.status = status
+                self.booksFound = booksFound
+                self.error = error
+            }
+        }
+
+        public init(type: String, jobId: String, totalBooks: Int, photoResults: [PhotoResult], books: [AIDetectedBook]) {
+            self.type = type
+            self.jobId = jobId
+            self.totalBooks = totalBooks
+            self.photoResults = photoResults
+            self.books = books
         }
     }
 }
@@ -185,9 +236,16 @@ enum BatchWebSocketMessage: Codable {
 // MARK: - AIDetectedBook
 
 /// AI-detected book from backend (for batch complete message)
-struct AIDetectedBook: Codable {
-    let title: String
-    let author: String?
-    let isbn: String?
-    let confidence: Double
+public struct AIDetectedBook: Codable {
+    public let title: String
+    public let author: String?
+    public let isbn: String?
+    public let confidence: Double
+
+    public init(title: String, author: String? = nil, isbn: String? = nil, confidence: Double) {
+        self.title = title
+        self.author = author
+        self.isbn = isbn
+        self.confidence = confidence
+    }
 }
