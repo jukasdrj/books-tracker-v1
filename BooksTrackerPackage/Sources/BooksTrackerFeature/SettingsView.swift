@@ -413,11 +413,6 @@ public struct SettingsView: View {
                 let works = try modelContext.fetch(workDescriptor)
 
                 for work in works {
-                    // Force fault resolution before deletion
-                    _ = work.authors
-                    _ = work.editions
-                    _ = work.userLibraryEntries
-
                     modelContext.delete(work)
                 }
 
@@ -426,19 +421,24 @@ public struct SettingsView: View {
                 let authors = try modelContext.fetch(authorDescriptor)
 
                 for author in authors {
-                    // Force fault resolution
-                    _ = author.works
-
                     modelContext.delete(author)
                 }
 
                 // 6. Save changes to SwiftData
                 try modelContext.save()
 
-                // 7. Clear search history from UserDefaults
+                // 7. CRITICAL: Reset model context to clear all cached objects
+                // This ensures deleted objects are truly removed from memory
+                modelContext.reset()
+
+                // 8. Give CloudKit time to process deletions (if on device)
+                // Without this, CloudKit might restore from cache before processing deletes
+                try await Task.sleep(for: .milliseconds(500))
+
+                // 9. Clear search history from UserDefaults
                 UserDefaults.standard.removeObject(forKey: "RecentBookSearches")
 
-                // 8. Reset app-level settings to default values
+                // 10. Reset app-level settings to default values
                 aiSettings.resetToDefaults()
                 featureFlags.resetToDefaults()
 
