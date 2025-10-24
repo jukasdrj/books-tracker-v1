@@ -139,3 +139,300 @@ describe('Batch Scan Endpoint', () => {
     expect(response.headers.get('access-control-allow-origin')).toBe('*');
   });
 });
+
+describe('Batch State Management (Durable Object)', () => {
+  const BASE_URL = process.env.TEST_BASE_URL || 'http://localhost:8787';
+
+  it('initializes batch job with photo array', async () => {
+    const jobId = `test-batch-${crypto.randomUUID()}`;
+
+    // Create Durable Object stub
+    const response = await fetch(`${BASE_URL}/test/do/init-batch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jobId,
+        totalPhotos: 3,
+        status: 'uploading'
+      })
+    });
+
+    expect(response.status).toBe(200);
+    const initResult = await response.json();
+    expect(initResult.success).toBe(true);
+
+    // Fetch state to verify initialization
+    const stateResponse = await fetch(`${BASE_URL}/test/do/get-state?jobId=${jobId}`);
+    expect(stateResponse.status).toBe(200);
+
+    const state = await stateResponse.json();
+    expect(state.type).toBe('batch');
+    expect(state.totalPhotos).toBe(3);
+    expect(state.photos).toHaveLength(3);
+    expect(state.photos[0].status).toBe('queued');
+    expect(state.photos[0].index).toBe(0);
+    expect(state.photos[1].status).toBe('queued');
+    expect(state.photos[2].status).toBe('queued');
+    expect(state.overallStatus).toBe('uploading');
+    expect(state.currentPhoto).toBeNull();
+    expect(state.totalBooksFound).toBe(0);
+    expect(state.cancelRequested).toBe(false);
+  });
+
+  it('updates individual photo progress', async () => {
+    const jobId = `test-batch-${crypto.randomUUID()}`;
+
+    // Initialize batch
+    await fetch(`${BASE_URL}/test/do/init-batch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jobId,
+        totalPhotos: 2,
+        status: 'processing'
+      })
+    });
+
+    // Update photo 0 to processing
+    const updateResponse = await fetch(`${BASE_URL}/test/do/update-photo`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jobId,
+        photoIndex: 0,
+        status: 'processing'
+      })
+    });
+
+    expect(updateResponse.status).toBe(200);
+
+    // Verify state
+    const stateResponse = await fetch(`${BASE_URL}/test/do/get-state?jobId=${jobId}`);
+    const state = await stateResponse.json();
+
+    expect(state.photos[0].status).toBe('processing');
+    expect(state.photos[1].status).toBe('queued');
+    expect(state.currentPhoto).toBe(0);
+  });
+
+  it('tracks books found per photo', async () => {
+    const jobId = `test-batch-${crypto.randomUUID()}`;
+
+    // Initialize batch
+    await fetch(`${BASE_URL}/test/do/init-batch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jobId,
+        totalPhotos: 2,
+        status: 'processing'
+      })
+    });
+
+    // Update photo 0 with books found
+    await fetch(`${BASE_URL}/test/do/update-photo`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jobId,
+        photoIndex: 0,
+        status: 'complete',
+        booksFound: 5
+      })
+    });
+
+    // Verify state
+    const stateResponse = await fetch(`${BASE_URL}/test/do/get-state?jobId=${jobId}`);
+    const state = await stateResponse.json();
+
+    expect(state.photos[0].booksFound).toBe(5);
+    expect(state.totalBooksFound).toBe(5);
+  });
+
+  it('accumulates total books across photos', async () => {
+    const jobId = `test-batch-${crypto.randomUUID()}`;
+
+    // Initialize batch
+    await fetch(`${BASE_URL}/test/do/init-batch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jobId,
+        totalPhotos: 3,
+        status: 'processing'
+      })
+    });
+
+    // Complete photos with different book counts
+    await fetch(`${BASE_URL}/test/do/update-photo`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jobId,
+        photoIndex: 0,
+        status: 'complete',
+        booksFound: 5
+      })
+    });
+
+    await fetch(`${BASE_URL}/test/do/update-photo`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jobId,
+        photoIndex: 1,
+        status: 'complete',
+        booksFound: 8
+      })
+    });
+
+    await fetch(`${BASE_URL}/test/do/update-photo`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jobId,
+        photoIndex: 2,
+        status: 'complete',
+        booksFound: 3
+      })
+    });
+
+    // Verify state
+    const stateResponse = await fetch(`${BASE_URL}/test/do/get-state?jobId=${jobId}`);
+    const state = await stateResponse.json();
+
+    expect(state.totalBooksFound).toBe(16); // 5 + 8 + 3
+  });
+
+  it('handles photo errors', async () => {
+    const jobId = `test-batch-${crypto.randomUUID()}`;
+
+    // Initialize batch
+    await fetch(`${BASE_URL}/test/do/init-batch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jobId,
+        totalPhotos: 2,
+        status: 'processing'
+      })
+    });
+
+    // Update photo 0 with error
+    await fetch(`${BASE_URL}/test/do/update-photo`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jobId,
+        photoIndex: 0,
+        status: 'error',
+        error: 'AI processing failed'
+      })
+    });
+
+    // Verify state
+    const stateResponse = await fetch(`${BASE_URL}/test/do/get-state?jobId=${jobId}`);
+    const state = await stateResponse.json();
+
+    expect(state.photos[0].status).toBe('error');
+    expect(state.photos[0].error).toBe('AI processing failed');
+  });
+
+  it('completes batch with final results', async () => {
+    const jobId = `test-batch-${crypto.randomUUID()}`;
+
+    // Initialize batch
+    await fetch(`${BASE_URL}/test/do/init-batch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jobId,
+        totalPhotos: 2,
+        status: 'processing'
+      })
+    });
+
+    // Complete batch
+    const completeResponse = await fetch(`${BASE_URL}/test/do/complete-batch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jobId,
+        status: 'complete',
+        totalBooks: 12,
+        photoResults: [
+          { index: 0, status: 'complete', booksFound: 7 },
+          { index: 1, status: 'complete', booksFound: 5 }
+        ],
+        books: [] // Would contain actual book data
+      })
+    });
+
+    expect(completeResponse.status).toBe(200);
+
+    // Verify state
+    const stateResponse = await fetch(`${BASE_URL}/test/do/get-state?jobId=${jobId}`);
+    const state = await stateResponse.json();
+
+    expect(state.overallStatus).toBe('complete');
+    expect(state.totalBooksFound).toBe(12);
+    expect(state.finalResults).toBeDefined();
+  });
+
+  it('checks cancellation status', async () => {
+    const jobId = `test-batch-${crypto.randomUUID()}`;
+
+    // Initialize batch
+    await fetch(`${BASE_URL}/test/do/init-batch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jobId,
+        totalPhotos: 2,
+        status: 'processing'
+      })
+    });
+
+    // Check initial cancellation status
+    const checkResponse1 = await fetch(`${BASE_URL}/test/do/is-canceled?jobId=${jobId}`);
+    const result1 = await checkResponse1.json();
+    expect(result1.canceled).toBe(false);
+
+    // Request cancellation (will be tested in Task 6, just verify endpoint exists)
+    const cancelResponse = await fetch(`${BASE_URL}/test/do/cancel-batch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jobId })
+    });
+
+    expect(cancelResponse.status).toBe(200);
+
+    // Check cancellation status after cancel
+    const checkResponse2 = await fetch(`${BASE_URL}/test/do/is-canceled?jobId=${jobId}`);
+    const result2 = await checkResponse2.json();
+    expect(result2.canceled).toBe(true);
+  });
+
+  it('returns 404 for non-existent job state', async () => {
+    const jobId = `nonexistent-${crypto.randomUUID()}`;
+
+    const stateResponse = await fetch(`${BASE_URL}/test/do/get-state?jobId=${jobId}`);
+    expect(stateResponse.status).toBe(404);
+  });
+
+  it('returns 404 when updating photo for non-existent batch', async () => {
+    const jobId = `nonexistent-${crypto.randomUUID()}`;
+
+    const updateResponse = await fetch(`${BASE_URL}/test/do/update-photo`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jobId,
+        photoIndex: 0,
+        status: 'processing'
+      })
+    });
+
+    expect(updateResponse.status).toBe(404);
+  });
+});

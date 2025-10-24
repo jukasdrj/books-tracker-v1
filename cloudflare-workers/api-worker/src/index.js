@@ -441,6 +441,163 @@ export default {
       });
     }
 
+    // ========================================================================
+    // Test Endpoints for Durable Object Batch State Management
+    // ========================================================================
+
+    // POST /test/do/init-batch - Initialize batch job in Durable Object
+    if (url.pathname === '/test/do/init-batch' && request.method === 'POST') {
+      try {
+        const { jobId, totalPhotos, status } = await request.json();
+        const doId = env.PROGRESS_WEBSOCKET_DO.idFromName(jobId);
+        const doStub = env.PROGRESS_WEBSOCKET_DO.get(doId);
+
+        const result = await doStub.initBatch({ jobId, totalPhotos, status });
+
+        return new Response(JSON.stringify(result), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+        });
+      } catch (error) {
+        console.error('Test init-batch failed:', error);
+        return new Response(JSON.stringify({ error: error.message }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+    }
+
+    // GET /test/do/get-state - Get batch state from Durable Object
+    if (url.pathname === '/test/do/get-state' && request.method === 'GET') {
+      try {
+        const jobId = url.searchParams.get('jobId');
+        if (!jobId) {
+          return new Response(JSON.stringify({ error: 'Missing jobId parameter' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+
+        const doId = env.PROGRESS_WEBSOCKET_DO.idFromName(jobId);
+        const doStub = env.PROGRESS_WEBSOCKET_DO.get(doId);
+
+        const state = await doStub.getState();
+
+        if (!state || Object.keys(state).length === 0) {
+          return new Response(JSON.stringify({ error: 'Job not found' }), {
+            status: 404,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+
+        return new Response(JSON.stringify(state), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+        });
+      } catch (error) {
+        console.error('Test get-state failed:', error);
+        return new Response(JSON.stringify({ error: error.message }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+    }
+
+    // POST /test/do/update-photo - Update photo status in Durable Object
+    if (url.pathname === '/test/do/update-photo' && request.method === 'POST') {
+      try {
+        const { jobId, photoIndex, status, booksFound, error: photoError } = await request.json();
+        const doId = env.PROGRESS_WEBSOCKET_DO.idFromName(jobId);
+        const doStub = env.PROGRESS_WEBSOCKET_DO.get(doId);
+
+        const result = await doStub.updatePhoto({ photoIndex, status, booksFound, error: photoError });
+
+        return new Response(JSON.stringify(result), {
+          status: result.error ? 404 : 200,
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+        });
+      } catch (error) {
+        console.error('Test update-photo failed:', error);
+        return new Response(JSON.stringify({ error: error.message }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+    }
+
+    // POST /test/do/complete-batch - Complete batch in Durable Object
+    if (url.pathname === '/test/do/complete-batch' && request.method === 'POST') {
+      try {
+        const { jobId, status, totalBooks, photoResults, books } = await request.json();
+        const doId = env.PROGRESS_WEBSOCKET_DO.idFromName(jobId);
+        const doStub = env.PROGRESS_WEBSOCKET_DO.get(doId);
+
+        const result = await doStub.completeBatch({ status, totalBooks, photoResults, books });
+
+        return new Response(JSON.stringify(result), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+        });
+      } catch (error) {
+        console.error('Test complete-batch failed:', error);
+        return new Response(JSON.stringify({ error: error.message }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+    }
+
+    // GET /test/do/is-canceled - Check if batch is canceled
+    if (url.pathname === '/test/do/is-canceled' && request.method === 'GET') {
+      try {
+        const jobId = url.searchParams.get('jobId');
+        if (!jobId) {
+          return new Response(JSON.stringify({ error: 'Missing jobId parameter' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+
+        const doId = env.PROGRESS_WEBSOCKET_DO.idFromName(jobId);
+        const doStub = env.PROGRESS_WEBSOCKET_DO.get(doId);
+
+        const result = await doStub.isBatchCanceled();
+
+        return new Response(JSON.stringify(result), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+        });
+      } catch (error) {
+        console.error('Test is-canceled failed:', error);
+        return new Response(JSON.stringify({ error: error.message }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+    }
+
+    // POST /test/do/cancel-batch - Cancel batch in Durable Object
+    if (url.pathname === '/test/do/cancel-batch' && request.method === 'POST') {
+      try {
+        const { jobId } = await request.json();
+        const doId = env.PROGRESS_WEBSOCKET_DO.idFromName(jobId);
+        const doStub = env.PROGRESS_WEBSOCKET_DO.get(doId);
+
+        const result = await doStub.cancelBatch();
+
+        return new Response(JSON.stringify(result), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+        });
+      } catch (error) {
+        console.error('Test cancel-batch failed:', error);
+        return new Response(JSON.stringify({ error: error.message }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+    }
+
     // Health check endpoint
     if (url.pathname === '/health') {
       return new Response(JSON.stringify({

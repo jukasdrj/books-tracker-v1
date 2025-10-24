@@ -172,4 +172,187 @@ export class ProgressWebSocketDO extends DurableObject {
     // IMPORTANT: Do NOT clear "canceled" status from storage
     // Worker needs to check cancellation state after socket closes
   }
+
+  /**
+   * RPC Method: Initialize batch job with photo array
+   * Called by batch-scan-handler.js when batch upload starts
+   */
+  async initBatch({ jobId, totalPhotos, status }) {
+    console.log(`[ProgressDO] initBatch called for job ${jobId}`, { totalPhotos, status });
+
+    // Initialize batch state with photo array
+    const photos = Array.from({ length: totalPhotos }, (_, i) => ({
+      index: i,
+      status: 'queued',
+      booksFound: 0
+    }));
+
+    const batchState = {
+      jobId,
+      type: 'batch',
+      totalPhotos,
+      photos,
+      overallStatus: status,
+      currentPhoto: null,
+      totalBooksFound: 0,
+      cancelRequested: false
+    };
+
+    await this.storage.put('batchState', batchState);
+
+    // Broadcast initialization to connected clients
+    this.broadcastToClients({
+      type: 'batch-init',
+      jobId,
+      totalPhotos,
+      status
+    });
+
+    return { success: true };
+  }
+
+  /**
+   * RPC Method: Update photo status in batch
+   * Called by batch-scan-handler.js after each photo processes
+   */
+  async updatePhoto({ photoIndex, status, booksFound, error }) {
+    console.log(`[ProgressDO] updatePhoto called`, { photoIndex, status, booksFound, error });
+
+    const batchState = await this.storage.get('batchState');
+    if (!batchState || batchState.type !== 'batch') {
+      console.error('[ProgressDO] Batch job not found');
+      return { error: 'Batch job not found' };
+    }
+
+    // Update photo state
+    batchState.photos[photoIndex].status = status;
+
+    if (booksFound !== undefined) {
+      batchState.photos[photoIndex].booksFound = booksFound;
+    }
+
+    if (error) {
+      batchState.photos[photoIndex].error = error;
+    }
+
+    // Update current photo pointer
+    if (status === 'processing') {
+      batchState.currentPhoto = photoIndex;
+    }
+
+    // Recalculate total books found
+    batchState.totalBooksFound = batchState.photos.reduce(
+      (sum, p) => sum + (p.booksFound || 0),
+      0
+    );
+
+    await this.storage.put('batchState', batchState);
+
+    // Broadcast update to connected clients
+    this.broadcastToClients({
+      type: 'batch-progress',
+      jobId: batchState.jobId,
+      currentPhoto: photoIndex,
+      totalPhotos: batchState.totalPhotos,
+      photoStatus: status,
+      booksFound: booksFound || 0,
+      totalBooksFound: batchState.totalBooksFound,
+      photos: batchState.photos
+    });
+
+    return { success: true };
+  }
+
+  /**
+   * RPC Method: Complete batch processing
+   * Called by batch-scan-handler.js when all photos are processed
+   */
+  async completeBatch({ status, totalBooks, photoResults, books }) {
+    console.log(`[ProgressDO] completeBatch called`, { status, totalBooks });
+
+    const batchState = await this.storage.get('batchState');
+    if (!batchState) {
+      console.error('[ProgressDO] Job not found');
+      return { error: 'Job not found' };
+    }
+
+    batchState.overallStatus = status || 'complete';
+    batchState.totalBooksFound = totalBooks;
+    batchState.finalResults = books;
+
+    await this.storage.put('batchState', batchState);
+
+    // Broadcast completion
+    this.broadcastToClients({
+      type: 'batch-complete',
+      jobId: batchState.jobId,
+      totalBooks,
+      photoResults,
+      books
+    });
+
+    return { success: true };
+  }
+
+  /**
+   * RPC Method: Get current batch state
+   * Called by test endpoints to verify state
+   */
+  async getState() {
+    const batchState = await this.storage.get('batchState');
+    return batchState || {};
+  }
+
+  /**
+   * RPC Method: Check if batch has been canceled
+   * Called by batch-scan-handler.js in processing loop
+   */
+  async isBatchCanceled() {
+    const batchState = await this.storage.get('batchState');
+    return { canceled: batchState?.cancelRequested || false };
+  }
+
+  /**
+   * RPC Method: Cancel batch processing
+   * Called by iOS client or test endpoints
+   */
+  async cancelBatch() {
+    console.log(`[ProgressDO] cancelBatch called`);
+
+    const batchState = await this.storage.get('batchState');
+
+    if (!batchState) {
+      return { error: 'Job not found' };
+    }
+
+    batchState.cancelRequested = true;
+    batchState.overallStatus = 'canceling';
+
+    await this.storage.put('batchState', batchState);
+
+    // Broadcast cancellation
+    this.broadcastToClients({
+      type: 'batch-canceling',
+      jobId: batchState.jobId
+    });
+
+    return { success: true };
+  }
+
+  /**
+   * Helper: Broadcast message to all connected WebSocket clients
+   */
+  broadcastToClients(message) {
+    if (!this.webSocket) {
+      console.warn('[ProgressDO] No WebSocket connection to broadcast to');
+      return;
+    }
+
+    try {
+      this.webSocket.send(JSON.stringify(message));
+      console.log(`[ProgressDO] Broadcast sent:`, message.type);
+    } catch (error) {
+      console.error('[ProgressDO] Failed to send to client:', error);
+    }
+  }
 }
