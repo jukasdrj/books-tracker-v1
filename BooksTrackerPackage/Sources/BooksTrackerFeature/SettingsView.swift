@@ -418,61 +418,65 @@ public struct SettingsView: View {
     // MARK: - Actions
 
     private func resetLibrary() {
-        // ✅ COMPREHENSIVE RESET: Clear all library data, queues, and settings
+        // This task needs to be async to call the backend cancel method
+        Task { @MainActor in
+            do {
+                // 1. NEW: Asynchronously cancel backend job *first*
+                await EnrichmentQueue.shared.cancelBackendJob()
 
-        do {
-            // 1. Cancel ongoing enrichment processing
-            EnrichmentQueue.shared.stopProcessing()
+                // 2. Stop the local task (cleanup local state)
+                EnrichmentQueue.shared.stopProcessing()
 
-            // 2. Clear enrichment queue (persisted queue items)
-            EnrichmentQueue.shared.clear()
+                // 3. Clear enrichment queue (persisted queue items)
+                EnrichmentQueue.shared.clear()
 
-            // 3. Delete all Work objects (CASCADE deletes Editions & UserLibraryEntries automatically)
-            let workDescriptor = FetchDescriptor<Work>()
-            let works = try modelContext.fetch(workDescriptor)
+                // 4. Delete all Work objects (CASCADE deletes Editions & UserLibraryEntries automatically)
+                let workDescriptor = FetchDescriptor<Work>()
+                let works = try modelContext.fetch(workDescriptor)
 
-            for work in works {
-                // Force fault resolution before deletion
-                _ = work.authors
-                _ = work.editions
-                _ = work.userLibraryEntries
+                for work in works {
+                    // Force fault resolution before deletion
+                    _ = work.authors
+                    _ = work.editions
+                    _ = work.userLibraryEntries
 
-                modelContext.delete(work)
+                    modelContext.delete(work)
+                }
+
+                // 5. Delete all Author objects separately (deleteRule: .nullify doesn't cascade)
+                let authorDescriptor = FetchDescriptor<Author>()
+                let authors = try modelContext.fetch(authorDescriptor)
+
+                for author in authors {
+                    // Force fault resolution
+                    _ = author.works
+
+                    modelContext.delete(author)
+                }
+
+                // 6. Save changes to SwiftData
+                try modelContext.save()
+
+                // 7. Clear search history from UserDefaults
+                UserDefaults.standard.removeObject(forKey: "RecentBookSearches")
+
+                // 8. Reset app-level settings to default values
+                aiSettings.resetToDefaults()
+                featureFlags.resetToDefaults()
+
+                // Success haptic feedback
+                let generator = UINotificationFeedbackGenerator()
+                generator.notificationOccurred(.success)
+
+                print("✅ Library reset complete - All works, settings, and queue cleared")
+
+            } catch {
+                print("❌ Failed to reset library: \(error)")
+
+                // Error haptic
+                let generator = UINotificationFeedbackGenerator()
+                generator.notificationOccurred(.error)
             }
-
-            // 4. Delete all Author objects separately (deleteRule: .nullify doesn't cascade)
-            let authorDescriptor = FetchDescriptor<Author>()
-            let authors = try modelContext.fetch(authorDescriptor)
-
-            for author in authors {
-                // Force fault resolution
-                _ = author.works
-
-                modelContext.delete(author)
-            }
-
-            // 5. Save changes to SwiftData
-            try modelContext.save()
-
-            // 6. Clear search history from UserDefaults
-            UserDefaults.standard.removeObject(forKey: "RecentBookSearches")
-
-            // 7. NEW: Reset app-level settings to default values
-            aiSettings.resetToDefaults()
-            featureFlags.resetToDefaults()
-
-            // Success haptic feedback
-            let generator = UINotificationFeedbackGenerator()
-            generator.notificationOccurred(.success)
-
-            print("✅ Library reset complete - All works, settings, and queue cleared")
-
-        } catch {
-            print("❌ Failed to reset library: \(error)")
-
-            // Error haptic
-            let generator = UINotificationFeedbackGenerator()
-            generator.notificationOccurred(.error)
         }
     }
 
