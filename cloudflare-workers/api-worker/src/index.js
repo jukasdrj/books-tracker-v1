@@ -2,6 +2,8 @@ import { ProgressWebSocketDO } from './durable-objects/progress-socket.js';
 import * as externalApis from './services/external-apis.js';
 import * as enrichment from './services/enrichment.js';
 import * as aiScanner from './services/ai-scanner.js';
+import * as bookSearch from './handlers/book-search.js';
+import { handleAdvancedSearch } from './handlers/search-handlers.js';
 
 // Export the Durable Object class for Cloudflare Workers runtime
 export { ProgressWebSocketDO };
@@ -153,6 +155,93 @@ export default {
     }
 
     // ========================================================================
+    // Book Search Endpoints
+    // ========================================================================
+
+    // GET /search/title - Search books by title with caching (6h TTL)
+    if (url.pathname === '/search/title') {
+      const query = url.searchParams.get('q');
+      if (!query) {
+        return new Response(JSON.stringify({ error: 'Missing query parameter "q"' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const maxResults = parseInt(url.searchParams.get('maxResults') || '20');
+      const result = await bookSearch.searchByTitle(query, { maxResults }, env, ctx);
+
+      return new Response(JSON.stringify(result), {
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        }
+      });
+    }
+
+    // GET /search/isbn - Search books by ISBN with caching (7 day TTL)
+    if (url.pathname === '/search/isbn') {
+      const isbn = url.searchParams.get('isbn');
+      if (!isbn) {
+        return new Response(JSON.stringify({ error: 'Missing ISBN parameter' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const maxResults = parseInt(url.searchParams.get('maxResults') || '1');
+      const result = await bookSearch.searchByISBN(isbn, { maxResults }, env, ctx);
+
+      return new Response(JSON.stringify(result), {
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        }
+      });
+    }
+
+    // POST /search/advanced - Advanced multi-field search
+    if (url.pathname === '/search/advanced' && request.method === 'POST') {
+      try {
+        const searchParams = await request.json();
+        const { bookTitle, authorName } = searchParams;
+
+        if (!bookTitle && !authorName) {
+          return new Response(JSON.stringify({
+            error: 'At least one search parameter required (bookTitle or authorName)'
+          }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+
+        const maxResults = searchParams.maxResults || 20;
+        const result = await handleAdvancedSearch(
+          { bookTitle, authorName },
+          { maxResults },
+          env
+        );
+
+        return new Response(JSON.stringify(result), {
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*'
+          }
+        });
+
+      } catch (error) {
+        console.error('Advanced search failed:', error);
+        return new Response(JSON.stringify({
+          error: 'Advanced search failed',
+          message: error.message
+        }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+    }
+
+    // ========================================================================
     // External API Routes (backward compatibility - temporary during migration)
     // ========================================================================
 
@@ -287,6 +376,9 @@ export default {
         worker: 'api-worker',
         version: '1.0.0',
         endpoints: [
+          'GET /search/title?q={query}&maxResults={n} - Title search with caching (6h TTL)',
+          'GET /search/isbn?isbn={isbn}&maxResults={n} - ISBN search with caching (7 day TTL)',
+          'POST /search/advanced - Advanced search (body: {bookTitle, authorName, maxResults})',
           'POST /api/enrichment/start - Start batch enrichment job',
           'POST /api/scan-bookshelf?jobId={id} - AI bookshelf scanner (upload image with Content-Type: image/*)',
           'GET /ws/progress?jobId={id} - WebSocket progress updates',
