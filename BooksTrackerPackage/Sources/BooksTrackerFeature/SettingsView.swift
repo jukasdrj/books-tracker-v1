@@ -49,7 +49,6 @@ public struct SettingsView: View {
     @State private var showingCloudKitHelp = false
     @State private var showingAcknowledgements = false
     @State private var showingBookshelfScanner = false
-    @State private var showCloudflareWarning = false
 
     // CloudKit status (simplified for now)
     @State private var cloudKitStatus: CloudKitStatus = .unknown
@@ -180,19 +179,8 @@ public struct SettingsView: View {
                 }
                 .pickerStyle(.navigationLink)
                 .onChange(of: aiSettings.selectedProvider) { oldValue, newValue in
-                    // Log provider switch (TODO: Replace with Firebase Analytics when configured)
+                    // Log provider switch
                     print("[Analytics] ai_provider_switched - from: \(oldValue.rawValue), to: \(newValue.rawValue)")
-                    // TODO: Add Firebase Analytics
-                    // Analytics.logEvent("ai_provider_switched", parameters: [
-                    //     "from_provider": oldValue.rawValue,
-                    //     "to_provider": newValue.rawValue,
-                    //     "timestamp": Date().timeIntervalSince1970
-                    // ])
-
-                    // Show warning when switching to Cloudflare for first time
-                    if newValue == .cloudflare && oldValue == .gemini {
-                        showCloudflareWarning = true
-                    }
                 }
 
                 Button {
@@ -372,16 +360,6 @@ public struct SettingsView: View {
             BookshelfScannerView()
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
-        }
-        .alert("Experimental Feature", isPresented: $showCloudflareWarning) {
-            Button("Try It") {
-                // User confirmed, keep Cloudflare selection
-            }
-            Button("Cancel", role: .cancel) {
-                aiSettings.selectedProvider = .gemini
-            }
-        } message: {
-            Text("Cloudflare AI is 5-8x faster than Gemini but may have lower accuracy. This is an experimental feature. You can always switch back to Gemini in Settings.")
         }
         .confirmationDialog(
             "Reset Library",

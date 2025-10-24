@@ -11,7 +11,7 @@ import SwiftUI
 public final class AIProviderSettings: @unchecked Sendable {
     /// Currently selected AI provider
     ///
-    /// Default: `.gemini` (proven accuracy)
+    /// Default: `.geminiFlash` (proven accuracy)
     ///
     /// Note: Uses stored property with didSet to ensure @Observable notifications fire
     public var selectedProvider: AIProvider {
@@ -24,14 +24,14 @@ public final class AIProviderSettings: @unchecked Sendable {
 
     private init() {
         // Load from UserDefaults on init
-        let raw = UserDefaults.standard.string(forKey: "aiProvider") ?? "gemini"
-        self.selectedProvider = AIProvider(rawValue: raw) ?? .gemini
+        let raw = UserDefaults.standard.string(forKey: "aiProvider") ?? "gemini-flash"
+        self.selectedProvider = AIProvider(rawValue: raw) ?? .geminiFlash
     }
 
     /// Reset AI provider settings to default values
     /// Called during library reset to restore clean state
     public func resetToDefaults() {
-        selectedProvider = .gemini  // Default to proven accuracy
-        print("✅ AIProviderSettings reset to defaults (provider: gemini)")
+        selectedProvider = .geminiFlash  // Default to proven accuracy
+        print("✅ AIProviderSettings reset to defaults (provider: gemini-flash)")
     }
 }

@@ -96,8 +96,8 @@ actor BookshelfAIService {
     /// Read user-selected AI provider from UserDefaults
     /// UserDefaults is thread-safe, safe to call from actor context
     private func getSelectedProvider() -> AIProvider {
-        let raw = UserDefaults.standard.string(forKey: "aiProvider") ?? "gemini"
-        return AIProvider(rawValue: raw) ?? .gemini
+        let raw = UserDefaults.standard.string(forKey: "aiProvider") ?? "gemini-flash"
+        return AIProvider(rawValue: raw) ?? .geminiFlash
     }
 
     // MARK: - Public API
@@ -457,6 +457,12 @@ actor BookshelfAIService {
         request.setValue(provider.rawValue, forHTTPHeaderField: "X-AI-Provider")
         request.httpBody = imageData
         request.timeoutInterval = timeout // Use same timeout as uploadImage (70s for AI + enrichment)
+
+        // DIAGNOSTIC: Log outgoing request details
+        print("[Diagnostic iOS Layer] === Outgoing Request for job \(jobId) ===")
+        print("[Diagnostic iOS Layer] Provider enum value: \(provider.rawValue)")
+        print("[Diagnostic iOS Layer] X-AI-Provider header set to: \(request.value(forHTTPHeaderField: "X-AI-Provider") ?? "NOT SET")")
+        print("[Diagnostic iOS Layer] All headers: \(request.allHTTPHeaderFields ?? [:])")
 
         let (data, response) = try await URLSession.shared.data(for: request)
 
