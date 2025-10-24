@@ -113,25 +113,17 @@ struct BookDetailView: View {
 - `GET /search/isbn?isbn={isbn}` - ISBN lookup (7-day cache)
 - `POST /search/advanced` - Multi-field search (title + author + ISBN)
 - `POST /api/enrichment/start` - Batch enrichment with WebSocket progress
-- `POST /api/scan-bookshelf?jobId={uuid}&provider={model}` - AI bookshelf scan with model selection
+- `POST /api/scan-bookshelf?jobId={uuid}` - AI bookshelf scan with Gemini 2.0 Flash
 - `GET /ws/progress?jobId={uuid}` - WebSocket progress (unified for ALL jobs)
 
-**AI Provider Selection:**
-- iOS sends `?provider={model}` query parameter (`gemini-flash`, `cf-llava-1.5-7b`, `cf-uform-gen2-qwen-500m`, `cf-llama-3.2-11b-vision`)
-- Backend routes to appropriate provider module and model
-- **Gemini Flash (Default):** Gemini 2.0 Flash - High accuracy, 25-40s processing (3072px/90% quality)
-- **LLaVA 1.5:** Cloudflare Workers AI - Balanced, 5-12s processing (2048px/87% quality)
-- **Qwen/UForm (Fast):** Cloudflare Workers AI - Fastest mode, 3-8s processing (1536px/85% quality)
-- **Llama 3.2 Vision (Accurate):** Cloudflare Workers AI - High accuracy, 8-15s processing (2560px/88% quality)
-- Missing parameter defaults to Gemini Flash for backward compatibility
+**AI Provider (Gemini Only):**
+- **Gemini 2.0 Flash:** Google's production vision model with 2M token context window
+- Processing time: 25-40s (includes AI inference + enrichment)
+- Image size: Handles 4-5MB images natively (no resizing needed)
+- Accuracy: High (0.7-0.95 confidence scores)
+- Optimized for ISBN detection and small text on book spines
 
-**Performance Comparison:**
-| Provider       | Speed    | Accuracy         | Image Size | Use Case                          |
-|----------------|----------|------------------|------------|-----------------------------------|
-| Gemini Flash   | 25-40s   | High (0.7-0.95)  | 400-600KB  | Best for ISBNs, small text       |
-| LLaVA 1.5      | 5-12s    | Good (0.6-0.85)  | 250-400KB  | Balanced speed/accuracy          |
-| Qwen/UForm     | 3-8s     | Fair (0.5-0.75)  | 150-300KB  | Quick scans, testing             |
-| Llama Vision   | 8-15s    | High (0.65-0.90) | 300-500KB  | Large shelves, quality           |
+**Note:** Cloudflare Workers AI models (Llama, LLaVA, UForm) removed due to small context windows (128K-8K tokens) that couldn't handle typical bookshelf images. See `cloudflare-workers/GEMINI_OPTIMIZATION.md` and [GitHub Issue #134](https://github.com/jukasdrj/books-tracker-v1/issues/134) for details.
 
 **Architecture:**
 - Single monolith worker with direct function calls (no RPC service bindings)
@@ -270,11 +262,10 @@ public class CSVImportService {
 ### Features
 
 **Bookshelf AI Scanner:** See `docs/features/BOOKSHELF_SCANNER.md`
-- Multi-provider AI support (Gemini, Cloudflare Workers AI)
-- Provider selection in Settings with user-facing descriptions
+- Gemini 2.0 Flash AI (optimized, 2M token context window)
 - WebSocket real-time progress (8ms latency!)
 - 60% confidence threshold for review queue
-- iOS preprocessing adapts per provider (3072px/90% for Gemini, 1536px/85% for Cloudflare)
+- iOS preprocessing (3072px @ 90% quality, 400-600KB)
 
 **CSV Import:** See `docs/features/CSV_IMPORT.md`
 - 100 books/min, <200MB memory

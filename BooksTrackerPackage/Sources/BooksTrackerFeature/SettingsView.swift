@@ -40,7 +40,6 @@ public struct SettingsView: View {
     @Environment(\.iOS26ThemeStore) private var themeStore
     @Environment(\.modelContext) private var modelContext
     @Environment(FeatureFlags.self) private var featureFlags
-    @Environment(AIProviderSettings.self) private var aiSettings
 
     // MARK: - State Management
 
@@ -154,35 +153,6 @@ public struct SettingsView: View {
             // MARK: - AI Features Section
 
             Section {
-                Picker("AI Model for Bookshelf Scan", selection: Binding(
-                    get: { aiSettings.selectedProvider },
-                    set: { aiSettings.selectedProvider = $0 }
-                )) {
-                    ForEach(AIProvider.allCases) { provider in
-                        Label {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(provider.displayName)
-                                    .font(.headline)
-                                    .foregroundColor(.primary)
-
-                                Text(provider.description)
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                        } icon: {
-                            Image(systemName: provider.icon)
-                                .foregroundStyle(themeStore.primaryColor)
-                        }
-                        .tag(provider)
-                    }
-                }
-                .pickerStyle(.navigationLink)
-                .onChange(of: aiSettings.selectedProvider) { oldValue, newValue in
-                    // Log provider switch
-                    print("[Analytics] ai_provider_switched - from: \(oldValue.rawValue), to: \(newValue.rawValue)")
-                }
-
                 Button {
                     showingBookshelfScanner = true
                 } label: {
@@ -240,7 +210,7 @@ public struct SettingsView: View {
             } header: {
                 Text("AI Features")
             } footer: {
-                Text("Choose your preferred AI model for bookshelf scanning. Gemini offers highest accuracy, while Cloudflare models prioritize speed.")
+                Text("Scan your bookshelf with Gemini 2.0 Flash - Google's fast and accurate AI model with 2M token context window. Best for ISBNs and small text.")
             }
 
             // MARK: - iCloud Sync Section

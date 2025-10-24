@@ -533,11 +533,11 @@ actor BookshelfAIService {
     // MARK: - Progress Tracking Methods (Swift 6.2 Task Pattern)
 
     private func startScanJob(_ imageData: Data, provider: AIProvider, jobId: String) async throws -> ScanJobResponse {
-        // Construct URL with jobId and provider query parameters
+        // Construct URL with jobId query parameter (provider always Gemini)
         var components = URLComponents(url: endpoint, resolvingAgainstBaseURL: false)!
         components.queryItems = [
-            URLQueryItem(name: "jobId", value: jobId),
-            URLQueryItem(name: "provider", value: provider.rawValue)
+            URLQueryItem(name: "jobId", value: jobId)
+            // Provider param removed - backend defaults to gemini-flash
         ]
 
         guard let urlWithParams = components.url else {
@@ -552,7 +552,7 @@ actor BookshelfAIService {
 
         // DIAGNOSTIC: Log outgoing request details
         print("[Diagnostic iOS Layer] === Outgoing Request for job \(jobId) ===")
-        print("[Diagnostic iOS Layer] Provider enum value: \(provider.rawValue)")
+        print("[Diagnostic iOS Layer] Provider: Gemini 2.0 Flash (optimized)")
         print("[Diagnostic iOS Layer] Full URL: \(urlWithParams.absoluteString)")
         print("[Diagnostic iOS Layer] Query items: \(components.queryItems ?? [])")
 

@@ -2,12 +2,12 @@
  * Bookshelf AI Scanner Service
  * Migrated from bookshelf-ai-worker
  *
+ * OPTIMIZED: Gemini 2.0 Flash only (proven working, 2M token context window)
  * CRITICAL: Uses direct function calls instead of RPC to eliminate circular dependencies!
  */
 
 import { handleAdvancedSearch } from '../handlers/search-handlers.js';
 import { scanImageWithGemini } from '../providers/gemini-provider.js';
-import { scanImageWithCloudflare } from '../providers/cloudflare-provider.js';
 
 /**
  * Process bookshelf image scan with AI vision
@@ -34,62 +34,30 @@ export async function processBookshelfScan(jobId, imageData, request, env, doStu
     });
     console.log(`[AI Scanner] Progress pushed: 10% (image quality analysis)`);
 
-    // Stage 2: Provider selection and AI processing
+    // Stage 2: AI processing with Gemini 2.0 Flash
     await doStub.pushProgress({
       progress: 0.3,
       processedItems: 1,
       totalItems: 3,
-      currentStatus: 'Processing with AI...',
+      currentStatus: 'Processing with Gemini AI...',
       jobId
     });
 
-    // Parse provider from query parameter (format: "cf-llava-1.5-7b")
-    const url = new URL(request.url);
-    const providerParam = url.searchParams.get('provider') || 'gemini-flash';
+    console.log(`[AI Scanner] Job ${jobId} - Using Gemini 2.0 Flash`);
 
-    console.log(`[AI Scanner] Job ${jobId} - Provider parameter: ${providerParam}`);
-
-    // Map provider parameter to model identifier
     let scanResult;
-    let modelIdentifier;
-
     try {
-      switch (providerParam) {
-        case 'cf-llava-1.5-7b':
-          console.log('[AI Scanner] Using Cloudflare LLaVA 1.5');
-          modelIdentifier = '@cf/llava-hf/llava-1.5-7b-hf';
-          scanResult = await scanImageWithCloudflare(imageData, env, modelIdentifier);
-          break;
-
-        case 'cf-uform-gen2-qwen-500m':
-          console.log('[AI Scanner] Using Cloudflare UForm Gen2 Qwen');
-          modelIdentifier = '@cf/unum/uform-gen2-qwen-500m';
-          scanResult = await scanImageWithCloudflare(imageData, env, modelIdentifier);
-          break;
-
-        case 'cf-llama-3.2-11b-vision':
-          console.log('[AI Scanner] Using Cloudflare Llama 3.2 Vision');
-          modelIdentifier = '@cf/meta/llama-3.2-11b-vision-instruct';
-          scanResult = await scanImageWithCloudflare(imageData, env, modelIdentifier);
-          break;
-
-        case 'gemini-flash':
-        default:
-          console.log('[AI Scanner] Using Gemini 2.0 Flash (default)');
-          // Default to Gemini for backward compatibility
-          scanResult = await scanImageWithGemini(imageData, env);
-          break;
-      }
-      console.log('[AI Scanner] AI processing complete');
+      scanResult = await scanImageWithGemini(imageData, env);
+      console.log('[AI Scanner] Gemini processing complete');
     } catch (aiError) {
-      console.error('[AI Scanner] AI processing failed:', aiError.message);
+      console.error('[AI Scanner] Gemini processing failed:', aiError.message);
       throw aiError;
     }
 
     const detectedBooks = scanResult.books;
     const suggestions = scanResult.suggestions || [];
 
-    console.log(`[AI Scanner] ${detectedBooks.length} books detected via ${providerParam} (${scanResult.metadata.processingTimeMs}ms)`);
+    console.log(`[AI Scanner] ${detectedBooks.length} books detected (${scanResult.metadata.processingTimeMs}ms)`);
 
     await doStub.pushProgress({
       progress: 0.5,
