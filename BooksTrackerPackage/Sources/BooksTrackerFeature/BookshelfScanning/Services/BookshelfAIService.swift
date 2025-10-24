@@ -511,7 +511,6 @@ actor BookshelfAIService {
             suggestions.append(SuggestionViewModel(
                 type: "low_confidence",
                 severity: "warning",
-                message: "\(scanResult.needsReview) books need manual review (low confidence)",
                 affectedCount: scanResult.needsReview
             ))
         }
@@ -522,7 +521,6 @@ actor BookshelfAIService {
             suggestions.append(SuggestionViewModel(
                 type: "no_enrichment",
                 severity: "info",
-                message: "\(unenriched) books could not be enriched with metadata",
                 affectedCount: unenriched
             ))
         }

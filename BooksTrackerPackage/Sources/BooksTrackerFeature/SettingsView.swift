@@ -371,7 +371,6 @@ public struct SettingsView: View {
                 UserDefaults.standard.removeObject(forKey: "RecentBookSearches")
 
                 // 10. Reset app-level settings to default values
-                aiSettings.resetToDefaults()
                 featureFlags.resetToDefaults()
 
                 // Success haptic feedback

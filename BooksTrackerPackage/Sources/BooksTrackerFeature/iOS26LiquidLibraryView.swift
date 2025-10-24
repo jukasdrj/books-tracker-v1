@@ -52,6 +52,7 @@ public struct iOS26LiquidLibraryView: View {
     @State private var searchText = ""
     @State private var showingDiversityInsights = false
     @State private var showingReviewQueue = false
+    @State private var showingSettings = false
     @State private var pendingEnrichmentCount = 0
     @State private var reviewQueueCount = 0
     @State private var isEnriching = false
@@ -140,6 +141,15 @@ public struct iOS26LiquidLibraryView: View {
                     .foregroundStyle(.primary)
                     .accessibilityLabel("Change layout")
                     .accessibilityHint("Switch between grid, cards, and list views")
+
+                    Button {
+                        showingSettings = true
+                    } label: {
+                        Image(systemName: "gearshape")
+                    }
+                    .buttonStyle(GlassButtonStyle())
+                    .foregroundStyle(themeStore.primaryColor)
+                    .accessibilityLabel("Settings")
                 }
             }
             // ✅ FIX 4: Navigation with Work objects (SwiftData PersistentIdentifier)
@@ -157,6 +167,19 @@ public struct iOS26LiquidLibraryView: View {
                 CulturalDiversityInsightsView(works: cachedFilteredWorks)
                     .presentationDetents([.medium, .large])
                     .iOS26SheetGlass()
+            }
+            .sheet(isPresented: $showingSettings) {
+                NavigationStack {
+                    SettingsView()
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .topBarTrailing) {
+                                Button("Done") {
+                                    showingSettings = false
+                                }
+                            }
+                        }
+                }
             }
     }
 

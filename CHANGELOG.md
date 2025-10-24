@@ -6,6 +6,64 @@ All notable changes, achievements, and debugging victories for this project.
 
 ## [Unreleased]
 
+### Changed - 4-Tab Layout Optimization per iOS 26 HIG (October 24, 2025) ⚡
+
+**"Five tabs? That's one too many!"** 🎯
+
+After implementing PR #135 (Shelf tab bar integration), we realized the app violated iOS 26 Human Interface Guidelines by having 5 tabs (Library, Search, Shelf, Insights, Settings). Apple's HIG recommends 3-4 tabs for optimal usability, with 5 tabs as the absolute maximum.
+
+**The Solution:** Settings doesn't need to be a tab! Following the Apple Books.app pattern, we moved Settings to a gear icon in the Library tab toolbar. This:
+- ✅ Reduces cognitive load (fewer tabs to navigate)
+- ✅ Follows iOS 26 HIG best practices (3-4 tabs optimal)
+- ✅ Matches familiar iOS patterns (Books, Music, Photos all put Settings in toolbars)
+- ✅ Improves one-handed reachability (Settings accessed from same tab)
+
+**What Changed:**
+- 🎯 **ContentView.swift**: Removed Settings tab, updated `MainTab` enum (removed `.settings` case)
+- ⚙️ **iOS26LiquidLibraryView.swift**: Added Settings gear button to trailing toolbar with sheet presentation
+- 📚 **SettingsView.swift**: Fixed pre-existing `aiSettings` reference error
+- 🤖 **BookshelfAIService.swift**: Fixed pre-existing `SuggestionViewModel` initializer errors
+- 📱 **BooksTrackerApp.swift**: Removed pre-existing `AIProviderSettings` environment reference
+
+**New Navigation Flow:**
+```
+Library Tab (with gear icon) → Sheet → SettingsView
+```
+
+**Pre-existing Errors Fixed (Bonus!):**
+While implementing the 4-tab optimization, we fixed 3 compilation errors that were blocking builds:
+1. `SuggestionViewModel` initializer calls with invalid `message` parameter
+2. Missing `aiSettings` reference in `SettingsView.resetLibrary()`
+3. Missing `AIProviderSettings` class in `BooksTrackerApp`
+
+**Files Changed:**
+- `ContentView.swift` (removed Settings tab, -9 lines)
+- `iOS26LiquidLibraryView.swift` (added Settings button + sheet, +21 lines)
+- `SettingsView.swift` (removed aiSettings call, -1 line)
+- `BookshelfAIService.swift` (fixed SuggestionViewModel, -2 lines)
+- `BooksTrackerApp.swift` (removed AIProviderSettings, -2 lines)
+- `CLAUDE.md` (added Navigation Structure section)
+
+**Build Status:**
+- ✅ **Warnings**: 0 (zero new warnings)
+- ✅ **Errors**: 0 (fixed 3 pre-existing errors!)
+- ⏱️ **Build Time**: ~8 seconds (iOS Simulator)
+
+**Commits:**
+- Pending: `feat: optimize to 4-tab layout per iOS 26 HIG (issue #136)`
+
+**GitHub Issues:**
+- ✅ Closes #37 (Shelf tab bar integration) - merged via PR #135
+- ✅ Closes #136 (4-tab optimization) - this change
+
+**Lessons Learned:**
+- 📱 **iOS 26 HIG**: Tab bar guidelines exist for a reason—trust Apple's UX research
+- 🎨 **SF Symbols**: Choose semantic icons (`books.vertical.on.book` > `viewfinder`)
+- 🏗️ **Pre-existing Errors**: Always fix blocking errors before new features
+- 🤖 **Bot PRs**: Review Jules bot PRs carefully—great starting point but need refinement
+
+---
+
 ### Fixed - The Great Circular Dependency Slaying (October 23, 2025) 🗡️
 
 **"Wait, our workers are calling each other in a circle?!"** 😱

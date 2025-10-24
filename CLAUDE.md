@@ -146,6 +146,30 @@ api-worker/
 
 **See:** `cloudflare-workers/SERVICE_BINDING_ARCHITECTURE.md` for monolith architecture details. Previous distributed architecture archived in `cloudflare-workers/_archived/`.
 
+### Navigation Structure
+
+**4-Tab Layout (iOS 26 HIG Optimized):**
+- **Library** - Main collection view with Settings gear icon in toolbar
+- **Search** - Book search with ISBN scanner
+- **Shelf** - AI-powered bookshelf scanner (Gemini 2.0 Flash)
+- **Insights** - Reading statistics and cultural diversity analytics
+
+**Settings Access:**
+- Accessed via gear icon in Library tab toolbar (Books.app pattern)
+- Sheet presentation with "Done" button
+- Not in tab bar (4 tabs optimal per iOS 26 HIG)
+
+**Navigation Patterns:**
+```swift
+// Push navigation for details
+.navigationDestination(item: $selectedBook) { book in WorkDetailView(work: book.work) }
+
+// Sheet presentation for Settings
+.sheet(isPresented: $showingSettings) {
+    NavigationStack { SettingsView() }
+}
+```
+
 ## Development Standards
 
 ### Swift 6 Concurrency

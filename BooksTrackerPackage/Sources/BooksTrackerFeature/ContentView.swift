@@ -52,15 +52,6 @@ public struct ContentView: View {
                     Label("Insights", systemImage: selectedTab == .insights ? "chart.bar.fill" : "chart.bar")
                 }
                 .tag(MainTab.insights)
-                
-                // Settings Tab
-                NavigationStack {
-                    SettingsView()
-                }
-                .tabItem {
-                    Label("Settings", systemImage: selectedTab == .settings ? "gear.circle.fill" : "gear")
-                }
-                .tag(MainTab.settings)
             }
             .tint(themeStore.primaryColor)
             #if os(iOS)
@@ -304,7 +295,6 @@ enum MainTab: String, CaseIterable {
     case search = "search"
     case shelf = "shelf"
     case insights = "insights"
-    case settings = "settings"
 
     var displayName: String {
         switch self {
@@ -312,7 +302,6 @@ enum MainTab: String, CaseIterable {
         case .search: return "Search"
         case .shelf: return "Shelf"
         case .insights: return "Insights"
-        case .settings: return "Settings"
         }
     }
 }
