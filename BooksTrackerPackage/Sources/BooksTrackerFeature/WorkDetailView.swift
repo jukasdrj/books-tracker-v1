@@ -206,7 +206,7 @@ struct WorkDetailView: View {
                                         .font(.footnote)
                                         .foregroundColor(.white.opacity(0.7))
                                 }
-                                .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 1)
+                                .shadow(color: .black.opacity(0.8), radius: 4, x: 0, y: 1) // ✅ WCAG AA: Stronger shadow for contrast on light backgrounds
                             }
                             .buttonStyle(.plain)
                         }

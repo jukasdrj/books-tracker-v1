@@ -486,7 +486,7 @@ public struct SearchView: View {
 
                 Text(description)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.primary.opacity(0.75)) // ✅ WCAG AA: Better contrast for small text
             }
         }
         .padding(12)

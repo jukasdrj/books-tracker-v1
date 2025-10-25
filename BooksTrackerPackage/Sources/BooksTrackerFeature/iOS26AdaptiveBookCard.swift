@@ -314,6 +314,11 @@ struct iOS26AdaptiveBookCard: View {
                             .lineLimit(2)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(.black.opacity(0.4)) // ✅ WCAG AA: Dark scrim for contrast on light gradients
+                            )
                     }
                 }
         }
