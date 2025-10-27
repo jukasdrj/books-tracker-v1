@@ -306,28 +306,33 @@ enum MainTab: String, CaseIterable {
     }
 }
 
-// MARK: - Placeholder Views
+// MARK: - Insights View
 
 struct InsightsView: View {
-    @Environment(\.iOS26ThemeStore) private var themeStore
+    @Environment(\.modelContext) private var modelContext
+    @State private var insightsModel = InsightsModel()
 
     var body: some View {
-        VStack(spacing: 24) {
-            Image(systemName: "chart.bar")
-                .font(.system(size: 48, weight: .ultraLight))
-                .foregroundStyle(.secondary)
+        ScrollView {
+            VStack(spacing: 30) {
+                UserStatsView(
+                    selectedTimePeriod: $insightsModel.selectedTimePeriod,
+                    readingStats: insightsModel.readingStats
+                )
 
-            Text("Reading Insights")
-                .font(.title2)
-                .fontWeight(.semibold)
-
-            Text("Track your reading progress and discover patterns in your literary journey")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
+                DiversityInsightsView(
+                    authorGenderDistribution: insightsModel.authorGenderDistribution,
+                    culturalRegionDistribution: insightsModel.culturalRegionDistribution,
+                    originalLanguageDistribution: insightsModel.originalLanguageDistribution
+                )
+            }
+            .padding()
         }
         .navigationTitle("Insights")
+        .task(id: insightsModel.selectedTimePeriod) {
+            // Re-fetch data when the time period changes
+            insightsModel.fetchData(from: modelContext)
+        }
     }
 }
 
