@@ -110,9 +110,9 @@ struct ReadingStatsTests {
         edition2.work = work2
         edition3.work = work3
 
-        let entry1 = UserLibraryEntry.createOwnedEntry(for: work1, edition: edition1, status: .read, context: context)
-        let entry2 = UserLibraryEntry.createOwnedEntry(for: work2, edition: edition2, status: .read, context: context)
-        let entry3 = UserLibraryEntry.createOwnedEntry(for: work3, edition: edition3, status: .read, context: context)
+        _ = UserLibraryEntry.createOwnedEntry(for: work1, edition: edition1, status: .read, context: context)
+        _ = UserLibraryEntry.createOwnedEntry(for: work2, edition: edition2, status: .read, context: context)
+        _ = UserLibraryEntry.createOwnedEntry(for: work3, edition: edition3, status: .read, context: context)
 
         // Note: Factory already inserted entries - no manual insert needed
         try context.save()
