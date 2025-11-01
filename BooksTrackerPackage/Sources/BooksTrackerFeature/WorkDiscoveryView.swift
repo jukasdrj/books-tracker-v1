@@ -499,8 +499,7 @@ public struct WorkDiscoveryView: View {
             publicationDate: primaryEdition.publicationDate,
             pageCount: primaryEdition.pageCount,
             format: primaryEdition.format,
-            coverImageURL: primaryEdition.coverImageURL,
-            work: work
+            coverImageURL: primaryEdition.coverImageURL
         )
 
         // Set external identifiers
