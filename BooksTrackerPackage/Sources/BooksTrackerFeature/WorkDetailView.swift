@@ -19,11 +19,6 @@ struct WorkDetailView: View {
         selectedEdition ?? work.primaryEdition ?? work.availableEditions.first ?? placeholderEdition
     }
 
-    // Edition lookup dictionary for O(1) access by PersistentIdentifier
-    private var editionsByID: [PersistentIdentifier: Edition] {
-        Dictionary(uniqueKeysWithValues: work.availableEditions.map { ($0.id, $0) })
-    }
-
     // Placeholder edition for works without editions
     private var placeholderEdition: Edition {
         Edition()
@@ -254,8 +249,7 @@ struct WorkDetailView: View {
         }
         .onChange(of: selectedEditionID) { oldValue, newValue in
             if let newID = newValue {
-                // O(1) dictionary lookup instead of O(n) linear search
-                userEntry.preferredEdition = editionsByID[newID]
+                userEntry.preferredEdition = work.availableEditions.first { $0.id == newID }
             } else {
                 userEntry.preferredEdition = nil  // Clear when no edition selected
             }
