@@ -94,20 +94,35 @@ public class BookSearchAPIService {
 
         switch envelope {
         case .success(let searchData, let meta):
+            // Map authors from API response (separate from works for normalization)
+            let mappedAuthors = searchData.authors.compactMap { authorDTO in
+                do {
+                    return try dtoMapper.mapToAuthor(authorDTO)
+                } catch {
+                    logger.warning("Failed to map Author DTO: \(String(describing: error))")
+                    return nil
+                }
+            }
+
             // Use DTOMapper to convert DTOs → SwiftData models with deduplication
             results = searchData.works.compactMap { workDTO in
                 do {
                     let work = try dtoMapper.mapToWork(workDTO)
 
-                    // DTOMapper automatically handles:
+                    // DTOMapper handles:
                     // - Deduplication by googleBooksVolumeIDs
                     // - Synthetic Work → Real Work merging
-                    // - Author relationship linking (if authors provided)
+                    // Note: Authors must be explicitly linked (not automatic)
+
+                    // Link authors to work (insert-before-relate already satisfied by DTOMapper)
+                    if !mappedAuthors.isEmpty {
+                        work.authors = mappedAuthors
+                    }
 
                     return SearchResult(
                         work: work,
                         editions: [],
-                        authors: [],
+                        authors: mappedAuthors,
                         relevanceScore: 1.0,
                         provider: meta.provider ?? "unknown"
                     )
@@ -213,15 +228,30 @@ public class BookSearchAPIService {
 
         switch envelope {
         case .success(let searchData, let meta):
+            // Map authors from API response (separate from works for normalization)
+            let mappedAuthors = searchData.authors.compactMap { authorDTO in
+                do {
+                    return try dtoMapper.mapToAuthor(authorDTO)
+                } catch {
+                    logger.warning("Failed to map Author DTO: \(String(describing: error))")
+                    return nil
+                }
+            }
+
             // Use DTOMapper to convert DTOs → SwiftData models with deduplication
             results = searchData.works.compactMap { workDTO in
                 do {
                     let work = try dtoMapper.mapToWork(workDTO)
 
+                    // Link authors to work (insert-before-relate already satisfied by DTOMapper)
+                    if !mappedAuthors.isEmpty {
+                        work.authors = mappedAuthors
+                    }
+
                     return SearchResult(
                         work: work,
                         editions: [],
-                        authors: [],
+                        authors: mappedAuthors,
                         relevanceScore: 1.0,
                         provider: meta.provider ?? "unknown"
                     )
