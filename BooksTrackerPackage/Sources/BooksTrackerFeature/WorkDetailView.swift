@@ -250,6 +250,8 @@ struct WorkDetailView: View {
         .onChange(of: selectedEditionID) { oldValue, newValue in
             if let newID = newValue {
                 userEntry.preferredEdition = work.availableEditions.first { $0.id == newID }
+            } else {
+                userEntry.preferredEdition = nil  // Clear when no edition selected
             }
         }
     }
@@ -336,6 +338,7 @@ struct AuthorSearchResultsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.iOS26ThemeStore) private var themeStore
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.dtoMapper) private var dtoMapper
     @State private var searchModel: SearchModel?
     @State private var selectedBook: SearchResult?
 
@@ -380,13 +383,14 @@ struct AuthorSearchResultsView: View {
                 WorkDiscoveryView(searchResult: result)
             }
             .task {
-                // Initialize searchModel with modelContext and dtoMapper
-                let dtoMapper = DTOMapper(modelContext: modelContext)
-                searchModel = SearchModel(modelContext: modelContext, dtoMapper: dtoMapper)
+                // Initialize searchModel with modelContext and environment dtoMapper
+                if let dtoMapper = dtoMapper {
+                    searchModel = SearchModel(modelContext: modelContext, dtoMapper: dtoMapper)
 
-                let criteria = AdvancedSearchCriteria()
-                criteria.authorName = author.name
-                searchModel?.advancedSearch(criteria: criteria)
+                    let criteria = AdvancedSearchCriteria()
+                    criteria.authorName = author.name
+                    searchModel?.advancedSearch(criteria: criteria)
+                }
             }
         }
     }
