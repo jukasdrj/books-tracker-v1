@@ -2,12 +2,12 @@
  * GET /v1/search/advanced
  *
  * Advanced search for books by title and/or author using canonical response format
- * Refactored to use shared enrichSingleBook() service (Task 2)
+ * Returns up to 20 results for iOS search UI
  */
 
 import type { ApiResponse, BookSearchResponse } from '../../types/responses.js';
 import { createSuccessResponse, createErrorResponse } from '../../types/responses.js';
-import { enrichSingleBook } from '../../services/enrichment.js';
+import { enrichMultipleBooks } from '../../services/enrichment.js';
 import type { AuthorDTO } from '../../types/canonical.js';
 
 export async function handleSearchAdvanced(
@@ -30,19 +30,20 @@ export async function handleSearchAdvanced(
   }
 
   try {
-    console.log(`v1 advanced search - title: "${title}", author: "${author}" (using enrichSingleBook)`);
+    console.log(`v1 advanced search - title: "${title}", author: "${author}" (using enrichMultipleBooks, maxResults: 20)`);
 
-    // Use shared enrichment service (DRY - multi-provider fallback included)
-    const result = await enrichSingleBook(
+    // Use enrichMultipleBooks for search endpoints (returns up to 20 results)
+    const works = await enrichMultipleBooks(
       {
         title: hasTitle ? title : undefined,
         author: hasAuthor ? author : undefined
       },
-      env
+      env,
+      { maxResults: 20 }
     );
 
-    if (!result) {
-      // Book not found in any provider
+    if (!works || works.length === 0) {
+      // No books found in any provider
       return createSuccessResponse(
         { works: [], authors: [] },
         {
@@ -53,15 +54,22 @@ export async function handleSearchAdvanced(
       );
     }
 
-    // enrichSingleBook returns a single WorkDTO with embedded authors
-    // Extract authors from the work for the canonical response format
-    const authors: AuthorDTO[] = result.authors || [];
+    // Extract all unique authors from works
+    const authorsMap = new Map<string, AuthorDTO>();
+    works.forEach(work => {
+      (work.authors || []).forEach((author: AuthorDTO) => {
+        if (!authorsMap.has(author.name)) {
+          authorsMap.set(author.name, author);
+        }
+      });
+    });
+    const authors = Array.from(authorsMap.values());
 
     return createSuccessResponse(
-      { works: [result], authors },
+      { works, authors },
       {
         processingTime: Date.now() - startTime,
-        provider: result.primaryProvider || 'google-books',
+        provider: works[0]?.primaryProvider || 'google-books',
         cached: false,
       }
     );
