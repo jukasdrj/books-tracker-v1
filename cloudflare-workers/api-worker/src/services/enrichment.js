@@ -1,55 +1,214 @@
+/**
+ * Book enrichment service
+ *
+ * Contains TWO enrichment systems:
+ * 1. NEW: enrichSingleBook() - DRY service for individual book enrichment
+ *    - Multi-provider fallback (Google Books → OpenLibrary)
+ *    - Used by: /api/enrichment/start (via batch handler), /v1/search/* (future)
+ *
+ * 2. OLD: enrichBatch() - Legacy batch enrichment (deprecated, preserved for /api/enrichment/start)
+ *    - Will be replaced by batch-enrichment.js calling enrichSingleBook()
+ *    - Scheduled for removal in Task 2
+ */
+
 import * as externalApis from './external-apis.js';
-import { normalizeGoogleBooksToWork, normalizeGoogleBooksToEdition } from './normalizers/google-books.js';
 
 /**
- * Transforms the raw Google Books API response into canonical DTO format
- * @param {Object} googleBooksResponse - The raw JSON response from the Google Books API
- * @returns {Object} Canonical format: { work, editions, authors }
+ * Enrich a single book with metadata from external providers
+ *
+ * @param {Object} query - Book search query
+ * @param {string} query.title - Book title (required)
+ * @param {string} [query.author] - Author name (optional, improves accuracy)
+ * @param {string} [query.isbn] - ISBN (optional, highest accuracy)
+ * @param {Object} env - Worker environment bindings
+ * @returns {Promise<Object|null>} WorkDTO with editions and authors, or null if not found
  */
-function transformGoogleBooksResponse(googleBooksResponse) {
-  if (!googleBooksResponse || !googleBooksResponse.items || googleBooksResponse.items.length === 0) {
-    return {
-      work: null,
-      editions: [],
-      authors: []
-    };
+export async function enrichSingleBook(query, env) {
+  const { title, author, isbn } = query;
+
+  if (!title && !isbn) {
+    console.warn('enrichSingleBook: No title or ISBN provided');
+    return null;
   }
 
-  // Use first item as primary book
-  const primaryItem = googleBooksResponse.items[0];
-  const volumeInfo = primaryItem.volumeInfo || {};
+  try {
+    // Strategy 1: If ISBN provided, use ISBN search (most accurate)
+    if (isbn) {
+      const result = await searchByISBN(isbn, env);
+      if (result) return result;
+    }
 
-  // Normalize to canonical WorkDTO
-  const work = normalizeGoogleBooksToWork(primaryItem);
+    // Strategy 2: Try Google Books with title+author
+    const googleResult = await searchGoogleBooks(query, env);
+    if (googleResult) {
+      return googleResult;
+    }
 
-  // Normalize all items to EditionDTOs
-  const editions = googleBooksResponse.items.map(item => normalizeGoogleBooksToEdition(item));
+    // Strategy 3: Fallback to OpenLibrary
+    const openLibResult = await searchOpenLibrary(query, env);
+    if (openLibResult) {
+      return openLibResult;
+    }
 
-  // Extract unique authors
-  const authorNames = volumeInfo.authors || [];
-  const authors = authorNames.map(name => ({
-    name,
-    gender: 'Unknown',
-  }));
+    // Book not found in any provider
+    console.log(`enrichSingleBook: No results for "${title}" by "${author || 'unknown'}"`);
+    return null;
 
+  } catch (error) {
+    console.error('enrichSingleBook error:', error);
+    // Best-effort: API errors = not found (don't propagate errors)
+    return null;
+  }
+}
+
+/**
+ * Search Google Books API with query
+ * Reuses existing external-apis.js logic
+ *
+ * @param {Object} query - Search parameters
+ * @param {Object} env - Worker environment bindings
+ * @returns {Promise<Object|null>} First work result or null
+ */
+async function searchGoogleBooks(query, env) {
+  const { title, author, isbn } = query;
+
+  try {
+    // Build search query (title + author for better precision)
+    const searchQuery = isbn
+      ? isbn // ISBN takes precedence
+      : [title, author].filter(Boolean).join(' ');
+
+    const result = isbn
+      ? await externalApis.searchGoogleBooksByISBN(searchQuery, env)
+      : await externalApis.searchGoogleBooks(searchQuery, { maxResults: 1 }, env);
+
+    if (!result.success || !result.works || result.works.length === 0) {
+      return null;
+    }
+
+    // Return first work with full metadata
+    const work = result.works[0];
+    return normalizeToWorkDTO(work, 'google-books');
+
+  } catch (error) {
+    console.error('searchGoogleBooks error:', error);
+    return null;
+  }
+}
+
+/**
+ * Search OpenLibrary API with query
+ * Reuses existing external-apis.js logic
+ *
+ * @param {Object} query - Search parameters
+ * @param {Object} env - Worker environment bindings
+ * @returns {Promise<Object|null>} First work result or null
+ */
+async function searchOpenLibrary(query, env) {
+  const { title, author } = query;
+
+  try {
+    const searchQuery = [title, author].filter(Boolean).join(' ');
+    const result = await externalApis.searchOpenLibrary(searchQuery, { maxResults: 1 }, env);
+
+    if (!result.success || !result.works || result.works.length === 0) {
+      return null;
+    }
+
+    // Return first work with full metadata
+    const work = result.works[0];
+    return normalizeToWorkDTO(work, 'openlibrary');
+
+  } catch (error) {
+    console.error('searchOpenLibrary error:', error);
+    return null;
+  }
+}
+
+/**
+ * ISBN-specific search (tries Google Books, then OpenLibrary)
+ *
+ * @param {string} isbn - ISBN-10 or ISBN-13
+ * @param {Object} env - Worker environment bindings
+ * @returns {Promise<Object|null>} Work result or null
+ */
+async function searchByISBN(isbn, env) {
+  try {
+    // Try Google Books ISBN search first
+    const googleResult = await externalApis.searchGoogleBooksByISBN(isbn, env);
+
+    if (googleResult.success && googleResult.works && googleResult.works.length > 0) {
+      const work = googleResult.works[0];
+      return normalizeToWorkDTO(work, 'google-books');
+    }
+
+    // Fallback to OpenLibrary ISBN search
+    const olResult = await externalApis.searchOpenLibrary(isbn, { maxResults: 1, isbn }, env);
+
+    if (olResult.success && olResult.works && olResult.works.length > 0) {
+      const work = olResult.works[0];
+      return normalizeToWorkDTO(work, 'openlibrary');
+    }
+
+    return null;
+
+  } catch (error) {
+    console.error('searchByISBN error:', error);
+    return null;
+  }
+}
+
+/**
+ * Normalize provider-specific work format to canonical WorkDTO
+ *
+ * The external-apis.js already returns normalized works with:
+ * - title, subtitle, authors
+ * - editions array
+ * - firstPublishYear, firstPublicationYear
+ *
+ * We just need to add:
+ * - primaryProvider (for provenance tracking)
+ * - contributors (single provider for now)
+ * - synthetic flag (false for direct API results)
+ *
+ * @param {Object} work - Normalized work from external-apis.js
+ * @param {string} provider - Provider name ('google-books', 'openlibrary')
+ * @returns {Object} WorkDTO with metadata
+ */
+function normalizeToWorkDTO(work, provider) {
   return {
-    work,
-    editions,
-    authors
+    // Core work fields (already normalized by external-apis.js)
+    title: work.title,
+    subtitle: work.subtitle,
+    authors: work.authors || [],
+    firstPublishYear: work.firstPublishYear || work.firstPublicationYear,
+    subjects: work.subjects || [],
+    description: work.description,
+
+    // Editions (already normalized)
+    editions: work.editions || [],
+
+    // External IDs (from OpenLibrary)
+    externalIds: work.externalIds,
+
+    // Provenance tracking (NEW)
+    primaryProvider: provider,
+    contributors: [provider],
+    synthetic: false, // Direct API result, not inferred
+
+    // Source metadata
+    source: provider
   };
 }
 
-
-/**
- * Book enrichment service
- * Migrated from enrichment-worker (Task 6: Monolith Refactor)
- *
- * Key change: Direct function calls instead of RPC service bindings.
- * Progress updates sent directly to ProgressWebSocketDO via doStub parameter.
- */
+// ============================================================================
+// LEGACY CODE - Preserved for backward compatibility with /api/enrichment/start
+// Will be removed in Task 2 when batch-enrichment.js is refactored
+// ============================================================================
 
 /**
  * Enrich batch of works with progress updates via WebSocket
+ * LEGACY FUNCTION - Preserved for /api/enrichment/start endpoint
  *
  * @param {string} jobId - Job identifier for tracking
  * @param {string[]} workIds - Array of work IDs to enrich (ISBN or title+author)
@@ -75,20 +234,17 @@ export async function enrichBatch(jobId, workIds, env, doStub) {
 
     // Process each work
     for (const workId of workIds) {
-      // --- NEW CANCELLATION CHECK ---
-      // Before processing the next item, check if the DO has been canceled
+      // Cancellation check
       let canceled = false;
       try {
         canceled = await doStub.isCanceled();
       } catch (e) {
-        // An error here (e.g., "Job canceled by client") also means we should stop
         console.warn(`[${jobId}] Stopping batch, DO stub threw: ${e.message}`);
         canceled = true;
       }
 
       if (canceled) {
         console.log(`[${jobId}] Cancellation detected. Stopping enrichment batch.`);
-        // Send cancellation status to client
         await doStub.pushProgress({
           progress: processedCount / totalCount,
           processedItems: processedCount,
@@ -104,23 +260,19 @@ export async function enrichBatch(jobId, workIds, env, doStub) {
             errorCount: errors.length
           }
         }).catch(() => {
-          // Ignore error - socket might already be closed
           console.log(`[${jobId}] Could not send cancel status (socket closed)`);
         });
-        // Break the loop to stop processing
         break;
       }
-      // --- END CANCELLATION CHECK ---
 
       try {
-        // Enrich single work using internal function call (NO RPC!)
+        // Enrich single work using internal function call
         const result = await enrichWorkWithAPIs(workId, env);
         enrichedWorks.push(result);
 
         processedCount++;
         const progress = processedCount / totalCount;
 
-        // Direct progress update to DO (NO RPC!)
         await doStub.pushProgress({
           progress: progress,
           processedItems: processedCount,
@@ -137,15 +289,14 @@ export async function enrichBatch(jobId, workIds, env, doStub) {
           error: error.message
         });
 
-        // Continue processing remaining works
         processedCount++;
       }
 
-      // Yield to event loop to avoid blocking
+      // Yield to event loop
       await new Promise(resolve => setTimeout(resolve, 0));
     }
 
-    // Final success update - canonical format
+    // Final success update
     await doStub.pushProgress({
       progress: 1.0,
       processedItems: processedCount,
@@ -178,7 +329,6 @@ export async function enrichBatch(jobId, workIds, env, doStub) {
   } catch (error) {
     console.error('Enrichment batch failed:', error);
 
-    // Send error status
     await doStub.pushProgress({
       progress: processedCount / totalCount,
       error: error.message,
@@ -189,35 +339,26 @@ export async function enrichBatch(jobId, workIds, env, doStub) {
     throw error;
 
   } finally {
-    // Close WebSocket connection when done
     await doStub.closeConnection(1000, "Job complete");
   }
 }
 
 /**
  * Internal: Enrich single work using external APIs
- *
- * @param {string} workId - Work identifier (ISBN or title+author)
- * @param {Object} env - Worker environment bindings
- * @returns {Promise<Object>} Enrichment result with metadata
+ * LEGACY HELPER - Used by enrichBatch()
  */
 async function enrichWorkWithAPIs(workId, env) {
   try {
-    // Determine if workId is ISBN or title search
     const isISBN = /^(97[89])?\d{9}[\dX]$/i.test(workId);
 
     let enrichmentData;
     if (isISBN) {
-      // Use ISBN search - direct function call (NO RPC!)
       enrichmentData = await externalApis.searchGoogleBooksByISBN(workId, env);
 
-      // Fallback to other providers if Google Books fails
       if (!enrichmentData || !enrichmentData.items || enrichmentData.items.length === 0) {
-        // Try other providers as fallback
         console.log(`Google Books returned no results for ISBN ${workId}, trying alternatives...`);
       }
     } else {
-      // Use general search - direct function call (NO RPC!)
       enrichmentData = await externalApis.searchGoogleBooks(workId, { maxResults: 5 }, env);
     }
 
@@ -243,4 +384,77 @@ async function enrichWorkWithAPIs(workId, env) {
       timestamp: new Date().toISOString()
     };
   }
+}
+
+/**
+ * LEGACY HELPER - Transform Google Books response to canonical format
+ */
+function transformGoogleBooksResponse(googleBooksResponse) {
+  if (!googleBooksResponse || !googleBooksResponse.items || googleBooksResponse.items.length === 0) {
+    return {
+      work: null,
+      editions: [],
+      authors: []
+    };
+  }
+
+  const primaryItem = googleBooksResponse.items[0];
+  const volumeInfo = primaryItem.volumeInfo || {};
+
+  // Simplified normalization (no normalizeGoogleBooksToWork needed)
+  const work = {
+    title: volumeInfo.title,
+    subtitle: volumeInfo.subtitle,
+    authors: (volumeInfo.authors || []).map(name => ({ name })),
+    firstPublishYear: extractYear(volumeInfo.publishedDate),
+    firstPublicationYear: extractYear(volumeInfo.publishedDate),
+  };
+
+  const editions = googleBooksResponse.items.map(item => {
+    const vol = item.volumeInfo;
+    const isbn13 = vol.industryIdentifiers?.find(id => id.type === 'ISBN_13')?.identifier;
+    const isbn10 = vol.industryIdentifiers?.find(id => id.type === 'ISBN_10')?.identifier;
+
+    return {
+      googleBooksVolumeId: item.id,
+      isbn13: isbn13,
+      isbn10: isbn10,
+      title: vol.title,
+      subtitle: vol.subtitle,
+      publisher: vol.publisher,
+      publishDate: vol.publishedDate,
+      publicationDate: vol.publishedDate,
+      publishYear: extractYear(vol.publishedDate),
+      pages: vol.pageCount,
+      pageCount: vol.pageCount,
+      language: vol.language,
+      genres: vol.categories || [],
+      description: vol.description,
+      coverImageURL: vol.imageLinks?.thumbnail?.replace('http:', 'https:'),
+      previewLink: vol.previewLink,
+      infoLink: vol.infoLink,
+      source: 'google-books',
+    };
+  });
+
+  const authorNames = volumeInfo.authors || [];
+  const authors = authorNames.map(name => ({
+    name,
+    gender: 'Unknown',
+  }));
+
+  return {
+    work,
+    editions,
+    authors
+  };
+}
+
+/**
+ * Extract year from date string
+ */
+function extractYear(dateString) {
+  if (!dateString) return null;
+  const yearMatch = dateString.match(/(\d{4})/);
+  return yearMatch ? parseInt(yearMatch[1], 10) : null;
 }
