@@ -101,16 +101,23 @@ export async function enrichSingleBook(query, env) {
     if (isbn) {
       const result = await searchByISBN(isbn, env);
       if (result) return result;
+
+      // If ISBN search failed but we have title/author, fall back to text search
+      // Don't continue to Strategy 2/3 if we only have ISBN (nothing else to search)
+      if (!title && !author) {
+        console.log(`enrichSingleBook: No results for ISBN "${isbn}"`);
+        return null;
+      }
     }
 
-    // Strategy 2: Try Google Books with title+author
-    const googleResult = await searchGoogleBooks(query, env);
+    // Strategy 2: Try Google Books with title+author (not ISBN - already tried above)
+    const googleResult = await searchGoogleBooks({ title, author }, env);
     if (googleResult) {
       return googleResult;
     }
 
     // Strategy 3: Fallback to OpenLibrary
-    const openLibResult = await searchOpenLibrary(query, env);
+    const openLibResult = await searchOpenLibrary({ title, author }, env);
     if (openLibResult) {
       return openLibResult;
     }
