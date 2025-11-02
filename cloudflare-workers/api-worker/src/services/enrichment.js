@@ -63,7 +63,7 @@ export async function enrichSingleBook(query, env) {
 
 /**
  * Search Google Books API with query
- * Reuses existing external-apis.js logic
+ * Thin wrapper around external-apis.js - just adds provenance fields
  *
  * @param {Object} query - Search parameters
  * @param {Object} env - Worker environment bindings
@@ -72,33 +72,27 @@ export async function enrichSingleBook(query, env) {
 async function searchGoogleBooks(query, env) {
   const { title, author, isbn } = query;
 
-  try {
-    // Build search query (title + author for better precision)
-    const searchQuery = isbn
-      ? isbn // ISBN takes precedence
-      : [title, author].filter(Boolean).join(' ');
+  // Build search query (title + author for better precision)
+  const searchQuery = isbn
+    ? isbn // ISBN takes precedence
+    : [title, author].filter(Boolean).join(' ');
 
-    const result = isbn
-      ? await externalApis.searchGoogleBooksByISBN(searchQuery, env)
-      : await externalApis.searchGoogleBooks(searchQuery, { maxResults: 1 }, env);
+  const result = isbn
+    ? await externalApis.searchGoogleBooksByISBN(searchQuery, env)
+    : await externalApis.searchGoogleBooks(searchQuery, { maxResults: 1 }, env);
 
-    if (!result.success || !result.works || result.works.length === 0) {
-      return null;
-    }
-
-    // Return first work with full metadata
-    const work = result.works[0];
-    return normalizeToWorkDTO(work, 'google-books');
-
-  } catch (error) {
-    console.error('searchGoogleBooks error:', error);
+  if (!result.success || !result.works || result.works.length === 0) {
     return null;
   }
+
+  // Return first work with provenance fields added
+  const work = result.works[0];
+  return addProvenanceFields(work, 'google-books');
 }
 
 /**
  * Search OpenLibrary API with query
- * Reuses existing external-apis.js logic
+ * Thin wrapper around external-apis.js - just adds provenance fields
  *
  * @param {Object} query - Search parameters
  * @param {Object} env - Worker environment bindings
@@ -107,97 +101,65 @@ async function searchGoogleBooks(query, env) {
 async function searchOpenLibrary(query, env) {
   const { title, author } = query;
 
-  try {
-    const searchQuery = [title, author].filter(Boolean).join(' ');
-    const result = await externalApis.searchOpenLibrary(searchQuery, { maxResults: 1 }, env);
+  const searchQuery = [title, author].filter(Boolean).join(' ');
+  const result = await externalApis.searchOpenLibrary(searchQuery, { maxResults: 1 }, env);
 
-    if (!result.success || !result.works || result.works.length === 0) {
-      return null;
-    }
-
-    // Return first work with full metadata
-    const work = result.works[0];
-    return normalizeToWorkDTO(work, 'openlibrary');
-
-  } catch (error) {
-    console.error('searchOpenLibrary error:', error);
+  if (!result.success || !result.works || result.works.length === 0) {
     return null;
   }
+
+  // Return first work with provenance fields added
+  const work = result.works[0];
+  return addProvenanceFields(work, 'openlibrary');
 }
 
 /**
  * ISBN-specific search (tries Google Books, then OpenLibrary)
+ * Thin wrapper around external-apis.js - just adds provenance fields
  *
  * @param {string} isbn - ISBN-10 or ISBN-13
  * @param {Object} env - Worker environment bindings
  * @returns {Promise<Object|null>} Work result or null
  */
 async function searchByISBN(isbn, env) {
-  try {
-    // Try Google Books ISBN search first
-    const googleResult = await externalApis.searchGoogleBooksByISBN(isbn, env);
+  // Try Google Books ISBN search first
+  const googleResult = await externalApis.searchGoogleBooksByISBN(isbn, env);
 
-    if (googleResult.success && googleResult.works && googleResult.works.length > 0) {
-      const work = googleResult.works[0];
-      return normalizeToWorkDTO(work, 'google-books');
-    }
-
-    // Fallback to OpenLibrary ISBN search
-    const olResult = await externalApis.searchOpenLibrary(isbn, { maxResults: 1, isbn }, env);
-
-    if (olResult.success && olResult.works && olResult.works.length > 0) {
-      const work = olResult.works[0];
-      return normalizeToWorkDTO(work, 'openlibrary');
-    }
-
-    return null;
-
-  } catch (error) {
-    console.error('searchByISBN error:', error);
-    return null;
+  if (googleResult.success && googleResult.works && googleResult.works.length > 0) {
+    const work = googleResult.works[0];
+    return addProvenanceFields(work, 'google-books');
   }
+
+  // Fallback to OpenLibrary ISBN search
+  const olResult = await externalApis.searchOpenLibrary(isbn, { maxResults: 1, isbn }, env);
+
+  if (olResult.success && olResult.works && olResult.works.length > 0) {
+    const work = olResult.works[0];
+    return addProvenanceFields(work, 'openlibrary');
+  }
+
+  return null;
 }
 
 /**
- * Normalize provider-specific work format to canonical WorkDTO
+ * Add provenance fields to work already normalized by external-apis.js
  *
- * The external-apis.js already returns normalized works with:
- * - title, subtitle, authors
- * - editions array
- * - firstPublishYear, firstPublicationYear
- *
- * We just need to add:
- * - primaryProvider (for provenance tracking)
- * - contributors (single provider for now)
- * - synthetic flag (false for direct API results)
+ * The external-apis.js already returns fully normalized works.
+ * We just add provenance tracking fields:
+ * - primaryProvider - Which API contributed the data
+ * - contributors - Array of all providers (single provider for direct calls)
+ * - synthetic - Flag for inferred works (false for direct API results)
  *
  * @param {Object} work - Normalized work from external-apis.js
  * @param {string} provider - Provider name ('google-books', 'openlibrary')
- * @returns {Object} WorkDTO with metadata
+ * @returns {Object} WorkDTO with provenance fields
  */
-function normalizeToWorkDTO(work, provider) {
+function addProvenanceFields(work, provider) {
   return {
-    // Core work fields (already normalized by external-apis.js)
-    title: work.title,
-    subtitle: work.subtitle,
-    authors: work.authors || [],
-    firstPublishYear: work.firstPublishYear || work.firstPublicationYear,
-    subjects: work.subjects || [],
-    description: work.description,
-
-    // Editions (already normalized)
-    editions: work.editions || [],
-
-    // External IDs (from OpenLibrary)
-    externalIds: work.externalIds,
-
-    // Provenance tracking (NEW)
+    ...work, // Preserve all existing normalized fields
     primaryProvider: provider,
     contributors: [provider],
-    synthetic: false, // Direct API result, not inferred
-
-    // Source metadata
-    source: provider
+    synthetic: false // Direct API result, not inferred
   };
 }
 
@@ -346,30 +308,51 @@ export async function enrichBatch(jobId, workIds, env, doStub) {
 /**
  * Internal: Enrich single work using external APIs
  * LEGACY HELPER - Used by enrichBatch()
+ *
+ * Note: This uses the old enrichment format for backward compatibility.
+ * New code should use enrichSingleBook() instead.
  */
 async function enrichWorkWithAPIs(workId, env) {
   try {
     const isISBN = /^(97[89])?\d{9}[\dX]$/i.test(workId);
 
-    let enrichmentData;
+    let result;
     if (isISBN) {
-      enrichmentData = await externalApis.searchGoogleBooksByISBN(workId, env);
+      result = await externalApis.searchGoogleBooksByISBN(workId, env);
 
-      if (!enrichmentData || !enrichmentData.items || enrichmentData.items.length === 0) {
+      if (!result.success || !result.works || result.works.length === 0) {
         console.log(`Google Books returned no results for ISBN ${workId}, trying alternatives...`);
+        return {
+          workId,
+          enriched: false,
+          error: 'No results found',
+          timestamp: new Date().toISOString()
+        };
       }
     } else {
-      enrichmentData = await externalApis.searchGoogleBooks(workId, { maxResults: 5 }, env);
+      result = await externalApis.searchGoogleBooks(workId, { maxResults: 5 }, env);
+
+      if (!result.success || !result.works || result.works.length === 0) {
+        return {
+          workId,
+          enriched: false,
+          error: 'No results found',
+          timestamp: new Date().toISOString()
+        };
+      }
     }
 
-    const canonicalData = transformGoogleBooksResponse(enrichmentData);
+    // external-apis.js returns { success: true, works: [...], authors: [...] }
+    const work = result.works[0];
+    const editions = work.editions || [];
+    const authors = result.authors || [];
 
     return {
       workId,
       enriched: true,
-      work: canonicalData.work,
-      editions: canonicalData.editions,
-      authors: canonicalData.authors,
+      work: work,
+      editions: editions,
+      authors: authors,
       isISBN,
       timestamp: new Date().toISOString()
     };
@@ -386,75 +369,3 @@ async function enrichWorkWithAPIs(workId, env) {
   }
 }
 
-/**
- * LEGACY HELPER - Transform Google Books response to canonical format
- */
-function transformGoogleBooksResponse(googleBooksResponse) {
-  if (!googleBooksResponse || !googleBooksResponse.items || googleBooksResponse.items.length === 0) {
-    return {
-      work: null,
-      editions: [],
-      authors: []
-    };
-  }
-
-  const primaryItem = googleBooksResponse.items[0];
-  const volumeInfo = primaryItem.volumeInfo || {};
-
-  // Simplified normalization (no normalizeGoogleBooksToWork needed)
-  const work = {
-    title: volumeInfo.title,
-    subtitle: volumeInfo.subtitle,
-    authors: (volumeInfo.authors || []).map(name => ({ name })),
-    firstPublishYear: extractYear(volumeInfo.publishedDate),
-    firstPublicationYear: extractYear(volumeInfo.publishedDate),
-  };
-
-  const editions = googleBooksResponse.items.map(item => {
-    const vol = item.volumeInfo;
-    const isbn13 = vol.industryIdentifiers?.find(id => id.type === 'ISBN_13')?.identifier;
-    const isbn10 = vol.industryIdentifiers?.find(id => id.type === 'ISBN_10')?.identifier;
-
-    return {
-      googleBooksVolumeId: item.id,
-      isbn13: isbn13,
-      isbn10: isbn10,
-      title: vol.title,
-      subtitle: vol.subtitle,
-      publisher: vol.publisher,
-      publishDate: vol.publishedDate,
-      publicationDate: vol.publishedDate,
-      publishYear: extractYear(vol.publishedDate),
-      pages: vol.pageCount,
-      pageCount: vol.pageCount,
-      language: vol.language,
-      genres: vol.categories || [],
-      description: vol.description,
-      coverImageURL: vol.imageLinks?.thumbnail?.replace('http:', 'https:'),
-      previewLink: vol.previewLink,
-      infoLink: vol.infoLink,
-      source: 'google-books',
-    };
-  });
-
-  const authorNames = volumeInfo.authors || [];
-  const authors = authorNames.map(name => ({
-    name,
-    gender: 'Unknown',
-  }));
-
-  return {
-    work,
-    editions,
-    authors
-  };
-}
-
-/**
- * Extract year from date string
- */
-function extractYear(dateString) {
-  if (!dateString) return null;
-  const yearMatch = dateString.match(/(\d{4})/);
-  return yearMatch ? parseInt(yearMatch[1], 10) : null;
-}
