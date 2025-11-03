@@ -7,10 +7,10 @@ public struct ContentView: View {
     @Environment(FeatureFlags.self) private var featureFlags
     @Environment(\.accessibilityVoiceOverEnabled) var voiceOverEnabled
     @Environment(\.accessibilityReduceMotion) var reduceMotion
+    @Environment(\.dtoMapper) private var dtoMapper
     @State private var selectedTab: MainTab = .library
     @State private var searchCoordinator = SearchCoordinator()
     @State private var notificationCoordinator = NotificationCoordinator()
-    @State private var dtoMapper: DTOMapper?
 
     // Enrichment progress tracking (no Live Activity required!)
     @State private var isEnriching = false
@@ -20,8 +20,7 @@ public struct ContentView: View {
     public var body: some View {
         if #available(iOS 26.0, *) {
             Group {
-                if let dtoMapper = dtoMapper {
-                    TabView(selection: $selectedTab) {
+                TabView(selection: $selectedTab) {
                         // Library Tab
                         NavigationStack {
                             iOS26LiquidLibraryView()
@@ -58,20 +57,16 @@ public struct ContentView: View {
                             Label("Insights", systemImage: selectedTab == .insights ? "chart.bar.fill" : "chart.bar")
                         }
                         .tag(MainTab.insights)
-                    }
-                    .environment(\.dtoMapper, dtoMapper)
-                    .tint(themeStore.primaryColor)
-                    #if os(iOS)
-                    .tabBarMinimizeBehavior(
-                        voiceOverEnabled || reduceMotion ? .never : (featureFlags.enableTabBarMinimize ? .onScrollDown : .never)
-                    )
-                    #endif
-                } else {
-                    ProgressView()
                 }
+                .environment(\.dtoMapper, dtoMapper!)  // Force-unwrap safe (app guarantees injection)
+                .tint(themeStore.primaryColor)
+                #if os(iOS)
+                .tabBarMinimizeBehavior(
+                    voiceOverEnabled || reduceMotion ? .never : (featureFlags.enableTabBarMinimize ? .onScrollDown : .never)
+                )
+                #endif
             }
             .themedBackground()
-            .onAppear(perform: setupDTOMapper)
             .task {
                 // Validate enrichment queue on app startup - remove stale persistent IDs
                 EnrichmentQueue.shared.validateQueue(in: modelContext)
@@ -120,12 +115,6 @@ public struct ContentView: View {
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isEnriching)
         } else {
             // Fallback on earlier versions
-        }
-    }
-
-    private func setupDTOMapper() {
-        if dtoMapper == nil {
-            dtoMapper = DTOMapper(modelContext: modelContext)
         }
     }
 
