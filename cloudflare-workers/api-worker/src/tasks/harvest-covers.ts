@@ -257,11 +257,18 @@ async function storeMetadata(
  */
 async function harvestSingleBook(
   entry: BookEntry,
-  env: Env
+  env: Env,
+  isDryRun: boolean = false
 ): Promise<HarvestResult> {
   const { isbn, title, author } = entry;
 
   try {
+    // Dry run mode - skip actual work
+    if (isDryRun) {
+      console.log(`  [DRY RUN] Would fetch cover for: ${isbn}`);
+      return { isbn, title, author, success: true, source: 'isbndb' };
+    }
+
     // Check if already cached
     const kvKey = `cover:${isbn}`;
     const existing = await env.KV_CACHE.get(kvKey);
@@ -355,6 +362,39 @@ export async function harvestCovers(env: Env): Promise<HarvestReport> {
 
   const startTime = Date.now();
 
+  // Pre-flight checks
+  console.log('🔍 Running pre-flight checks...');
+
+  try {
+    // Check ISBNDB_API_KEY
+    const apiKey = typeof env.ISBNDB_API_KEY === 'object'
+      ? await env.ISBNDB_API_KEY.get()
+      : env.ISBNDB_API_KEY;
+    if (!apiKey) throw new Error('ISBNDB_API_KEY not found');
+    console.log('  ✓ ISBNDB_API_KEY accessible');
+
+    // Test R2 write
+    await env.LIBRARY_DATA.put('test_harvest_write', 'test');
+    await env.LIBRARY_DATA.delete('test_harvest_write');
+    console.log('  ✓ R2 write permissions OK');
+
+    // Test KV write
+    await env.KV_CACHE.put('test_harvest_kv', 'test', { expirationTtl: 60 });
+    await env.KV_CACHE.delete('test_harvest_kv');
+    console.log('  ✓ KV write permissions OK');
+
+    console.log('✅ Pre-flight checks passed\n');
+  } catch (error) {
+    console.error('❌ Pre-flight check failed:', error.message);
+    throw error;
+  }
+
+  const isDryRun = process.env.DRY_RUN === 'true';
+
+  if (isDryRun) {
+    console.log('⚠️  DRY RUN MODE - No API calls or uploads will be made\n');
+  }
+
   // Load and deduplicate books from CSVs
   const allEntries = await loadISBNsFromCSVs();
   const books = deduplicateISBNs(allEntries);
@@ -372,7 +412,7 @@ export async function harvestCovers(env: Env): Promise<HarvestReport> {
     console.log(`\n[${i + 1}/${books.length}] ${book.title} by ${book.author}`);
     console.log(`  ISBN: ${book.isbn}`);
 
-    const result = await harvestSingleBook(book, env);
+    const result = await harvestSingleBook(book, env, isDryRun);
     results.push(result);
 
     if (result.success) {
