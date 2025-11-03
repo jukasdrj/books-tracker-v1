@@ -15,19 +15,16 @@ actor EnrichmentAPIClient {
     /// Backend will push progress updates via WebSocket
     /// - Parameter jobId: Unique job identifier for WebSocket tracking
     /// - Returns: Enrichment result with final counts
-    func startEnrichment(jobId: String, workIds: [String]) async throws -> EnrichmentResult {
-        let url = URL(string: "\(baseURL)/api/enrichment/start")!
+    func startEnrichment(jobId: String, books: [Book]) async throws -> EnrichmentResult {
+        let url = URL(string: "\(baseURL)/api/enrichment/batch")!
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
-        let payload: [String: Any] = [
-            "jobId": jobId,
-            "workIds": workIds
-        ]
+        let payload = BatchEnrichmentPayload(books: books, jobId: jobId)
 
-        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+        request.httpBody = try JSONEncoder().encode(payload)
 
         let (data, response) = try await URLSession.shared.data(for: request)
 
