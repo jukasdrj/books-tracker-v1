@@ -29,7 +29,7 @@ if [ -f "failed_isbns.json" ]; then
   FAILED_COUNT=$(cat failed_isbns.json | jq '.totalFailed')
   echo "   Total failed: $FAILED_COUNT"
   echo "   Top 5 failures:"
-  cat failed_isbns.json | jq '.failures[:5] | .[] | {isbn, title, error: .isbndbError}'
+  cat failed_isbns.json | jq '.failures[:5] | .[] | {isbn, title, error: .error}'
 else
   echo "   No failures logged (or file not found)"
 fi

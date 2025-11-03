@@ -54,8 +54,7 @@ export interface HarvestReport {
     isbn: string;
     title: string;
     author: string;
-    isbndbError?: string;
-    googleBooksError?: string;
+    error?: string;
   }>;
 }
 

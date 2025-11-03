@@ -76,6 +76,21 @@ function deduplicateISBNs(entries: BookEntry[]): BookEntry[] {
 }
 
 /**
+ * Helper to get API key from environment (handles both string and object types)
+ */
+async function getApiKey(env: Env): Promise<string> {
+  const apiKey = typeof env.ISBNDB_API_KEY === 'object'
+    ? await env.ISBNDB_API_KEY.get()
+    : env.ISBNDB_API_KEY;
+
+  if (!apiKey) {
+    throw new Error('ISBNDB_API_KEY not found');
+  }
+
+  return apiKey;
+}
+
+/**
  * Fetch cover data from ISBNdb API
  */
 async function fetchFromISBNdb(isbn: string, env: Env): Promise<CoverData | null> {
@@ -83,13 +98,7 @@ async function fetchFromISBNdb(isbn: string, env: Env): Promise<CoverData | null
     // Enforce rate limit (1000ms between requests)
     await enforceRateLimit(env);
 
-    const apiKey = typeof env.ISBNDB_API_KEY === 'object'
-      ? await env.ISBNDB_API_KEY.get()
-      : env.ISBNDB_API_KEY;
-
-    if (!apiKey) {
-      throw new Error('ISBNDB_API_KEY not found');
-    }
+    const apiKey = await getApiKey(env);
 
     const url = `https://api2.isbndb.com/book/${isbn}`;
     const response = await fetch(url, {
@@ -119,7 +128,7 @@ async function fetchFromISBNdb(isbn: string, env: Env): Promise<CoverData | null
       isbn,
     };
   } catch (error) {
-    console.error(`ISBNdb error for ${isbn}: ${error.message}`);
+    console.error(`ISBNdb error for ${isbn}: ${error instanceof Error ? error.message : String(error)}`);
     return null;
   }
 }
@@ -204,7 +213,7 @@ async function fetchFromGoogleBooks(
       isbn: isbn13,
     };
   } catch (error) {
-    console.error(`Google Books error for "${title}" by ${author}: ${error.message}`);
+    console.error(`Google Books error for "${title}" by ${author}: ${error instanceof Error ? error.message : String(error)}`);
     return null;
   }
 }
@@ -232,7 +241,7 @@ async function downloadAndStoreImage(
   // Upload to R2
   await env.LIBRARY_DATA.put(r2Key, imageBlob, {
     httpMetadata: {
-      contentType: 'image/jpeg',
+      contentType: response.headers.get('Content-Type') || 'image/jpeg',
     },
   });
 
@@ -275,7 +284,13 @@ async function harvestSingleBook(
 
     if (existing) {
       console.log(`  ⏭ Already cached: ${isbn}`);
-      return { isbn, title, author, success: true, source: 'isbndb' }; // Assume isbndb
+      try {
+        const metadata: CoverMetadata = JSON.parse(existing);
+        return { isbn, title, author, success: true, source: metadata.source };
+      } catch {
+        // If parsing fails, assume isbndb
+        return { isbn, title, author, success: true, source: 'isbndb' };
+      }
     }
 
     // Try ISBNdb first
@@ -326,7 +341,7 @@ async function harvestSingleBook(
       title,
       author,
       success: false,
-      error: error.message,
+      error: error instanceof Error ? error.message : String(error),
     };
   }
 }
@@ -367,10 +382,7 @@ export async function harvestCovers(env: Env): Promise<HarvestReport> {
 
   try {
     // Check ISBNDB_API_KEY
-    const apiKey = typeof env.ISBNDB_API_KEY === 'object'
-      ? await env.ISBNDB_API_KEY.get()
-      : env.ISBNDB_API_KEY;
-    if (!apiKey) throw new Error('ISBNDB_API_KEY not found');
+    await getApiKey(env);
     console.log('  ✓ ISBNDB_API_KEY accessible');
 
     // Test R2 write
@@ -385,7 +397,7 @@ export async function harvestCovers(env: Env): Promise<HarvestReport> {
 
     console.log('✅ Pre-flight checks passed\n');
   } catch (error) {
-    console.error('❌ Pre-flight check failed:', error.message);
+    console.error('❌ Pre-flight check failed:', error instanceof Error ? error.message : String(error));
     throw error;
   }
 
@@ -441,7 +453,7 @@ export async function harvestCovers(env: Env): Promise<HarvestReport> {
         isbn: r.isbn,
         title: r.title,
         author: r.author,
-        isbndbError: r.error,
+        error: r.error,
       })),
   };
 
