@@ -70,11 +70,11 @@ public final class NotificationCoordinator {
 
     /// Handles all app notifications in a single stream. Call from ContentView.task { }.
     public func handleNotifications(
-        onSwitchToLibrary: @escaping @Sendable () -> Void,
-        onEnrichmentStarted: @escaping @Sendable (EnrichmentStartedPayload) -> Void,
-        onEnrichmentProgress: @escaping @Sendable (EnrichmentProgressPayload) -> Void,
-        onEnrichmentCompleted: @escaping @Sendable () -> Void,
-        onSearchForAuthor: @escaping @Sendable (SearchForAuthorPayload) -> Void
+        onSwitchToLibrary: @escaping @MainActor () -> Void,
+        onEnrichmentStarted: @escaping @MainActor (EnrichmentStartedPayload) -> Void,
+        onEnrichmentProgress: @escaping @MainActor (EnrichmentProgressPayload) -> Void,
+        onEnrichmentCompleted: @escaping @MainActor () -> Void,
+        onSearchForAuthor: @escaping @MainActor (SearchForAuthorPayload) -> Void
     ) async {
         await withTaskGroup(of: Void.self) { group in
             group.addTask {

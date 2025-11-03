@@ -9,6 +9,7 @@ public struct ContentView: View {
     @Environment(\.accessibilityReduceMotion) var reduceMotion
     @State private var selectedTab: MainTab = .library
     @State private var searchCoordinator = SearchCoordinator()
+    @State private var notificationCoordinator = NotificationCoordinator()
     @State private var dtoMapper: DTOMapper?
 
     // Enrichment progress tracking (no Live Activity required!)
@@ -87,7 +88,23 @@ public struct ContentView: View {
                 generator.setupSampleDataIfNeeded()
             }
             .task {
-                await handleNotifications()
+                await notificationCoordinator.handleNotifications(
+                    onSwitchToLibrary: { selectedTab = .library },
+                    onEnrichmentStarted: { payload in
+                        isEnriching = true
+                        enrichmentProgress = (0, payload.totalBooks)
+                        currentBookTitle = ""
+                    },
+                    onEnrichmentProgress: { payload in
+                        enrichmentProgress = (payload.completed, payload.total)
+                        currentBookTitle = payload.currentTitle
+                    },
+                    onEnrichmentCompleted: { isEnriching = false },
+                    onSearchForAuthor: { payload in
+                        selectedTab = .search
+                        searchCoordinator.setPendingAuthorSearch(payload.authorName)
+                    }
+                )
             }
             .overlay(alignment: .bottom) {
                 if isEnriching {
@@ -113,76 +130,6 @@ public struct ContentView: View {
     }
 
     public init() {}
-
-    // MARK: - Notification Handling (Swift 6.2)
-
-    private func handleNotifications() async {
-        // Handle each notification type sequentially to avoid Swift 6 isolation checker limitations
-        // See: https://github.com/swiftlang/swift/issues/XXXXX
-        Task { @MainActor in
-            for await notification in NotificationCenter.default.notifications(named: .switchToLibraryTab) {
-                handle(notification)
-            }
-        }
-        Task { @MainActor in
-            for await notification in NotificationCenter.default.notifications(named: .enrichmentStarted) {
-                handle(notification)
-            }
-        }
-        Task { @MainActor in
-            for await notification in NotificationCenter.default.notifications(named: .enrichmentProgress) {
-                handle(notification)
-            }
-        }
-        Task { @MainActor in
-            for await notification in NotificationCenter.default.notifications(named: .enrichmentCompleted) {
-                handle(notification)
-            }
-        }
-        Task { @MainActor in
-            for await notification in NotificationCenter.default.notifications(named: .searchForAuthor) {
-                handle(notification)
-            }
-        }
-    }
-
-    @MainActor
-    private func handle(_ notification: Notification) {
-        switch notification.name {
-        case .switchToLibraryTab:
-            selectedTab = .library
-
-        case .enrichmentStarted:
-            if let userInfo = notification.userInfo,
-               let total = userInfo["totalBooks"] as? Int {
-                isEnriching = true
-                enrichmentProgress = (0, total)
-                currentBookTitle = ""
-            }
-
-        case .enrichmentProgress:
-            if let userInfo = notification.userInfo,
-               let completed = userInfo["completed"] as? Int,
-               let total = userInfo["total"] as? Int,
-               let title = userInfo["currentTitle"] as? String {
-                enrichmentProgress = (completed, total)
-                currentBookTitle = title
-            }
-
-        case .enrichmentCompleted:
-            isEnriching = false
-
-        case .searchForAuthor:
-            if let authorName = notification.userInfo?["authorName"] as? String {
-                selectedTab = .search
-                searchCoordinator.setPendingAuthorSearch(authorName)
-                // SearchView will observe the coordinator and trigger search when tab becomes visible
-            }
-
-        default:
-            break
-        }
-    }
 }
 
 // MARK: - Notification Names
