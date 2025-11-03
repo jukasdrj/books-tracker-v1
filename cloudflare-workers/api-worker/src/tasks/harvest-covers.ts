@@ -147,6 +147,69 @@ async function enforceRateLimit(env: Env): Promise<void> {
 }
 
 /**
+ * Fetch cover data from Google Books API (fallback)
+ * Searches by title+author, picks edition with highest ratingsCount
+ */
+async function fetchFromGoogleBooks(
+  title: string,
+  author: string
+): Promise<CoverData | null> {
+  try {
+    // Build search query: intitle + inauthor
+    const query = `intitle:${encodeURIComponent(title)}+inauthor:${encodeURIComponent(author)}`;
+    const url = `https://www.googleapis.com/books/v1/volumes?q=${query}&maxResults=5`;
+
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      throw new Error(`Google Books API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (!data.items || data.items.length === 0) {
+      return null; // No results
+    }
+
+    // Find edition with highest ratingsCount (most popular)
+    let bestEdition = data.items[0];
+    let maxRatings = bestEdition.volumeInfo?.ratingsCount || 0;
+
+    for (const item of data.items) {
+      const ratings = item.volumeInfo?.ratingsCount || 0;
+      if (ratings > maxRatings) {
+        bestEdition = item;
+        maxRatings = ratings;
+      }
+    }
+
+    const coverUrl = bestEdition.volumeInfo?.imageLinks?.thumbnail
+      || bestEdition.volumeInfo?.imageLinks?.smallThumbnail;
+
+    if (!coverUrl) {
+      return null; // No cover available
+    }
+
+    // Extract ISBN-13 from identifiers
+    const identifiers = bestEdition.volumeInfo?.industryIdentifiers || [];
+    const isbn13 = identifiers.find(id => id.type === 'ISBN_13')?.identifier;
+
+    if (!isbn13) {
+      return null; // Can't use without ISBN
+    }
+
+    return {
+      url: coverUrl.replace('http://', 'https://'), // Force HTTPS
+      source: 'google-books',
+      isbn: isbn13,
+    };
+  } catch (error) {
+    console.error(`Google Books error for "${title}" by ${author}: ${error.message}`);
+    return null;
+  }
+}
+
+/**
  * Main entry point for ISBNdb cover harvest task
  *
  * Usage: npx wrangler dev --remote --task harvest-covers
