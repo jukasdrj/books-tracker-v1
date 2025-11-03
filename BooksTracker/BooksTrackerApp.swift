@@ -48,22 +48,32 @@ struct BooksTrackerApp: App {
 
             #if targetEnvironment(simulator)
             print("💡 Simulator detected - trying persistent fallback")
-            // Last resort fallback for simulator
+            #else
+            print("💡 Device detected - trying local-only fallback (CloudKit disabled)")
+            #endif
+
+            // Last resort fallback: Disable CloudKit and use local-only storage
+            // This prevents app crashes when CloudKit sync fails or schema migration issues occur
             do {
                 let fallbackConfig = ModelConfiguration(
                     schema: schema,
-                    isStoredInMemoryOnly: false,  // Persist data
-                    cloudKitDatabase: .none
+                    isStoredInMemoryOnly: false,  // Persist data locally
+                    cloudKitDatabase: .none       // Disable CloudKit sync
                 )
                 return try ModelContainer(for: schema, configurations: [fallbackConfig])
             } catch {
-                fatalError("Failed to create fallback ModelContainer: \(error)")
+                // If even fallback fails, crash with detailed error for debugging
+                fatalError("Failed to create fallback ModelContainer (local-only mode): \(error)")
             }
-            #else
-            fatalError("Failed to create ModelContainer: \(error)")
-            #endif
         }
     }()
+
+    let dtoMapper: DTOMapper
+
+    init() {
+        // Create DTOMapper with main context
+        self.dtoMapper = DTOMapper(modelContext: modelContainer.mainContext)
+    }
 
     var body: some Scene {
         WindowGroup {
@@ -71,6 +81,7 @@ struct BooksTrackerApp: App {
                 .iOS26ThemeStore(themeStore)
                 .modelContainer(modelContainer)
                 .environment(featureFlags)
+                .environment(\.dtoMapper, dtoMapper)
         }
     }
 }
