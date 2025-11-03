@@ -393,11 +393,8 @@ struct iOS26AdaptiveBookCard: View {
     @ViewBuilder
     private func authorNavigationButton(font: Font, lineLimit: Int) -> some View {
         Button {
-            NotificationCenter.default.post(
-                name: .searchForAuthor,
-                object: nil,
-                userInfo: ["authorName": work.primaryAuthorName]
-            )
+            let coordinator = NotificationCoordinator()
+            coordinator.postSearchForAuthor(authorName: work.primaryAuthorName)
         } label: {
             HStack(spacing: 4) {
                 Text(work.authorNames)
