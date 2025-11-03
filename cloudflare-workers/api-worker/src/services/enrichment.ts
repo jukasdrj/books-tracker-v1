@@ -12,12 +12,47 @@
  */
 
 import * as externalApis from './external-apis.js';
-import type { WorkDTO } from '../types/canonical.js';
+import type { WorkDTO, AuthorDTO } from '../types/canonical.js';
 import type { DataProvider } from '../types/enums.js';
 
 // ========================================================================================
 // INTERFACES
 // ========================================================================================
+
+/**
+ * Cloudflare Worker environment bindings
+ * See wrangler.toml for complete configuration
+ */
+interface WorkerEnv {
+	// KV Namespaces
+	CACHE: KVNamespace;
+	KV_CACHE: KVNamespace;
+
+	// Secrets
+	GOOGLE_BOOKS_API_KEY: string;
+	ISBNDB_API_KEY: string;
+	GEMINI_API_KEY: string;
+
+	// R2 Buckets
+	API_CACHE_COLD: R2Bucket;
+	LIBRARY_DATA: R2Bucket;
+	BOOKSHELF_IMAGES: R2Bucket;
+
+	// Workers AI
+	AI: Fetcher;
+
+	// Durable Objects
+	PROGRESS_WEBSOCKET_DO: DurableObjectNamespace;
+
+	// Analytics Engine
+	PERFORMANCE_ANALYTICS?: AnalyticsEngineDataset;
+	CACHE_ANALYTICS?: AnalyticsEngineDataset;
+	PROVIDER_ANALYTICS?: AnalyticsEngineDataset;
+	AI_ANALYTICS?: AnalyticsEngineDataset;
+
+	// Queue Producers
+	AUTHOR_WARMING_QUEUE?: Queue;
+}
 
 /**
  * Query parameters for book searches
@@ -36,12 +71,18 @@ interface SearchOptions {
 }
 
 /**
+ * Extended WorkDTO with authors property
+ * external-apis.js returns works with authors array, but canonical WorkDTO doesn't include it
+ */
+type WorkDTOWithAuthors = WorkDTO & { authors?: AuthorDTO[] };
+
+/**
  * Generic API response for external API calls
  */
 interface ApiResponse {
 	success: boolean;
-	works?: WorkDTO[];
-	authors?: any[]; // Keep authors flexible as we don't use them yet
+	works?: WorkDTOWithAuthors[];
+	authors?: AuthorDTO[];
 	error?: string;
 }
 
@@ -53,14 +94,14 @@ interface ApiResponse {
  * Enrich multiple books with metadata from external providers
  * Used by search endpoints that need multiple results
  *
- * @param query - Book search query
+ * @param query - Search parameters
  * @param env - Worker environment bindings
  * @param options - Search options
  * @returns Array of WorkDTOs with provenance fields
  */
 export async function enrichMultipleBooks(
 	query: BookSearchQuery,
-	env: unknown,
+	env: WorkerEnv,
 	options: SearchOptions = { maxResults: 20 }
 ): Promise<WorkDTO[]> {
 	const { title, author, isbn } = query;
@@ -72,15 +113,13 @@ export async function enrichMultipleBooks(
 		return result ? [result] : [];
 	}
 
-  // Build search query for Google Books
-  let searchQuery = '';
-  if (title) searchQuery += `${title}`;
-  if (author) searchQuery += (searchQuery ? ' ' : '') + author;
+	// Build search query for Google Books
+	const searchQuery = [title, author].filter(Boolean).join(' ');
 
-  if (!searchQuery) {
-    console.warn('enrichMultipleBooks: No search parameters provided');
-    return [];
-  }
+	if (!searchQuery) {
+		console.warn('enrichMultipleBooks: No search parameters provided');
+		return [];
+	}
 
   try {
     // Try Google Books first with maxResults
@@ -116,11 +155,11 @@ export async function enrichMultipleBooks(
  * Enrich a single book with metadata from external providers
  * Used by enrichment pipeline that needs best match for a specific book
  *
- * @param query - Book search query
+ * @param query - Search parameters
  * @param env - Worker environment bindings
  * @returns WorkDTO with editions and authors, or null if not found
  */
-export async function enrichSingleBook(query: BookSearchQuery, env: unknown): Promise<WorkDTO | null> {
+export async function enrichSingleBook(query: BookSearchQuery, env: WorkerEnv): Promise<WorkDTO | null> {
 	const { title, author, isbn } = query;
 
 	// Require at least one search parameter
@@ -170,11 +209,11 @@ export async function enrichSingleBook(query: BookSearchQuery, env: unknown): Pr
  * Search Google Books API with query
  * Thin wrapper around external-apis.js - just adds provenance fields
  *
- * @param {Object} query - Search parameters
- * @param {Object} env - Worker environment bindings
- * @returns {Promise<Object|null>} First work result or null
+ * @param query - Search parameters
+ * @param env - Worker environment bindings
+ * @returns First work result or null
  */
-async function searchGoogleBooks(query: BookSearchQuery, env: unknown): Promise<WorkDTO | null> {
+async function searchGoogleBooks(query: BookSearchQuery, env: WorkerEnv): Promise<WorkDTO | null> {
 	const { title, author, isbn } = query;
 
 	// Build search query (title + author for better precision)
@@ -197,11 +236,11 @@ async function searchGoogleBooks(query: BookSearchQuery, env: unknown): Promise<
  * Search OpenLibrary API with query
  * Thin wrapper around external-apis.js - just adds provenance fields
  *
- * @param {Object} query - Search parameters
- * @param {Object} env - Worker environment bindings
- * @returns {Promise<Object|null>} First work result or null
+ * @param query - Search parameters
+ * @param env - Worker environment bindings
+ * @returns First work result or null
  */
-async function searchOpenLibrary(query: BookSearchQuery, env: unknown): Promise<WorkDTO | null> {
+async function searchOpenLibrary(query: BookSearchQuery, env: WorkerEnv): Promise<WorkDTO | null> {
 	const { title, author } = query;
 
 	const searchQuery: string = [title, author].filter(Boolean).join(' ');
@@ -220,11 +259,11 @@ async function searchOpenLibrary(query: BookSearchQuery, env: unknown): Promise<
  * ISBN-specific search (tries Google Books, then OpenLibrary)
  * Thin wrapper around external-apis.js - just adds provenance fields
  *
- * @param {string} isbn - ISBN-10 or ISBN-13
- * @param {Object} env - Worker environment bindings
- * @returns {Promise<Object|null>} Work result or null
+ * @param isbn - ISBN-10 or ISBN-13
+ * @param env - Worker environment bindings
+ * @returns Work result or null
  */
-async function searchByISBN(isbn: string, env: unknown): Promise<WorkDTO | null> {
+async function searchByISBN(isbn: string, env: WorkerEnv): Promise<WorkDTO | null> {
 	// Try Google Books ISBN search first
 	const googleResult: ApiResponse = await externalApis.searchGoogleBooksByISBN(isbn, env);
 
@@ -253,9 +292,9 @@ async function searchByISBN(isbn: string, env: unknown): Promise<WorkDTO | null>
  * - contributors - Array of all providers (single provider for direct calls)
  * - synthetic - Flag for inferred works (false for direct API results)
  *
- * @param {Object} work - Normalized work from external-apis.js
- * @param {string} provider - Provider name ('google-books', 'openlibrary')
- * @returns {Object} WorkDTO with provenance fields
+ * @param work - Normalized work from external-apis.js
+ * @param provider - Provider name
+ * @returns WorkDTO with provenance fields
  */
 function addProvenanceFields(work: WorkDTO, provider: DataProvider): WorkDTO {
 	return {
