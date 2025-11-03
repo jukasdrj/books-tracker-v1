@@ -76,6 +76,77 @@ function deduplicateISBNs(entries: BookEntry[]): BookEntry[] {
 }
 
 /**
+ * Fetch cover data from ISBNdb API
+ */
+async function fetchFromISBNdb(isbn: string, env: Env): Promise<CoverData | null> {
+  try {
+    // Enforce rate limit (1000ms between requests)
+    await enforceRateLimit(env);
+
+    const apiKey = typeof env.ISBNDB_API_KEY === 'object'
+      ? await env.ISBNDB_API_KEY.get()
+      : env.ISBNDB_API_KEY;
+
+    if (!apiKey) {
+      throw new Error('ISBNDB_API_KEY not found');
+    }
+
+    const url = `https://api2.isbndb.com/book/${isbn}`;
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': apiKey,
+        'Accept': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        return null; // Book not found, will try fallback
+      }
+      throw new Error(`ISBNdb API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const coverUrl = data.book?.image;
+
+    if (!coverUrl) {
+      return null; // No cover available
+    }
+
+    return {
+      url: coverUrl,
+      source: 'isbndb',
+      isbn,
+    };
+  } catch (error) {
+    console.error(`ISBNdb error for ${isbn}: ${error.message}`);
+    return null;
+  }
+}
+
+/**
+ * Rate limiting: 1 second between ISBNdb requests
+ */
+const RATE_LIMIT_KEY = 'harvest_isbndb_last_request';
+const RATE_LIMIT_INTERVAL = 1000; // 1 second
+
+async function enforceRateLimit(env: Env): Promise<void> {
+  const lastRequest = await env.KV_CACHE.get(RATE_LIMIT_KEY);
+
+  if (lastRequest) {
+    const timeDiff = Date.now() - parseInt(lastRequest);
+    if (timeDiff < RATE_LIMIT_INTERVAL) {
+      const waitTime = RATE_LIMIT_INTERVAL - timeDiff;
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
+  }
+
+  await env.KV_CACHE.put(RATE_LIMIT_KEY, Date.now().toString(), {
+    expirationTtl: 60
+  });
+}
+
+/**
  * Main entry point for ISBNdb cover harvest task
  *
  * Usage: npx wrangler dev --remote --task harvest-covers
