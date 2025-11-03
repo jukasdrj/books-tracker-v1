@@ -16,6 +16,7 @@ public final class EnrichmentQueue {
     private var currentTask: Task<Void, Never>?
     // Track current backend job ID for cancellation
     private var currentJobId: String?
+    private let notificationCoordinator = NotificationCoordinator()
 
     // Persistence
     private let queueStorageKey = "EnrichmentQueueStorage"
@@ -180,11 +181,7 @@ public final class EnrichmentQueue {
         let totalCount = queue.count
 
         // Notify ContentView that enrichment started
-        NotificationCenter.default.post(
-            name: .enrichmentStarted,
-            object: nil,
-            userInfo: ["totalBooks": totalCount]
-        )
+        notificationCoordinator.postEnrichmentStarted(totalBooks: totalCount)
 
         currentTask = Task { @MainActor in
             var processedCount = 0
@@ -215,14 +212,10 @@ public final class EnrichmentQueue {
                 progressHandler(processedCount, totalCount, work.title)
 
                 // Notify ContentView of progress update
-                NotificationCenter.default.post(
-                    name: .enrichmentProgress,
-                    object: nil,
-                    userInfo: [
-                        "completed": processedCount,
-                        "total": totalCount,
-                        "currentTitle": work.title
-                    ]
+                notificationCoordinator.postEnrichmentProgress(
+                    completed: processedCount,
+                    total: totalCount,
+                    currentTitle: work.title
                 )
 
                 // Log result with detailed error information
@@ -252,10 +245,7 @@ public final class EnrichmentQueue {
             processing = false
 
             // Notify ContentView that enrichment completed
-            NotificationCenter.default.post(
-                name: .enrichmentCompleted,
-                object: nil
-            )
+            notificationCoordinator.postEnrichmentCompleted()
         }
     }
 
