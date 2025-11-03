@@ -1,6 +1,27 @@
 import SwiftUI
 import SwiftData
 
+/// Root view orchestrating BooksTracker's 4-tab navigation layout.
+///
+/// **Architecture (Refactored November 2, 2025):**
+/// - 4-tab layout: Library, Search, Shelf, Insights
+/// - Extracted components: `EnrichmentBanner`, `SampleDataGenerator`, `NotificationCoordinator`
+/// - Type-safe notifications via `NotificationPayloads` (eliminates magic strings)
+/// - Environment-injected `DTOMapper` (no ProgressView flash on launch)
+///
+/// **Line Reduction:** 448 → 165 lines (63% reduction, 283 lines extracted)
+///
+/// **Responsibilities:**
+/// - Tab navigation orchestration
+/// - Enrichment progress state management (banner display)
+/// - Notification handling delegation (via NotificationCoordinator)
+/// - Theme and environment injection
+///
+/// **Related Components:**
+/// - `UI/EnrichmentBanner.swift` - Progress banner UI (92 lines)
+/// - `Services/SampleDataGenerator.swift` - Sample data logic (126 lines)
+/// - `Services/NotificationCoordinator.swift` - Type-safe notification handling (80 lines)
+/// - `Models/NotificationPayloads.swift` - Structured notification contracts (60 lines)
 public struct ContentView: View {
     @Environment(\.iOS26ThemeStore) private var themeStore
     @Environment(\.modelContext) private var modelContext
