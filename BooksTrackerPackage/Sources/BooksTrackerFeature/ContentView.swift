@@ -39,8 +39,17 @@ public struct ContentView: View {
     @State private var currentBookTitle = ""
 
     public var body: some View {
+        // Verify DTOMapper dependency injection (should never fail in production)
+        guard let dtoMapper = dtoMapper else {
+            return AnyView(Text("Configuration Error: DTOMapper not injected")
+                .foregroundColor(.red)
+                .onAppear {
+                    fatalError("DTOMapper must be injected via environment in BooksTrackerApp")
+                })
+        }
+
         if #available(iOS 26.0, *) {
-            Group {
+            return AnyView(Group {
                 TabView(selection: $selectedTab) {
                         // Library Tab
                         NavigationStack {
@@ -79,14 +88,14 @@ public struct ContentView: View {
                         }
                         .tag(MainTab.insights)
                 }
-                .environment(\.dtoMapper, dtoMapper!)  // Force-unwrap safe (app guarantees injection)
+                .environment(\.dtoMapper, dtoMapper)  // Safely unwrapped above
                 .tint(themeStore.primaryColor)
                 #if os(iOS)
                 .tabBarMinimizeBehavior(
                     voiceOverEnabled || reduceMotion ? .never : (featureFlags.enableTabBarMinimize ? .onScrollDown : .never)
                 )
                 #endif
-            }
+            })
             .themedBackground()
             .task {
                 // Validate enrichment queue on app startup - remove stale persistent IDs

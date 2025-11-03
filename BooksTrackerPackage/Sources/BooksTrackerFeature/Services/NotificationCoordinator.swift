@@ -5,9 +5,10 @@ import SwiftUI
 public final class NotificationCoordinator {
     public init() {}
 
-    // MARK: - Type-Safe Posting
+    // MARK: - Type-Safe Posting (Static Methods)
 
-    public func postEnrichmentStarted(totalBooks: Int) {
+    @MainActor
+    public static func postEnrichmentStarted(totalBooks: Int) {
         let payload = EnrichmentStartedPayload(totalBooks: totalBooks)
         NotificationCenter.default.post(
             name: .enrichmentStarted,
@@ -16,7 +17,8 @@ public final class NotificationCoordinator {
         )
     }
 
-    public func postEnrichmentProgress(completed: Int, total: Int, currentTitle: String) {
+    @MainActor
+    public static func postEnrichmentProgress(completed: Int, total: Int, currentTitle: String) {
         let payload = EnrichmentProgressPayload(
             completed: completed,
             total: total,
@@ -29,14 +31,16 @@ public final class NotificationCoordinator {
         )
     }
 
-    public func postEnrichmentCompleted() {
+    @MainActor
+    public static func postEnrichmentCompleted() {
         NotificationCenter.default.post(
             name: .enrichmentCompleted,
             object: nil
         )
     }
 
-    public func postSearchForAuthor(authorName: String) {
+    @MainActor
+    public static func postSearchForAuthor(authorName: String) {
         let payload = SearchForAuthorPayload(authorName: authorName)
         NotificationCenter.default.post(
             name: .searchForAuthor,
@@ -45,7 +49,8 @@ public final class NotificationCoordinator {
         )
     }
 
-    public func postSwitchToLibraryTab() {
+    @MainActor
+    public static func postSwitchToLibraryTab() {
         NotificationCenter.default.post(
             name: .switchToLibraryTab,
             object: nil

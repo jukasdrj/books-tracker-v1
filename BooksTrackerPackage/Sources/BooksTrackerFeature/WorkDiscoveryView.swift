@@ -89,8 +89,7 @@ public struct WorkDiscoveryView: View {
 
                     // Post notification to switch to library tab
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        let coordinator = NotificationCoordinator()
-                        coordinator.postSwitchToLibraryTab()
+                        NotificationCoordinator.postSwitchToLibraryTab()
                     }
                 }
                 Button("OK") {
