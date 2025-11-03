@@ -3,7 +3,7 @@ import Foundation
 /// API client for triggering backend enrichment jobs
 actor EnrichmentAPIClient {
 
-    private let baseURL = "https://api-worker.jukasdrj.workers.dev"
+    private let baseURL = EnrichmentConfig.baseURL
 
     struct EnrichmentResult: Codable, Sendable {
         let success: Bool
@@ -16,7 +16,9 @@ actor EnrichmentAPIClient {
     /// - Parameter jobId: Unique job identifier for WebSocket tracking
     /// - Returns: Enrichment result with final counts
     func startEnrichment(jobId: String, books: [Book]) async throws -> EnrichmentResult {
-        let url = URL(string: "\(baseURL)/api/enrichment/batch")!
+        guard let url = URL(string: "\(baseURL)/api/enrichment/batch") else {
+            throw URLError(.badURL)
+        }
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"

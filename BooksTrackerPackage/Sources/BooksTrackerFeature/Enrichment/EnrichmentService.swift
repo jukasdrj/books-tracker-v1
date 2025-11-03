@@ -11,7 +11,7 @@ public final class EnrichmentService {
 
     // MARK: - Properties
     private let apiClient = EnrichmentAPIClient()
-    private let baseURL = "https://api-worker.jukasdrj.workers.dev"
+    private let baseURL = EnrichmentConfig.baseURL
     private let urlSession: URLSession
     private let batchSize = 5 // Process 5 books at a time
     private let throttleDelay: TimeInterval = 0.5 // 500ms between requests
@@ -93,6 +93,7 @@ public final class EnrichmentService {
     /// Enrich a batch of works with metadata from the API
     public func batchEnrichWorks(
         _ works: [Work],
+        jobId: String,
         in modelContext: ModelContext
     ) async -> BatchEnrichmentResult {
         let books = works.map { work in
@@ -102,8 +103,6 @@ public final class EnrichmentService {
                 isbn: work.editions?.first?.isbn
             )
         }
-
-        let jobId = UUID().uuidString
 
         do {
             let result = try await apiClient.startEnrichment(jobId: jobId, books: books)

@@ -1,24 +1,36 @@
 import Foundation
 
-/// Namespace for enrichment WebSocket messages
-enum EnrichmentProgressMessage {
+/// Discriminated union for enrichment WebSocket messages
+enum EnrichmentProgressMessage: Decodable {
+    case progress(processedCount: Int, totalCount: Int, currentTitle: String)
+    case complete(message: String)
+    case unknown
 
-    /// A generic message for decoding the `type` field to determine the specific message type.
-    struct GenericMessage: Codable {
-        let type: String
+    private enum CodingKeys: String, CodingKey {
+        case type
+        case processedCount
+        case totalCount
+        case currentTitle
+        case message
     }
 
-    /// A message indicating the progress of the enrichment job.
-    struct Progress: Codable {
-        let type: String
-        let processedCount: Int
-        let totalCount: Int
-        let currentTitle: String
-    }
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let type = try container.decode(String.self, forKey: .type)
 
-    /// A message indicating the completion of the enrichment job.
-    struct Complete: Codable {
-        let type: String
-        let message: String
+        switch type {
+        case "progress":
+            let processedCount = try container.decode(Int.self, forKey: .processedCount)
+            let totalCount = try container.decode(Int.self, forKey: .totalCount)
+            let currentTitle = try container.decode(String.self, forKey: .currentTitle)
+            self = .progress(processedCount: processedCount, totalCount: totalCount, currentTitle: currentTitle)
+
+        case "complete":
+            let message = try container.decode(String.self, forKey: .message)
+            self = .complete(message: message)
+
+        default:
+            self = .unknown
+        }
     }
 }

@@ -202,7 +202,7 @@ public final class EnrichmentQueue {
             })
             self.webSocketHandler?.connect()
 
-            let result = await EnrichmentService.shared.batchEnrichWorks(works, in: modelContext)
+            let result = await EnrichmentService.shared.batchEnrichWorks(works, jobId: jobId, in: modelContext)
 
             self.webSocketHandler?.disconnect()
             self.webSocketHandler = nil

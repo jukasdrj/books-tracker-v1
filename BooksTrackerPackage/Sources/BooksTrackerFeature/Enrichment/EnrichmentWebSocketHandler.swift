@@ -15,7 +15,7 @@ final class EnrichmentWebSocketHandler {
 
     /// Connect to WebSocket and start listening for messages.
     func connect() {
-        guard let url = URL(string: "wss://api-worker.jukasdrj.workers.dev/ws/progress?jobId=\(jobId)") else { return }
+        guard let url = URL(string: "\(EnrichmentConfig.webSocketBaseURL)/ws/progress?jobId=\(jobId)") else { return }
         let session = URLSession(configuration: .default)
         webSocket = session.webSocketTask(with: url)
         webSocket?.resume()
@@ -26,14 +26,16 @@ final class EnrichmentWebSocketHandler {
     /// Listen for incoming WebSocket messages.
     private func listenForMessages() {
         webSocket?.receive { [weak self] result in
-            guard let self = self, self.isConnected else { return }
-            switch result {
-            case .success(let message):
-                self.handleMessage(message)
-                self.listenForMessages() // Continue listening for more messages
-            case .failure(let error):
-                print("WebSocket error: \(error)")
-                self.disconnect()
+            Task { @MainActor [weak self] in
+                guard let self = self, self.isConnected else { return }
+                switch result {
+                case .success(let message):
+                    self.handleMessage(message)
+                    self.listenForMessages() // Continue listening for more messages
+                case .failure(let error):
+                    print("WebSocket error: \(error)")
+                    self.disconnect()
+                }
             }
         }
     }
@@ -43,16 +45,14 @@ final class EnrichmentWebSocketHandler {
         guard let data = message.data else { return }
         let decoder = JSONDecoder()
 
-        guard let genericMessage = try? decoder.decode(EnrichmentProgressMessage.GenericMessage.self, from: data) else { return }
+        guard let progressMessage = try? decoder.decode(EnrichmentProgressMessage.self, from: data) else { return }
 
-        switch genericMessage.type {
-        case "progress":
-            if let progressMessage = try? decoder.decode(EnrichmentProgressMessage.Progress.self, from: data) {
-                progressHandler(progressMessage.processedCount, progressMessage.totalCount, progressMessage.currentTitle)
-            }
-        case "complete":
+        switch progressMessage {
+        case .progress(let processedCount, let totalCount, let currentTitle):
+            progressHandler(processedCount, totalCount, currentTitle)
+        case .complete:
             disconnect()
-        default:
+        case .unknown:
             break
         }
     }
