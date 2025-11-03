@@ -325,6 +325,26 @@ async function harvestSingleBook(
 }
 
 /**
+ * Log harvest progress every 10 books
+ */
+function logProgress(
+  current: number,
+  total: number,
+  isbndbCount: number,
+  googleCount: number,
+  failedCount: number
+): void {
+  if (current % 10 === 0 || current === total) {
+    const percent = Math.round((current / total) * 100);
+    const bar = '━'.repeat(Math.floor(percent / 2.5));
+    const empty = ' '.repeat(40 - bar.length);
+
+    console.log(`\n📊 Progress: [${bar}${empty}] ${current}/${total} (${percent}%)`);
+    console.log(`   ✓ ISBNdb: ${isbndbCount} | ↻ Google: ${googleCount} | ✗ Failed: ${failedCount}`);
+  }
+}
+
+/**
  * Main entry point for ISBNdb cover harvest task
  *
  * Usage: npx wrangler dev --remote --task harvest-covers
@@ -341,15 +361,39 @@ export async function harvestCovers(env: Env): Promise<HarvestReport> {
 
   console.log(`\n📚 Loaded ${books.length} unique books to harvest\n`);
 
-  // TODO: Harvest each book
+  // Harvest each book
   const results: HarvestResult[] = [];
+  let isbndbCount = 0;
+  let googleCount = 0;
+  let failedCount = 0;
 
+  for (let i = 0; i < books.length; i++) {
+    const book = books[i];
+    console.log(`\n[${i + 1}/${books.length}] ${book.title} by ${book.author}`);
+    console.log(`  ISBN: ${book.isbn}`);
+
+    const result = await harvestSingleBook(book, env);
+    results.push(result);
+
+    if (result.success) {
+      if (result.source === 'isbndb') isbndbCount++;
+      else if (result.source === 'google-books') googleCount++;
+      console.log(`  ✓ SUCCESS (${result.source})`);
+    } else {
+      failedCount++;
+      console.log(`  ✗ FAILED: ${result.error}`);
+    }
+
+    logProgress(i + 1, books.length, isbndbCount, googleCount, failedCount);
+  }
+
+  // Generate final report
   const report: HarvestReport = {
     totalBooks: books.length,
     successCount: results.filter(r => r.success).length,
-    isbndbCount: results.filter(r => r.success && r.source === 'isbndb').length,
-    googleBooksCount: results.filter(r => r.success && r.source === 'google-books').length,
-    failureCount: results.filter(r => !r.success).length,
+    isbndbCount,
+    googleBooksCount: googleCount,
+    failureCount: failedCount,
     executionTimeMs: Date.now() - startTime,
     failures: results
       .filter(r => !r.success)
@@ -367,7 +411,18 @@ export async function harvestCovers(env: Env): Promise<HarvestReport> {
   console.log(`✓ ISBNdb Covers: ${report.isbndbCount}`);
   console.log(`↻ Google Fallback: ${report.googleBooksCount}`);
   console.log(`✗ Failed: ${report.failureCount}`);
-  console.log(`⏱ Execution Time: ${(report.executionTimeMs / 1000).toFixed(1)}s`);
+  console.log(`⏱ Execution Time: ${(report.executionTimeMs / 1000 / 60).toFixed(1)} minutes`);
+
+  // Write failures to local file
+  if (report.failures.length > 0) {
+    const failuresPath = path.join(process.cwd(), 'failed_isbns.json');
+    fs.writeFileSync(failuresPath, JSON.stringify({
+      timestamp: new Date().toISOString(),
+      totalFailed: report.failureCount,
+      failures: report.failures,
+    }, null, 2));
+    console.log(`\n📄 Failed ISBNs logged to: ${failuresPath}`);
+  }
 
   return report;
 }
