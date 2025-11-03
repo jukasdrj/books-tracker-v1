@@ -210,6 +210,121 @@ async function fetchFromGoogleBooks(
 }
 
 /**
+ * Download cover image and upload to R2
+ */
+async function downloadAndStoreImage(
+  coverUrl: string,
+  isbn: string,
+  env: Env
+): Promise<void> {
+  // Download image
+  const response = await fetch(coverUrl);
+
+  if (!response.ok) {
+    throw new Error(`Failed to download cover: ${response.status}`);
+  }
+
+  const imageBlob = await response.blob();
+
+  // Generate R2 key
+  const r2Key = `covers/isbn/${isbn}.jpg`;
+
+  // Upload to R2
+  await env.LIBRARY_DATA.put(r2Key, imageBlob, {
+    httpMetadata: {
+      contentType: 'image/jpeg',
+    },
+  });
+
+  console.log(`  📦 Uploaded to R2: ${r2Key}`);
+}
+
+/**
+ * Store cover metadata in KV
+ */
+async function storeMetadata(
+  isbn: string,
+  metadata: CoverMetadata,
+  env: Env
+): Promise<void> {
+  const kvKey = `cover:${isbn}`;
+  await env.KV_CACHE.put(kvKey, JSON.stringify(metadata));
+  console.log(`  💾 Stored KV metadata: ${kvKey}`);
+}
+
+/**
+ * Harvest cover for a single book
+ */
+async function harvestSingleBook(
+  entry: BookEntry,
+  env: Env
+): Promise<HarvestResult> {
+  const { isbn, title, author } = entry;
+
+  try {
+    // Check if already cached
+    const kvKey = `cover:${isbn}`;
+    const existing = await env.KV_CACHE.get(kvKey);
+
+    if (existing) {
+      console.log(`  ⏭ Already cached: ${isbn}`);
+      return { isbn, title, author, success: true, source: 'isbndb' }; // Assume isbndb
+    }
+
+    // Try ISBNdb first
+    let coverData = await fetchFromISBNdb(isbn, env);
+    let usedFallback = false;
+
+    // Fallback to Google Books if needed
+    if (!coverData) {
+      console.log(`  ↻ Trying Google Books fallback for: ${title}`);
+      coverData = await fetchFromGoogleBooks(title, author);
+      usedFallback = true;
+    }
+
+    if (!coverData) {
+      return {
+        isbn,
+        title,
+        author,
+        success: false,
+        error: 'No cover found in ISBNdb or Google Books',
+      };
+    }
+
+    // Download and store
+    await downloadAndStoreImage(coverData.url, isbn, env);
+
+    // Store metadata
+    const metadata: CoverMetadata = {
+      isbn,
+      source: coverData.source,
+      r2Key: `covers/isbn/${isbn}.jpg`,
+      harvestedAt: new Date().toISOString(),
+      fallback: usedFallback,
+      originalUrl: coverData.url,
+    };
+    await storeMetadata(isbn, metadata, env);
+
+    return {
+      isbn,
+      title,
+      author,
+      success: true,
+      source: coverData.source,
+    };
+  } catch (error) {
+    return {
+      isbn,
+      title,
+      author,
+      success: false,
+      error: error.message,
+    };
+  }
+}
+
+/**
  * Main entry point for ISBNdb cover harvest task
  *
  * Usage: npx wrangler dev --remote --task harvest-covers
