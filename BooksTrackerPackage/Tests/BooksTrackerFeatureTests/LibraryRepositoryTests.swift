@@ -47,7 +47,7 @@ struct LibraryRepositoryTests {
         modelContext.insert(notOwnedWork)
 
         // Add library entry for ownedWork only
-        let entry = UserLibraryEntry.createWishlistEntry(for: ownedWork, context: modelContext)
+        _ = UserLibraryEntry.createWishlistEntry(for: ownedWork, context: modelContext)
 
         // Fetch library
         let library = try repository.fetchUserLibrary()
@@ -81,8 +81,8 @@ struct LibraryRepositoryTests {
         modelContext.insert(newWork)
 
         // Add library entries
-        let entry1 = UserLibraryEntry.createWishlistEntry(for: oldWork, context: modelContext)
-        let entry2 = UserLibraryEntry.createWishlistEntry(for: newWork, context: modelContext)
+        _ = UserLibraryEntry.createWishlistEntry(for: oldWork, context: modelContext)
+        _ = UserLibraryEntry.createWishlistEntry(for: newWork, context: modelContext)
 
         let library = try repository.fetchUserLibrary()
 

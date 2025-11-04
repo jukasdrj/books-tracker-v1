@@ -371,7 +371,7 @@ struct WorkIntegrationTests {
             context: modelContext
         )
         let userOwned = createTestEdition(
-                        format: EditionFormat.paperback,
+            format: EditionFormat.paperback,
             publicationDate: "2000-01-01",
             context: modelContext
         )
