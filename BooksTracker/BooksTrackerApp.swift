@@ -79,6 +79,21 @@ class ModelContainerFactory {
             }
         }
     }
+
+    // Lazy LibraryRepository - created on first access
+    private var _libraryRepository: LibraryRepository?
+
+    var libraryRepository: LibraryRepository {
+        if let _libraryRepository = _libraryRepository {
+            return _libraryRepository
+        }
+
+        LaunchMetrics.shared.recordMilestone("LibraryRepository creation start")
+        let repository = LibraryRepository(modelContext: container.mainContext)
+        LaunchMetrics.shared.recordMilestone("LibraryRepository created")
+        _libraryRepository = repository
+        return repository
+    }
 }
 
 // MARK: - DTO Mapper Factory
@@ -118,6 +133,7 @@ struct BooksTrackerApp: App {
                 .modelContainer(container)
                 .environment(featureFlags)
                 .environment(\.dtoMapper, DTOMapperFactory.shared.mapper(for: container.mainContext))
+                .environment(ModelContainerFactory.shared.libraryRepository)
         }
     }
 }
