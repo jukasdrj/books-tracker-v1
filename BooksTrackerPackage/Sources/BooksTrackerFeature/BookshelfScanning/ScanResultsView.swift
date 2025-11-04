@@ -566,6 +566,8 @@ class ScanResultsModel {
         var addedWorksForQueue: [Work] = []
 
         for detectedBook in confirmedBooks {
+            var importedViaPathA = false
+
             // Path A: Use pre-enriched data from backend
             if let enrichedWork = detectedBook.enrichmentWork,
                let enrichedEditions = detectedBook.enrichmentEditions,
@@ -608,13 +610,16 @@ class ScanResultsModel {
 
                     print("✅ Imported enriched book: \(work.title)")
                     enrichedImportCount += 1
+                    importedViaPathA = true
 
                 } catch {
-                    print("❌ Failed to import enriched book: \(error)")
-                    // Fall through to Path B on error
+                    print("❌ Path A failed for enriched book: \(error). Falling back to Path B.")
+                    // Fall through to Path B below
                 }
-            } else {
-                // Path B: Minimal import + queue for enrichment (fallback)
+            }
+
+            // Path B: Minimal import + queue for enrichment (fallback or primary)
+            if !importedViaPathA {
                 do {
                     // Create minimal Work
                     let work = Work(
