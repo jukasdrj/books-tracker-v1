@@ -32,9 +32,10 @@ public final class BackgroundTaskScheduler {
 
     /// Cancel all scheduled background tasks (e.g., on library reset)
     public func cancelAll() {
+        let count = scheduledTasks.count
         scheduledTasks.forEach { $0.cancel() }
         scheduledTasks.removeAll()
-        print("🛑 Cancelled \(scheduledTasks.count) background tasks")
+        print("🛑 Cancelled \(count) background tasks")
     }
 
     /// Wait for all background tasks to complete (for testing)

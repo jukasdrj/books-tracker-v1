@@ -59,6 +59,7 @@ struct AppLaunchPerformanceTests {
         print("⏱️ Lazy container init: \(Int(elapsed))ms")
     }
 
+    @MainActor
     @Test("Background task scheduling defers execution")
     func testBackgroundTaskScheduling() async throws {
         var taskExecuted = false

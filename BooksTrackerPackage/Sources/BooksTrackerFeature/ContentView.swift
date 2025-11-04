@@ -130,7 +130,7 @@ public struct ContentView: View {
 
                 LaunchMetrics.shared.recordMilestone("Background tasks scheduled")
             }
-            .task(priority: .low) {
+            .task(priority: .userInitiated) {
                 LaunchMetrics.shared.recordMilestone("NotificationCoordinator setup")
                 await notificationCoordinator.handleNotifications(
                     onSwitchToLibrary: { selectedTab = .library },

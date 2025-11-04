@@ -109,14 +109,15 @@ struct BooksTrackerApp: App {
 
     var body: some Scene {
         WindowGroup {
+            let container = ModelContainerFactory.shared.container
             ContentView()
                 .onAppear {
                     LaunchMetrics.shared.recordMilestone("ContentView appeared")
                 }
                 .iOS26ThemeStore(themeStore)
-                .modelContainer(ModelContainerFactory.shared.container)
+                .modelContainer(container)
                 .environment(featureFlags)
-                .environment(\.dtoMapper, DTOMapperFactory.shared.mapper(for: ModelContainerFactory.shared.container.mainContext))
+                .environment(\.dtoMapper, DTOMapperFactory.shared.mapper(for: container.mainContext))
         }
     }
 }

@@ -31,13 +31,15 @@ public class ImageCleanupService {
                 }
             )
 
-            let worksWithImages = try modelContext.fetch(descriptor)
-
-            // Early exit if no works have images
-            guard !worksWithImages.isEmpty else {
+            // Early exit if no works have images (use fetchCount for efficiency)
+            let worksWithImagesCount = try modelContext.fetchCount(descriptor)
+            guard worksWithImagesCount > 0 else {
                 print("✅ No works with images - skipping cleanup")
                 return
             }
+
+            // Now fetch the actual works with images
+            let worksWithImages = try modelContext.fetch(descriptor)
 
             // Group works by their original image path
             let groupedByImage = Dictionary(grouping: worksWithImages) { $0.originalImagePath! }
