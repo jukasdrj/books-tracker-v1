@@ -139,8 +139,8 @@ export default {
         }), {
           status: 200,
           headers: {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*'
+            ...getCorsHeaders(request),
+            'Content-Type': 'application/json'
           }
         });
 
@@ -189,8 +189,8 @@ export default {
         return new Response(JSON.stringify(result), {
           status: 200,
           headers: {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*'
+            ...getCorsHeaders(request),
+            'Content-Type': 'application/json'
           }
         });
       } catch (error) {
@@ -321,8 +321,8 @@ export default {
         }), {
           status: 202,
           headers: {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*' // CORS for iOS app
+            ...getCorsHeaders(request),
+            'Content-Type': 'application/json'
           }
         });
 
@@ -407,8 +407,8 @@ export default {
 
       return new Response(JSON.stringify(result), {
         headers: {
+          ...getCorsHeaders(request),
           'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
           ...cacheHeaders
         }
       });
@@ -433,8 +433,8 @@ export default {
 
       return new Response(JSON.stringify(result), {
         headers: {
+          ...getCorsHeaders(request),
           'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
           ...cacheHeaders
         }
       });
@@ -501,8 +501,8 @@ export default {
 
       return new Response(JSON.stringify(result), {
         headers: {
+          ...getCorsHeaders(request),
           'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
           'Cache-Control': 'public, max-age=21600', // 6h cache
           'X-Cache': cacheStatus,
           'X-Cache-Source': cacheSource,
@@ -566,8 +566,8 @@ export default {
 
         return new Response(JSON.stringify(result), {
           headers: {
+            ...getCorsHeaders(request),
             'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
             // Add cache header for GET requests (like /search/title)
             ...(request.method === 'GET' && { 'Cache-Control': 'public, max-age=21600' }) // 6h cache
           }
@@ -728,7 +728,7 @@ export default {
 
         return new Response(JSON.stringify(result), {
           status: 200,
-          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+          headers: { ...getCorsHeaders(request), 'Content-Type': 'application/json' }
         });
       } catch (error) {
         console.error('Test init-batch failed:', error);
@@ -764,7 +764,7 @@ export default {
 
         return new Response(JSON.stringify(state), {
           status: 200,
-          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+          headers: { ...getCorsHeaders(request), 'Content-Type': 'application/json' }
         });
       } catch (error) {
         console.error('Test get-state failed:', error);
@@ -786,7 +786,7 @@ export default {
 
         return new Response(JSON.stringify(result), {
           status: result.error ? 404 : 200,
-          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+          headers: { ...getCorsHeaders(request), 'Content-Type': 'application/json' }
         });
       } catch (error) {
         console.error('Test update-photo failed:', error);
@@ -808,7 +808,7 @@ export default {
 
         return new Response(JSON.stringify(result), {
           status: 200,
-          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+          headers: { ...getCorsHeaders(request), 'Content-Type': 'application/json' }
         });
       } catch (error) {
         console.error('Test complete-batch failed:', error);
@@ -837,7 +837,7 @@ export default {
 
         return new Response(JSON.stringify(result), {
           status: 200,
-          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+          headers: { ...getCorsHeaders(request), 'Content-Type': 'application/json' }
         });
       } catch (error) {
         console.error('Test is-canceled failed:', error);
@@ -859,7 +859,7 @@ export default {
 
         return new Response(JSON.stringify(result), {
           status: 200,
-          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+          headers: { ...getCorsHeaders(request), 'Content-Type': 'application/json' }
         });
       } catch (error) {
         console.error('Test cancel-batch failed:', error);
