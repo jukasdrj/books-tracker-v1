@@ -97,6 +97,15 @@ public struct ContentView: View {
                 #endif
             })
             .themedBackground()
+            .onAppear {
+                LaunchMetrics.shared.recordMilestone("UI fully interactive")
+
+                // Print full launch report after a short delay (let everything settle)
+                Task {
+                    try? await Task.sleep(for: .seconds(5))
+                    LaunchMetrics.shared.printReport()
+                }
+            }
             .task {
                 // Defer non-critical background tasks until app is interactive
                 BackgroundTaskScheduler.shared.schedule(priority: .low) {
