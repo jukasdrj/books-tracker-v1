@@ -1,6 +1,13 @@
 import { normalizeImageURL } from '../utils/normalization.js';
 
 /**
+ * Environment bindings for image proxy handler
+ */
+interface Env {
+  BOOK_COVERS: R2Bucket;
+}
+
+/**
  * Proxies and caches book cover images via R2 + Cloudflare Image Resizing
  *
  * Flow:
@@ -9,7 +16,7 @@ import { normalizeImageURL } from '../utils/normalization.js';
  * 3. If miss: Fetch from origin, store in R2
  * 4. Return image with Cloudflare Image Resizing (on-the-fly thumbnail)
  */
-export async function handleImageProxy(request: Request, env: any): Promise<Response> {
+export async function handleImageProxy(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const imageUrl = url.searchParams.get('url');
   const size = url.searchParams.get('size') || 'medium'; // small, medium, large
@@ -20,15 +27,16 @@ export async function handleImageProxy(request: Request, env: any): Promise<Resp
   }
 
   // Security: Only allow known book cover domains
-  const allowedDomains = [
+  // Using Set for O(1) lookup performance vs O(n) for array.includes()
+  const allowedDomains = new Set([
     'books.google.com',
     'covers.openlibrary.org',
     'images-na.ssl-images-amazon.com'
-  ];
+  ]);
 
   try {
     const parsedUrl = new URL(imageUrl);
-    if (!allowedDomains.includes(parsedUrl.hostname)) {
+    if (!allowedDomains.has(parsedUrl.hostname)) {
       return new Response('Domain not allowed', { status: 403 });
     }
   } catch {
@@ -43,10 +51,15 @@ export async function handleImageProxy(request: Request, env: any): Promise<Resp
   const cached = await env.BOOK_COVERS.get(cacheKey);
 
   if (cached) {
-    console.log(`Image cache HIT: ${cacheKey}`);
-    const imageData = await cached.arrayBuffer();
-    const contentType = cached.httpMetadata?.contentType || 'image/jpeg';
-    return resizeImage(imageData, size, contentType);
+    try {
+      console.log(`Image cache HIT: ${cacheKey}`);
+      const imageData = await cached.arrayBuffer();
+      const contentType = cached.httpMetadata?.contentType || 'image/jpeg';
+      return resizeImage(imageData, size, contentType);
+    } catch (err) {
+      console.error(`Error reading cached image from R2 for key ${cacheKey}:`, err);
+      // Fall through to fetch from origin
+    }
   }
 
   console.log(`Image cache MISS: ${cacheKey}`);

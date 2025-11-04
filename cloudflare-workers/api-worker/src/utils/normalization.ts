@@ -9,7 +9,7 @@ export function normalizeTitle(title: string): string {
   return title
     .toLowerCase()
     .trim()
-    .replace(/^(the|a|an)\s+/i, '')  // "The Hobbit" → "hobbit"
+    .replace(/^(the|a|an)\s+/, '')    // "The Hobbit" → "hobbit"
     .replace(/[^a-z0-9\s]/g, '');     // Remove punctuation
 }
 
