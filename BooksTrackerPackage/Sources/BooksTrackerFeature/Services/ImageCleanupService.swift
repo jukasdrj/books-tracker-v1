@@ -24,12 +24,22 @@ public class ImageCleanupService {
     /// Call this on app launch to maintain clean temporary storage
     public func cleanupReviewedImages(in modelContext: ModelContext) async {
         do {
-            // Fetch all works that have temporary image references
-            let descriptor = FetchDescriptor<Work>()
-            let allWorks = try modelContext.fetch(descriptor)
+            // Use predicate to only fetch works with image paths (avoid loading entire library)
+            let descriptor = FetchDescriptor<Work>(
+                predicate: #Predicate<Work> { work in
+                    work.originalImagePath != nil
+                }
+            )
+
+            let worksWithImages = try modelContext.fetch(descriptor)
+
+            // Early exit if no works have images
+            guard !worksWithImages.isEmpty else {
+                print("✅ No works with images - skipping cleanup")
+                return
+            }
 
             // Group works by their original image path
-            let worksWithImages = allWorks.filter { $0.originalImagePath != nil }
             let groupedByImage = Dictionary(grouping: worksWithImages) { $0.originalImagePath! }
 
             var cleanedCount = 0
