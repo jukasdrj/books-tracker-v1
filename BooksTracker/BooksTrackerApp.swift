@@ -71,13 +71,19 @@ struct BooksTrackerApp: App {
     let dtoMapper: DTOMapper
 
     init() {
+        LaunchMetrics.shared.recordMilestone("BooksTrackerApp.init start")
+
         // Create DTOMapper with main context
         self.dtoMapper = DTOMapper(modelContext: modelContainer.mainContext)
+        LaunchMetrics.shared.recordMilestone("DTOMapper created")
     }
 
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .onAppear {
+                    LaunchMetrics.shared.recordMilestone("ContentView appeared")
+                }
                 .iOS26ThemeStore(themeStore)
                 .modelContainer(modelContainer)
                 .environment(featureFlags)

@@ -98,19 +98,21 @@ public struct ContentView: View {
             })
             .themedBackground()
             .task {
-                // Validate enrichment queue on app startup - remove stale persistent IDs
+                LaunchMetrics.shared.recordMilestone("EnrichmentQueue validation start")
                 EnrichmentQueue.shared.validateQueue(in: modelContext)
+                LaunchMetrics.shared.recordMilestone("EnrichmentQueue validation end")
             }
             .task {
-                // Clean up temporary scan images after all books reviewed
+                LaunchMetrics.shared.recordMilestone("ImageCleanup start")
                 await ImageCleanupService.shared.cleanupReviewedImages(in: modelContext)
-                // Clean up orphaned temp files from failed scans (24h+ old)
                 await ImageCleanupService.shared.cleanupOrphanedFiles(in: modelContext)
+                LaunchMetrics.shared.recordMilestone("ImageCleanup end")
             }
             .task {
-                // Setup sample data if library is empty
+                LaunchMetrics.shared.recordMilestone("SampleData check start")
                 let generator = SampleDataGenerator(modelContext: modelContext)
                 generator.setupSampleDataIfNeeded()
+                LaunchMetrics.shared.recordMilestone("SampleData check end")
             }
             .task {
                 await notificationCoordinator.handleNotifications(
