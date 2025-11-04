@@ -19,15 +19,15 @@ struct ImageCleanupServiceTests {
         // Create 100 works without images (should be filtered out by predicate)
         for i in 0..<100 {
             let work = Work(title: "Book \(i)")
-            work.originalImagePath = nil // No image
             context.insert(work)
+            work.originalImagePath = nil // No image
         }
 
         // Create 1 work with image
         let workWithImage = Work(title: "Scanned Book")
+        context.insert(workWithImage)
         workWithImage.originalImagePath = "/tmp/scan.jpg"
         workWithImage.reviewStatus = .verified
-        context.insert(workWithImage)
 
         try context.save()
 
