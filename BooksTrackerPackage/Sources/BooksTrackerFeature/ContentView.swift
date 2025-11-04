@@ -98,21 +98,28 @@ public struct ContentView: View {
             })
             .themedBackground()
             .task {
-                LaunchMetrics.shared.recordMilestone("EnrichmentQueue validation start")
-                EnrichmentQueue.shared.validateQueue(in: modelContext)
-                LaunchMetrics.shared.recordMilestone("EnrichmentQueue validation end")
-            }
-            .task {
-                LaunchMetrics.shared.recordMilestone("ImageCleanup start")
-                await ImageCleanupService.shared.cleanupReviewedImages(in: modelContext)
-                await ImageCleanupService.shared.cleanupOrphanedFiles(in: modelContext)
-                LaunchMetrics.shared.recordMilestone("ImageCleanup end")
-            }
-            .task {
-                LaunchMetrics.shared.recordMilestone("SampleData check start")
-                let generator = SampleDataGenerator(modelContext: modelContext)
-                generator.setupSampleDataIfNeeded()
-                LaunchMetrics.shared.recordMilestone("SampleData check end")
+                // Defer non-critical background tasks until app is interactive
+                BackgroundTaskScheduler.shared.schedule(priority: .low) {
+                    LaunchMetrics.shared.recordMilestone("EnrichmentQueue validation start")
+                    EnrichmentQueue.shared.validateQueue(in: modelContext)
+                    LaunchMetrics.shared.recordMilestone("EnrichmentQueue validation end")
+                }
+
+                BackgroundTaskScheduler.shared.schedule(priority: .low) {
+                    LaunchMetrics.shared.recordMilestone("ImageCleanup start")
+                    await ImageCleanupService.shared.cleanupReviewedImages(in: modelContext)
+                    await ImageCleanupService.shared.cleanupOrphanedFiles(in: modelContext)
+                    LaunchMetrics.shared.recordMilestone("ImageCleanup end")
+                }
+
+                BackgroundTaskScheduler.shared.schedule(priority: .low) {
+                    LaunchMetrics.shared.recordMilestone("SampleData check start")
+                    let generator = SampleDataGenerator(modelContext: modelContext)
+                    generator.setupSampleDataIfNeeded()
+                    LaunchMetrics.shared.recordMilestone("SampleData check end")
+                }
+
+                LaunchMetrics.shared.recordMilestone("Background tasks scheduled")
             }
             .task {
                 await notificationCoordinator.handleNotifications(

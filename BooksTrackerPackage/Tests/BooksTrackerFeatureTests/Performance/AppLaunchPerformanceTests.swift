@@ -58,4 +58,39 @@ struct AppLaunchPerformanceTests {
         #expect(container != nil)
         print("⏱️ Lazy container init: \(Int(elapsed))ms")
     }
+
+    @Test("Background task scheduling defers execution")
+    func testBackgroundTaskScheduling() async throws {
+        var taskExecuted = false
+
+        BackgroundTaskScheduler.shared.schedule {
+            taskExecuted = true
+        }
+
+        // Task should not execute immediately
+        #expect(taskExecuted == false)
+
+        // Wait for deferred execution
+        await BackgroundTaskScheduler.shared.waitForCompletion()
+
+        // Now task should be complete
+        #expect(taskExecuted == true)
+    }
+
+    @Test("Background tasks can be cancelled")
+    func testBackgroundTaskCancellation() async throws {
+        var taskExecuted = false
+
+        BackgroundTaskScheduler.shared.schedule {
+            taskExecuted = true
+        }
+
+        // Cancel before execution
+        BackgroundTaskScheduler.shared.cancelAll()
+
+        // Wait a bit to ensure task doesn't run
+        try await Task.sleep(for: .milliseconds(100))
+
+        #expect(taskExecuted == false)
+    }
 }
