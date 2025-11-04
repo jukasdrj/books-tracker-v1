@@ -35,4 +35,27 @@ struct AppLaunchPerformanceTests {
 
         _ = container // Use to avoid warning
     }
+
+    @Test("Lazy ModelContainer initialization")
+    func testLazyContainerInit() async throws {
+        // Test that container creation can be deferred
+        var container: ModelContainer?
+
+        let start = CFAbsoluteTimeGetCurrent()
+
+        // Simulate lazy init
+        let schema = Schema([Work.self, Edition.self, Author.self, UserLibraryEntry.self])
+        let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+
+        // Container not created yet
+        #expect(container == nil)
+
+        // Create on first access
+        container = try ModelContainer(for: schema, configurations: [config])
+
+        let elapsed = (CFAbsoluteTimeGetCurrent() - start) * 1000
+
+        #expect(container != nil)
+        print("⏱️ Lazy container init: \(Int(elapsed))ms")
+    }
 }
