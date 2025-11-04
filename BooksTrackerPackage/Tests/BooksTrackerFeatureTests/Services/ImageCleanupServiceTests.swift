@@ -1,5 +1,6 @@
 import Testing
 import SwiftData
+import Foundation
 @testable import BooksTrackerFeature
 
 @MainActor
@@ -17,29 +18,13 @@ struct ImageCleanupServiceTests {
 
         // Create 100 works without images (should be filtered out by predicate)
         for i in 0..<100 {
-            let work = Work(
-                title: "Book \(i)",
-                authors: [],
-                publicationYear: 2024,
-                genres: [],
-                isbn: nil,
-                olid: nil,
-                coverURL: nil
-            )
+            let work = Work(title: "Book \(i)")
             work.originalImagePath = nil // No image
             context.insert(work)
         }
 
         // Create 1 work with image
-        let workWithImage = Work(
-            title: "Scanned Book",
-            authors: [],
-            publicationYear: 2024,
-            genres: [],
-            isbn: nil,
-            olid: nil,
-            coverURL: nil
-        )
+        let workWithImage = Work(title: "Scanned Book")
         workWithImage.originalImagePath = "/tmp/scan.jpg"
         workWithImage.reviewStatus = .verified
         context.insert(workWithImage)

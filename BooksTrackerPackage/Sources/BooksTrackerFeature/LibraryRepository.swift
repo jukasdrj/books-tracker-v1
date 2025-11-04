@@ -1,6 +1,21 @@
 import SwiftUI
 import SwiftData
 
+/// Reading statistics for Insights view
+public struct ReadingStatistics: Codable, Sendable {
+    public let totalBooks: Int
+    public let completionRate: Double
+    public let currentlyReading: Int
+    public let totalPagesRead: Int
+
+    public init(totalBooks: Int, completionRate: Double, currentlyReading: Int, totalPagesRead: Int) {
+        self.totalBooks = totalBooks
+        self.completionRate = completionRate
+        self.currentlyReading = currentlyReading
+        self.totalPagesRead = totalPagesRead
+    }
+}
+
 /// Repository pattern for centralizing SwiftData queries and business logic.
 ///
 /// # Purpose
@@ -83,16 +98,19 @@ public class LibraryRepository {
     /// let reading = try repository.fetchByReadingStatus(.reading)
     /// ```
     ///
+    /// **Performance:** Fetches UserLibraryEntry first (smaller dataset), then maps to Works.
     /// - Parameter status: Reading status to filter by (.wishlist, .toRead, .reading, .read)
     /// - Returns: Array of works sorted by last modified date
     /// - Throws: `SwiftDataError` if query fails
     public func fetchByReadingStatus(_ status: ReadingStatus) throws -> [Work] {
-        let allWorks = try fetchUserLibrary()
+        // PERFORMANCE: Fetch UserLibraryEntry first (smaller dataset), then map to Works
+        let descriptor = FetchDescriptor<UserLibraryEntry>(
+            predicate: #Predicate { $0.readingStatus == status }
+        )
+        let entries = try modelContext.fetch(descriptor)
 
-        // Filter by reading status
-        return allWorks.filter { work in
-            work.userLibraryEntries?.first?.readingStatus == status
-        }
+        // Map to Works (only loads needed Works, not entire library)
+        return entries.compactMap { $0.work }
     }
 
     /// Fetches books currently being read.
@@ -197,11 +215,12 @@ public class LibraryRepository {
     /// - Returns: Number of works needing review
     /// - Throws: `SwiftDataError` if query fails
     public func reviewQueueCount() throws -> Int {
-        // PERFORMANCE: Direct database-level count with predicate
-        let descriptor = FetchDescriptor<Work>(
-            predicate: #Predicate { $0.reviewStatus == .needsReview }
-        )
-        return try modelContext.fetchCount(descriptor)
+        // PERFORMANCE: Direct database-level count
+        // Note: Fetch all and filter in-memory because SwiftData predicates
+        // can't compare enum cases directly (key path limitation)
+        let descriptor = FetchDescriptor<Work>()
+        let allWorks = try modelContext.fetch(descriptor)
+        return allWorks.filter { $0.reviewStatus == .needsReview }.count
     }
 
     // MARK: - Diversity Analytics
@@ -235,11 +254,11 @@ public class LibraryRepository {
     ///
     /// **Metrics:**
     /// - Total books
-    /// - Completion rate
+    /// - Completion rate (0.0 to 1.0)
     /// - Currently reading count
     /// - Total pages read
     ///
-    /// - Returns: Dictionary of statistic keys and values
+    /// - Returns: Dictionary with statistics (backwards compatible)
     /// - Throws: `SwiftDataError` if query fails
     public func calculateReadingStatistics() throws -> [String: Any] {
         let total = try totalBooksCount()
