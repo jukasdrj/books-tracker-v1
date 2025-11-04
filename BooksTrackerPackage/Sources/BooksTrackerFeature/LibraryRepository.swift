@@ -260,9 +260,9 @@ public class LibraryRepository {
     /// - Currently reading count
     /// - Total pages read
     ///
-    /// - Returns: Dictionary with statistics (backwards compatible)
+    /// - Returns: Typed statistics struct (compile-time safe)
     /// - Throws: `SwiftDataError` if query fails
-    public func calculateReadingStatistics() throws -> [String: Any] {
+    public func calculateReadingStatistics() throws -> ReadingStatistics {
         let total = try totalBooksCount()
         let completion = try completionRate()
         let reading = try fetchCurrentlyReading().count
@@ -273,11 +273,11 @@ public class LibraryRepository {
             work.userLibraryEntries?.first?.edition?.pageCount
         }.reduce(0, +)
 
-        return [
-            "totalBooks": total,
-            "completionRate": completion,
-            "currentlyReading": reading,
-            "totalPagesRead": totalPages
-        ]
+        return ReadingStatistics(
+            totalBooks: total,
+            completionRate: completion,
+            currentlyReading: reading,
+            totalPagesRead: totalPages
+        )
     }
 }
