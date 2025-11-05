@@ -130,7 +130,9 @@ public struct ContentView: View {
                 
                 BackgroundTaskScheduler.shared.schedule(priority: .low) {
                     LaunchMetrics.shared.recordMilestone("DTOMapper cache pruning start")
-                    await dtoMapper?.pruneStaleCacheEntries()
+                    if let dtoMapper = dtoMapper {
+                        await dtoMapper.pruneStaleCacheEntries()
+                    }
                     LaunchMetrics.shared.recordMilestone("DTOMapper cache pruning end")
                 }
 

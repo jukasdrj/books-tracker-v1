@@ -19,7 +19,11 @@ public final class DTOMapper {
     
     // Cache persistence location
     private let cacheURL: URL = {
-        let directory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
+        guard let directory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else {
+            // Fallback to temporary directory if caches directory unavailable
+            let tempDir = FileManager.default.temporaryDirectory
+            return tempDir.appendingPathComponent("dto_work_cache.json")
+        }
         return directory.appendingPathComponent("dto_work_cache.json")
     }()
 
@@ -241,9 +245,12 @@ public final class DTOMapper {
         
         do {
             // 1. Fetch all valid Works whose IDs are in cache
+            // Convert to Set for O(1) lookup performance
+            let cachedIDSet = Set(allCachedIDs)
+            
             var descriptor = FetchDescriptor<Work>()
             descriptor.predicate = #Predicate<Work> { work in
-                allCachedIDs.contains(work.persistentModelID)
+                cachedIDSet.contains(work.persistentModelID)
             }
             
             let validWorks = try modelContext.fetch(descriptor)
