@@ -231,6 +231,11 @@ public struct DiversityStats: Sendable {
         // Calculate language stats
         var languageCounts: [String: Int] = [:]
         for work in worksInLibrary {
+            // DEFENSIVE: Validate work is still in context before accessing properties
+            guard context.model(for: work.persistentModelID) as? Work != nil else {
+                continue
+            }
+            
             if let language = work.originalLanguage, !language.isEmpty {
                 languageCounts[language, default: 0] += 1
             }
