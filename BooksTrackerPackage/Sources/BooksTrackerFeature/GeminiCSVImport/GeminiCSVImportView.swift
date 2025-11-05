@@ -376,6 +376,7 @@ public struct GeminiCSVImportView: View {
                 // initial request and will begin processing. No UI state is updated here because actual progress
                 // updates (including percentage and status) will be sent via subsequent 'progress' messages.
                 // Only log this event; UI state changes are handled in the 'progress', 'complete', and 'error' cases.
+                // Note: ready_ack messages have no 'data' field (see progress-socket.js:102-105)
 
             case "progress":
                 if let data = message.data,
@@ -559,32 +560,6 @@ public struct GeminiCSVImportView: View {
 
             // Update UI with error
             importStatus = .failed("Failed to save: \(error.localizedDescription)")
-        }
-    }
-
-    // MARK: - WebSocket Message Types
-
-    struct WebSocketMessage: Codable {
-        let type: String
-        let jobId: String?
-        let timestamp: Double?
-        let data: MessageData?
-        
-        struct MessageData: Codable {
-            // Progress message fields
-            let progress: Double?
-            let status: String?
-            let keepAlive: Bool?
-            
-            // Complete message fields
-            let books: [GeminiCSVImportJob.ParsedBook]?
-            let errors: [GeminiCSVImportJob.ImportError]?
-            let successRate: String?
-            
-            // Error message fields
-            let error: String?
-            let fallbackAvailable: Bool?
-            let suggestion: String?
         }
     }
 }
