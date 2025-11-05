@@ -299,7 +299,7 @@ describe('Migration Validation - Old vs New Format', () => {
       reviewStatus: "unreviewed",
       goodreadsWorkIDs: [],
       amazonASINs: [],
-      isbndbQuality: 0
+      isbndbQuality: 0,
       // All canonical fields present
     };
 
