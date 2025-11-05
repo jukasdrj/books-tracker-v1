@@ -875,11 +875,17 @@ public struct UltraOptimizedLibraryView: View {
         let allAuthors = works.compactMap(\.authors).flatMap { $0 }
         guard !allAuthors.isEmpty else { return 0.0 }
 
-        let diverseCount = allAuthors.filter { author in
+        // DEFENSIVE: Filter out deleted authors before accessing properties
+        let validAuthors = allAuthors.filter { author in
+            modelContext.model(for: author.persistentModelID) as? Author != nil
+        }
+        guard !validAuthors.isEmpty else { return 0.0 }
+
+        let diverseCount = validAuthors.filter { author in
             author.representsMarginalizedVoices() || author.representsIndigenousVoices()
         }.count
 
-        return Double(diverseCount) / Double(allAuthors.count)
+        return Double(diverseCount) / Double(validAuthors.count)
     }
 }
 
@@ -890,6 +896,7 @@ struct CulturalDiversityInsightsView: View {
     let works: [Work]
     @Environment(\.dismiss) private var dismiss
     @Environment(\.iOS26ThemeStore) private var themeStore
+    @Environment(\.modelContext) private var modelContext
 
     var body: some View {
         NavigationStack {
@@ -1056,10 +1063,16 @@ struct CulturalDiversityInsightsView: View {
 
     private func calculateDiversityMetrics() -> (diversePercentage: Double, regionCount: Int, languageCount: Int) {
         let allAuthors = works.compactMap(\.authors).flatMap { $0 }
-        let diverseCount = allAuthors.filter { $0.representsMarginalizedVoices() }.count
-        let diversePercentage = allAuthors.isEmpty ? 0.0 : Double(diverseCount) / Double(allAuthors.count)
+        
+        // DEFENSIVE: Filter out deleted authors before accessing properties
+        let validAuthors = allAuthors.filter { author in
+            modelContext.model(for: author.persistentModelID) as? Author != nil
+        }
+        
+        let diverseCount = validAuthors.filter { $0.representsMarginalizedVoices() }.count
+        let diversePercentage = validAuthors.isEmpty ? 0.0 : Double(diverseCount) / Double(validAuthors.count)
 
-        let regions = Set(allAuthors.compactMap(\.culturalRegion))
+        let regions = Set(validAuthors.compactMap(\.culturalRegion))
         let languages = Set(works.compactMap(\.originalLanguage))
 
         return (diversePercentage, regions.count, languages.count)
@@ -1070,6 +1083,11 @@ struct CulturalDiversityInsightsView: View {
         var regionCounts: [CulturalRegion: Int] = [:]
 
         for author in allAuthors {
+            // DEFENSIVE: Validate author is still in context before accessing properties
+            // During library reset, authors may be deleted while this view is still visible
+            guard modelContext.model(for: author.persistentModelID) as? Author != nil else {
+                continue
+            }
             if let region = author.culturalRegion {
                 regionCounts[region, default: 0] += 1
             }
@@ -1083,6 +1101,11 @@ struct CulturalDiversityInsightsView: View {
         var genderCounts: [AuthorGender: Int] = [:]
 
         for author in allAuthors {
+            // DEFENSIVE: Validate author is still in context before accessing properties
+            // During library reset, authors may be deleted while this view is still visible
+            guard modelContext.model(for: author.persistentModelID) as? Author != nil else {
+                continue
+            }
             genderCounts[author.gender, default: 0] += 1
         }
 
