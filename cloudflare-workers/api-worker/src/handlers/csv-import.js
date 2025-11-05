@@ -78,11 +78,15 @@ export async function processCSVImport(csvFile, jobId, doStub, env) {
     // Read CSV content
     const csvText = await csvFile.text();
 
-    // CRITICAL: Wait for WebSocket ready signal before processing
-    // This prevents race condition where we send updates before client connects
+    // CRITICAL: Wait for iOS to connect WebSocket before calling waitForReady()
+    // Race condition fix: HTTP response must reach iOS before WebSocket can connect
+    console.log(`[CSV Import] Waiting for iOS to establish WebSocket connection for job ${jobId}`);
+    await new Promise(resolve => setTimeout(resolve, 1000)); // Give iOS 1 second to connect
+
+    // Now wait for WebSocket ready signal before processing
     console.log(`[CSV Import] Waiting for WebSocket ready signal for job ${jobId}`);
 
-    const readyResult = await doStub.waitForReady(5000); // 5 second timeout
+    const readyResult = await doStub.waitForReady(10000); // 10 second timeout
 
     if (readyResult.timedOut || readyResult.disconnected) {
       const reason = readyResult.timedOut ? 'timeout' : 'WebSocket not connected';
