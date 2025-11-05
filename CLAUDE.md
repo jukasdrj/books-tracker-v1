@@ -1,5 +1,11 @@
 # 📚 BooksTrack by oooe - Claude Code Guide
 
+**AI Context Files:**
+- This file: Claude Code development guide (primary)
+- `.ai/SHARED_CONTEXT.md`: Project-wide AI context
+- `.ai/gemini-config.md`: Gemini API configuration
+- `.github/copilot-instructions.md`: GitHub Copilot setup
+
 **Version 3.0.0 (Build 47+)** | **iOS 26.0+** | **Swift 6.1+** | **Updated: October 23, 2025**
 
 Personal book tracking iOS app with cultural diversity insights. SwiftUI, SwiftData, Cloudflare Workers backend.
