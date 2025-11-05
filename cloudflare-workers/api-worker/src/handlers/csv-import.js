@@ -44,7 +44,7 @@ export async function handleCSVImport(request, env, ctx) {
     const doId = env.PROGRESS_WEBSOCKET_DO.idFromName(jobId);
     const doStub = env.PROGRESS_WEBSOCKET_DO.get(doId);
 
-    // Start background processing
+    // Start background processing immediately (no waitForReady here - handled in background)
     ctx.waitUntil(processCSVImport(csvFile, jobId, doStub, env));
 
     return Response.json(
@@ -78,14 +78,8 @@ export async function processCSVImport(csvFile, jobId, doStub, env) {
     // Read CSV content
     const csvText = await csvFile.text();
 
-    // CRITICAL: Wait for iOS to connect WebSocket before calling waitForReady()
-    // Race condition fix: HTTP response must reach iOS before WebSocket can connect
-    console.log(`[CSV Import] Waiting for iOS to establish WebSocket connection for job ${jobId}`);
-    await new Promise(resolve => setTimeout(resolve, 1000)); // Give iOS 1 second to connect
-
-    // Now wait for WebSocket ready signal before processing
+    // Wait for WebSocket ready signal (async I/O, not blocking)
     console.log(`[CSV Import] Waiting for WebSocket ready signal for job ${jobId}`);
-
     const readyResult = await doStub.waitForReady(10000); // 10 second timeout
 
     if (readyResult.timedOut || readyResult.disconnected) {
@@ -107,38 +101,31 @@ export async function processCSVImport(csvFile, jobId, doStub, env) {
     await doStub.updateProgress(0.05, 'Uploading CSV to Gemini...');
 
     const cacheKey = await generateCSVCacheKey(csvText, PROMPT_VERSION);
-    let parsedBooks = await env.CACHE_KV.get(cacheKey, 'json');
+    let parsedBooks = await env.KV_CACHE.get(cacheKey, 'json');
 
     if (!parsedBooks) {
-      // Keep-alive interval
-      const keepAliveInterval = setInterval(async () => {
-        await doStub.updateProgress(0.25, 'Gemini is parsing your file...', true);
-      }, 5000);
+      // NOTE: setInterval keep-alive removed - it doesn't prevent waitUntil() timeout
+      // because async callbacks don't register as I/O activity in Workers runtime.
+      // Gemini 2.0 Flash typically responds in <20 seconds for CSV parsing.
+      const prompt = buildCSVParserPrompt();
+      parsedBooks = await callGemini(csvText, prompt, env);
 
-      try {
-        const prompt = buildCSVParserPrompt();
-        parsedBooks = await callGemini(csvText, prompt, env);
-
-        // Validate Gemini response
-        if (!Array.isArray(parsedBooks) || parsedBooks.length === 0) {
-          throw new Error('Gemini returned invalid format');
-        }
-
-        const validBooks = parsedBooks.filter(b => b.title && b.author);
-        if (validBooks.length === 0) {
-          throw new Error('No valid books found in CSV');
-        }
-
-        parsedBooks = validBooks;
-
-        // Cache for 7 days
-        await env.CACHE_KV.put(cacheKey, JSON.stringify(parsedBooks), {
-          expirationTtl: 604800
-        });
-
-      } finally {
-        clearInterval(keepAliveInterval);
+      // Validate Gemini response
+      if (!Array.isArray(parsedBooks) || parsedBooks.length === 0) {
+        throw new Error('Gemini returned invalid format');
       }
+
+      const validBooks = parsedBooks.filter(b => b.title && b.author);
+      if (validBooks.length === 0) {
+        throw new Error('No valid books found in CSV');
+      }
+
+      parsedBooks = validBooks;
+
+      // Cache for 7 days
+      await env.KV_CACHE.put(cacheKey, JSON.stringify(parsedBooks), {
+        expirationTtl: 604800
+      });
     }
 
     // Stage 2: Validation (50-100%)
@@ -172,6 +159,13 @@ export async function processCSVImport(csvFile, jobId, doStub, env) {
       fallbackAvailable: true,
       suggestion: 'Try manual CSV import instead'
     });
+  } finally {
+    // Ensure WebSocket closes cleanly (matches bookshelf scanner pattern)
+    try {
+      await doStub.closeConnection(1000, 'CSV import complete');
+    } catch (closeError) {
+      console.error(`[CSV Import] Failed to close connection: ${closeError.message}`);
+    }
   }
 }
 
@@ -184,7 +178,11 @@ export async function processCSVImport(csvFile, jobId, doStub, env) {
  * @returns {Promise<Array<Object>>} Parsed book data
  */
 async function callGemini(csvText, prompt, env) {
-  const apiKey = env.GEMINI_API_KEY;
+  // Get API key from Secrets Store (requires .get() call)
+  const apiKey = env.GEMINI_API_KEY?.get
+    ? await env.GEMINI_API_KEY.get()
+    : env.GEMINI_API_KEY;
+
   if (!apiKey) {
     throw new Error('GEMINI_API_KEY not configured');
   }
