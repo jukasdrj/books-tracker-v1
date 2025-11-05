@@ -161,7 +161,12 @@ public class LibraryRepository {
             // Search author names
             if let authors = work.authors {
                 return authors.contains { author in
-                    author.name.lowercased().contains(lowercasedQuery)
+                    // DEFENSIVE: Validate author is still in context before accessing properties
+                    // During library reset, authors may be deleted while search is running
+                    guard modelContext.model(for: author.persistentModelID) as? Author != nil else {
+                        return false
+                    }
+                    return author.name.lowercased().contains(lowercasedQuery)
                 }
             }
 

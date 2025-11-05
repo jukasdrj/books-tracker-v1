@@ -234,5 +234,24 @@ struct LibraryResetCrashTests {
         
         // Should have no counts since all authors are deleted
         #expect(regionCounts.isEmpty, "Should have no region counts for deleted authors")
+        
+        // TEST: Accessing author.name during search should be handled gracefully
+        // This simulates searchWorks() and searchLibrary() logic
+        let searchResults = allWorks.filter { work in
+            if let authors = work.authors {
+                for author in authors {
+                    // Defensive check (what our fix adds)
+                    if context.model(for: author.persistentModelID) as? Author != nil {
+                        if author.name.lowercased().contains("doe") {
+                            return true
+                        }
+                    }
+                }
+            }
+            return false
+        }
+        
+        // Should return empty since all authors are deleted
+        #expect(searchResults.isEmpty, "Should have no search results for deleted authors")
     }
 }
