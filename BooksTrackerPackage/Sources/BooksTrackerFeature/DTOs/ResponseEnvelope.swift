@@ -9,7 +9,7 @@ import Foundation
 
 // MARK: - Response Metadata
 
-/// Response metadata included in every response
+/// Response metadata included in every response (LEGACY - use ResponseMetadata for new endpoints)
 public struct ResponseMeta: Codable, Sendable {
     /// ISO 8601 timestamp
     public let timestamp: String
@@ -28,6 +28,24 @@ public struct ResponseMeta: Codable, Sendable {
 
     /// Request ID for distributed tracing (future)
     public let requestId: String?
+}
+
+/// Response metadata for new envelope format
+public struct ResponseMetadata: Codable, Sendable {
+    /// ISO 8601 timestamp
+    public let timestamp: String
+
+    /// Request tracing ID for distributed systems
+    public let traceId: String?
+
+    /// Processing time in milliseconds
+    public let processingTime: Int?
+
+    /// Data provider used
+    public let provider: String?
+
+    /// Whether response was cached
+    public let cached: Bool?
 }
 
 // MARK: - API Response (Discriminated Union)
@@ -84,6 +102,27 @@ public enum ApiResponse<T: Codable>: Codable {
             try container.encode(error, forKey: .error)
             try container.encode(meta, forKey: .meta)
         }
+    }
+}
+
+// MARK: - New Response Envelope
+
+/// Universal response envelope for new endpoints
+/// Mirrors TypeScript ResponseEnvelope in api-worker/src/types/responses.ts
+public struct ResponseEnvelope<T: Codable>: Codable {
+    /// Response payload (null on error)
+    public let data: T?
+
+    /// Response metadata (always present)
+    public let metadata: ResponseMetadata
+
+    /// Error information (present on failure)
+    public let error: ApiErrorInfo?
+
+    public struct ApiErrorInfo: Codable, Sendable {
+        public let message: String
+        public let code: String?
+        public let details: AnyCodable?
     }
 }
 

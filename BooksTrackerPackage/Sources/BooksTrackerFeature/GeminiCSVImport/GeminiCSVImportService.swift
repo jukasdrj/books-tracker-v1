@@ -117,9 +117,20 @@ actor GeminiCSVImportService {
                 throw GeminiCSVImportError.serverError(httpResponse.statusCode, errorMessage)
             }
 
-            // Decode jobId response
+            // Decode ResponseEnvelope<GeminiCSVImportResponse>
             let decoder = JSONDecoder()
-            let importResponse = try decoder.decode(GeminiCSVImportResponse.self, from: data)
+            let envelope = try decoder.decode(ResponseEnvelope<GeminiCSVImportResponse>.self, from: data)
+
+            // Check for errors
+            if let error = envelope.error {
+                throw GeminiCSVImportError.serverError(httpResponse.statusCode, error.message)
+            }
+
+            // Unwrap data
+            guard let importResponse = envelope.data else {
+                throw GeminiCSVImportError.invalidResponse
+            }
+
             return importResponse.jobId
 
         } catch let error as GeminiCSVImportError {
