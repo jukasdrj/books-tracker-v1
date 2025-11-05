@@ -32,16 +32,27 @@ actor EnrichmentAPIClient {
 
         guard let httpResponse = response as? HTTPURLResponse,
               httpResponse.statusCode == 202 else {
+            // Enhanced error logging for debugging enrichment failures
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
+            print("🚨 Enrichment API error: HTTP \(statusCode)")
+            
+            #if DEBUG
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("🚨 Response body: \(responseString)")
+            }
+            #endif
+            
             // Try to decode error response to extract error code
             if let errorResponse = try? JSONDecoder().decode(ApiResponse<EnrichmentResult>.self, from: data),
                case .failure(let apiError, _) = errorResponse {
+                print("🚨 API Error: \(apiError.message), Code: \(apiError.code?.rawValue ?? "UNKNOWN")")
                 // Preserve error code in NSError userInfo
                 let userInfo: [String: Any] = [
                     NSLocalizedDescriptionKey: apiError.message,
                     "errorCode": apiError.code?.rawValue ?? "UNKNOWN",
                     "details": apiError.details?.value ?? NSNull()
                 ]
-                throw NSError(domain: "EnrichmentAPIClient", code: (response as? HTTPURLResponse)?.statusCode ?? -1, userInfo: userInfo)
+                throw NSError(domain: "EnrichmentAPIClient", code: statusCode, userInfo: userInfo)
             }
             throw URLError(.badServerResponse)
         }
@@ -51,12 +62,18 @@ actor EnrichmentAPIClient {
 
         // Check for errors in envelope
         if let error = envelope.error {
+            print("🚨 Enrichment envelope error: \(error.message), Code: \(error.code ?? "UNKNOWN")")
             throw NSError(domain: "EnrichmentAPIClient", code: -1, userInfo: [NSLocalizedDescriptionKey: error.message])
         }
 
         guard let result = envelope.data else {
+            print("🚨 Enrichment response missing data field")
             throw URLError(.badServerResponse)
         }
+
+        #if DEBUG
+        print("✅ Enrichment job started: \(result.totalCount) books queued")
+        #endif
 
         return result
     }

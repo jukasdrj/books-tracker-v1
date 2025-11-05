@@ -106,12 +106,28 @@ public final class EnrichmentService {
 
         do {
             let result = try await apiClient.startEnrichment(jobId: jobId, books: books)
+            
+            #if DEBUG
+            print("✅ Batch enrichment API call succeeded: \(result.totalCount) books, processedCount: \(result.processedCount)")
+            #endif
+            
             return BatchEnrichmentResult(
                 successCount: result.processedCount,
                 failureCount: result.totalCount - result.processedCount,
                 errors: []
             )
         } catch {
+            // Enhanced error logging for debugging enrichment failures
+            print("🚨 Batch enrichment failed: \(error)")
+            print("🚨 Error type: \(type(of: error))")
+            
+            if let urlError = error as? URLError {
+                print("🚨 URLError code: \(urlError.code.rawValue), localized: \(urlError.localizedDescription)")
+            } else if let nsError = error as? NSError {
+                print("🚨 NSError domain: \(nsError.domain), code: \(nsError.code)")
+                print("🚨 NSError userInfo: \(nsError.userInfo)")
+            }
+            
             return BatchEnrichmentResult(
                 successCount: 0,
                 failureCount: works.count,
