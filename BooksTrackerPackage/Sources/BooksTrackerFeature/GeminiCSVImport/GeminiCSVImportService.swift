@@ -78,9 +78,12 @@ actor GeminiCSVImportService {
     /// - Returns: JobId for progress tracking
     /// - Throws: GeminiCSVImportError on failure
     func uploadCSV(csvText: String) async throws -> String {
+        print("[CSV Upload] Starting upload, size: \(csvText.utf8.count) bytes")
+
         // Validate file size
         let dataSize = csvText.utf8.count
         guard dataSize <= maxFileSize else {
+            print("[CSV Upload] ❌ File too large: \(dataSize) bytes")
             throw GeminiCSVImportError.fileTooLarge(dataSize)
         }
 
@@ -89,6 +92,9 @@ actor GeminiCSVImportService {
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 120 // 2 minute timeout for large files
+
+        print("[CSV Upload] Request configured, endpoint: \(endpoint)")
 
         var body = Data()
 
@@ -104,9 +110,13 @@ actor GeminiCSVImportService {
 
         request.httpBody = body
 
+        print("[CSV Upload] Multipart body constructed, size: \(body.count) bytes")
+        print("[CSV Upload] Sending request to backend...")
+
         // Execute request
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
+            print("[CSV Upload] ✅ Received response from backend")
 
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw GeminiCSVImportError.invalidResponse
@@ -137,14 +147,18 @@ actor GeminiCSVImportService {
 
             // Unwrap data
             guard let importResponse = envelope.data else {
+                print("[CSV Upload] ❌ No data in response envelope")
                 throw GeminiCSVImportError.invalidResponse
             }
 
+            print("[CSV Upload] ✅ Got jobId: \(importResponse.jobId)")
             return importResponse.jobId
 
         } catch let error as GeminiCSVImportError {
+            print("[CSV Upload] ❌ CSV Import Error: \(error.localizedDescription)")
             throw error
         } catch {
+            print("[CSV Upload] ❌ Network Error: \(error.localizedDescription)")
             throw GeminiCSVImportError.networkError(error)
         }
     }
