@@ -244,10 +244,6 @@ public class BookSearchAPIService {
                     return nil // Continue processing other works
                 }
             }
-            .map { result in
-                logger.debug("✅ Mapped work: \(result.displayTitle)")
-                return result
-            }
 
         case .failure(let error, _):
             throw SearchError.apiError(error.message)

@@ -561,7 +561,7 @@ class ScanResultsModel {
 
         // Include both auto-selected (.confirmed) and manually selected (.detected) books
         // Exclude only .alreadyInLibrary and .rejected
-        let includedStatuses: Set<DetectedBook.Status> = [.confirmed, .detected]
+        let includedStatuses: Set<DetectionStatus> = [.confirmed, .detected]
         let selectedBooks = detectedBooks.filter { includedStatuses.contains($0.status) }
         let dtoMapper = DTOMapper(modelContext: modelContext)
         var enrichedImportCount = 0
@@ -705,7 +705,7 @@ class ScanResultsModel {
 
         // Analytics logging
         print("📊 Import complete: \(enrichedImportCount) enriched, \(queuedImportCount) queued")
-        print("📊 Analytics: bookshelf_import_completed - total: \(confirmedBooks.count), enriched: \(enrichedImportCount), queued: \(queuedImportCount)")
+        print("📊 Analytics: bookshelf_import_completed - total: \(selectedBooks.count), enriched: \(enrichedImportCount), queued: \(queuedImportCount)")
 
         isAdding = false
     }
