@@ -282,12 +282,14 @@ public struct GeminiCSVImportView: View {
 
     private func startWebSocketProgress(jobId: String) {
         let wsURL = URL(string: "wss://api-worker.jukasdrj.workers.dev/ws/progress?jobId=\(jobId)")!
+        print("[CSV WebSocket] Connecting to: \(wsURL)")
 
         webSocketTask = Task {
             do {
                 let session = URLSession.shared
                 let webSocket = session.webSocketTask(with: wsURL)
                 webSocket.resume()
+                print("[CSV WebSocket] ✅ WebSocket connection established")
 
                 // Send ready signal to backend (required for processing to start)
                 let readyMessage: [String: Any] = [
@@ -297,26 +299,33 @@ public struct GeminiCSVImportView: View {
                 if let messageData = try? JSONSerialization.data(withJSONObject: readyMessage),
                    let messageString = String(data: messageData, encoding: .utf8) {
                     try await webSocket.send(.string(messageString))
-                    print("✅ Sent ready signal to CSV import backend")
+                    print("[CSV WebSocket] ✅ Sent ready signal to backend")
                 }
 
                 // Listen for messages
+                print("[CSV WebSocket] Waiting for messages...")
                 while !Task.isCancelled {
                     let message = try await webSocket.receive()
+                    print("[CSV WebSocket] 📨 Received message")
 
                     switch message {
                     case .string(let text):
+                        print("[CSV WebSocket] Message text: \(text.prefix(200))")
                         handleWebSocketMessage(text)
                     case .data(let data):
+                        print("[CSV WebSocket] Message data: \(data.count) bytes")
                         if let text = String(data: data, encoding: .utf8) {
                             handleWebSocketMessage(text)
                         }
                     @unknown default:
+                        print("[CSV WebSocket] ⚠️ Unknown message type")
                         break
                     }
                 }
+                print("[CSV WebSocket] Message loop ended (task cancelled)")
 
             } catch {
+                print("[CSV WebSocket] ❌ Error: \(error.localizedDescription)")
                 if !Task.isCancelled {
                     importStatus = .failed("Connection lost: \(error.localizedDescription)")
                 }
@@ -325,35 +334,44 @@ public struct GeminiCSVImportView: View {
     }
 
     private func handleWebSocketMessage(_ text: String) {
-        guard let data = text.data(using: .utf8) else { return }
+        guard let data = text.data(using: .utf8) else {
+            print("[CSV WebSocket] ❌ Failed to convert text to data")
+            return
+        }
 
         do {
             let message = try JSONDecoder().decode(WebSocketMessage.self, from: data)
+            print("[CSV WebSocket] Decoded message type: \(message.type)")
 
             switch message.type {
             case "progress":
                 if let progressValue = message.progress, let status = message.status {
+                    print("[CSV WebSocket] Progress: \(Int(progressValue * 100))% - \(status)")
                     importStatus = .processing(progress: progressValue, message: status)
                 }
 
             case "complete":
                 if let result = message.result {
+                    print("[CSV WebSocket] ✅ Import complete: \(result.books.count) books")
                     importStatus = .completed(books: result.books, errors: result.errors)
                 }
                 webSocketTask?.cancel()
 
             case "error":
                 if let error = message.error {
+                    print("[CSV WebSocket] ❌ Error from backend: \(error)")
                     importStatus = .failed(error)
                 }
                 webSocketTask?.cancel()
 
             default:
+                print("[CSV WebSocket] ⚠️ Unknown message type: \(message.type)")
                 break
             }
 
         } catch {
-            print("Failed to decode WebSocket message: \(error)")
+            print("[CSV WebSocket] ❌ Failed to decode WebSocket message: \(error)")
+            print("[CSV WebSocket] Raw message: \(text)")
         }
     }
 
