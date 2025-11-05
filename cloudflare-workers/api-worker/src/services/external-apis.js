@@ -154,6 +154,10 @@ export async function searchGoogleBooksByISBN(isbn, env) {
 /**
  * Normalize Google Books API response to canonical DTOs
  * Uses canonical normalizers to ensure contract compliance
+ * 
+ * NOTE: This function temporarily attaches an `authors` property to WorkDTO
+ * for enrichment service compatibility (WorkDTOWithAuthors type).
+ * Handlers must strip this property before sending to client.
  */
 function normalizeGoogleBooksResponse(apiResponse) {
   if (!apiResponse.items || apiResponse.items.length === 0) {
@@ -267,6 +271,10 @@ export async function getOpenLibraryAuthorWorks(authorName, env) {
 /**
  * Normalize OpenLibrary search results to canonical DTOs
  * Uses canonical normalizers to ensure contract compliance
+ * 
+ * NOTE: This function temporarily attaches an `authors` property to WorkDTO
+ * for enrichment service compatibility (WorkDTOWithAuthors type).
+ * Handlers must strip this property before sending to client.
  */
 function normalizeOpenLibrarySearchResults(docs) {
   const works = [];

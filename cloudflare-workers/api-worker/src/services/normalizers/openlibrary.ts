@@ -36,8 +36,7 @@ export function normalizeOpenLibraryToWork(doc: any): WorkDTO {
     synthetic: false,
     primaryProvider: 'openlibrary',
     contributors: ['openlibrary'],
-    openLibraryID: extractWorkId(doc.key),
-    openLibraryWorkID: extractWorkId(doc.key),
+    openLibraryWorkID: extractWorkId(doc.key), // Canonical field
     goodreadsWorkIDs: doc.id_goodreads || [],
     amazonASINs: doc.id_amazon || [],
     librarythingIDs: doc.id_librarything || [],
