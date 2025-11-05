@@ -200,18 +200,34 @@ public class BookSearchAPIService {
     private func processSearchResponse(_ envelope: ApiResponse<BookSearchResponse>) throws -> [SearchResult] {
         switch envelope {
         case .success(let searchData, let meta):
+            logger.debug("📦 Processing search response: \(searchData.works.count) works, \(searchData.editions.count) editions, \(searchData.authors.count) authors")
+
             // Map authors from API response (separate from works for normalization)
             let mappedAuthors = searchData.authors.compactMap { authorDTO in
                 do {
                     return try dtoMapper.mapToAuthor(authorDTO)
                 } catch {
-                    logger.warning("Failed to map Author DTO: \(String(describing: error))")
+                    logger.warning("⚠️ Failed to map Author DTO '\(authorDTO.name)': \(String(describing: error))")
                     return nil
                 }
             }
 
+            logger.debug("✅ Mapped \(mappedAuthors.count) authors successfully")
+
+            // Map editions from API response with DTOMapper
+            let mappedEditions = searchData.editions.compactMap { editionDTO in
+                do {
+                    return try dtoMapper.mapToEdition(editionDTO)
+                } catch {
+                    logger.warning("⚠️ Failed to map Edition DTO: \(String(describing: error))")
+                    return nil
+                }
+            }
+
+            logger.debug("✅ Mapped \(mappedEditions.count) editions successfully")
+
             // Use DTOMapper to convert DTOs → SwiftData models with deduplication
-            return searchData.works.compactMap { workDTO in
+            return searchData.works.enumerated().compactMap { (index, workDTO) in
                 do {
                     let work = try dtoMapper.mapToWork(workDTO)
 
@@ -220,6 +236,14 @@ public class BookSearchAPIService {
                     // - Synthetic Work → Real Work merging
                     // Note: Authors must be explicitly linked (not automatic)
 
+                    // Get corresponding edition (1:1 mapping by index)
+                    let edition = index < mappedEditions.count ? mappedEditions[index] : nil
+
+                    // Link edition to work if available
+                    if let edition = edition {
+                        edition.work = work
+                    }
+
                     // Link authors to work (insert-before-relate already satisfied by DTOMapper)
                     if !mappedAuthors.isEmpty {
                         work.authors = mappedAuthors
@@ -227,13 +251,13 @@ public class BookSearchAPIService {
 
                     return SearchResult(
                         work: work,
-                        editions: [],
+                        editions: edition.map { [$0] } ?? [],
                         authors: mappedAuthors,
                         relevanceScore: 1.0,
                         provider: meta.provider ?? "unknown"
                     )
                 } catch {
-                    logger.warning("Failed to map Work DTO: \(String(describing: error))")
+                    logger.warning("⚠️ Failed to map Work DTO '\(workDTO.title)': \(String(describing: error))")
                     return nil // Continue processing other works
                 }
             }
