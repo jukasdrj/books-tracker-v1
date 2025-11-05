@@ -48,9 +48,10 @@ public class BookSearchAPIService {
             endpoint = "/v1/search/advanced"
             urlString = "\(baseURL)\(endpoint)?author=\(encodedQuery)"
         case .isbn:
-            // Dedicated ISBN endpoint for ISBNdb lookups (7-day cache, most accurate)
-            endpoint = "/v1/search/isbn"
-            urlString = "\(baseURL)\(endpoint)?isbn=\(encodedQuery)"
+            // TEMPORARY FIX: Route through title search until ISBN endpoint returns editions (Issue #244)
+            // Title endpoint handles ISBNs intelligently and returns full edition data
+            endpoint = "/v1/search/title"
+            urlString = "\(baseURL)\(endpoint)?q=\(encodedQuery)"
         }
         guard let url = URL(string: urlString) else {
             throw SearchError.invalidURL
