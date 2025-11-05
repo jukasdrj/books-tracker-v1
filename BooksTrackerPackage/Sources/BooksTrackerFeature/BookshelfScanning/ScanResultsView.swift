@@ -559,7 +559,11 @@ class ScanResultsModel {
     func addAllToLibrary(modelContext: ModelContext) async {
         isAdding = true
 
-        let confirmedBooks = detectedBooks.filter { $0.status == .confirmed }
+        // Include both auto-selected (.confirmed) and manually selected (.detected) books
+        // Exclude only .alreadyInLibrary and .rejected
+        let confirmedBooks = detectedBooks.filter {
+            $0.status == .confirmed || $0.status == .detected
+        }
         let dtoMapper = DTOMapper(modelContext: modelContext)
         var enrichedImportCount = 0
         var queuedImportCount = 0
