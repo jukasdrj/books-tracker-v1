@@ -491,6 +491,7 @@ public struct UltraOptimizedLibraryView: View {
     @Namespace private var layoutTransition
     @State private var scrollPosition = ScrollPosition()
     @Environment(\.iOS26ThemeStore) private var themeStore
+    @Environment(\.modelContext) private var modelContext
 
     // ✅ FIX 4: Memory management
     private let memoryHandler = MemoryPressureHandler.shared
