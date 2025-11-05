@@ -78,7 +78,12 @@ export async function processCSVImport(csvFile, jobId, doStub, env) {
     // Read CSV content
     const csvText = await csvFile.text();
 
-    // Wait for WebSocket ready signal (async I/O, not blocking)
+    // Give the client a predictable window to establish the WebSocket connection.
+    // This is a temporary workaround for the race condition where ctx.waitUntil()
+    // starts background processing immediately, before iOS can receive HTTP 202
+    // response and connect WebSocket. 200ms provides reliable buffer for connection.
+    await new Promise(resolve => setTimeout(resolve, 200));
+
     console.log(`[CSV Import] Waiting for WebSocket ready signal for job ${jobId}`);
     const readyResult = await doStub.waitForReady(10000); // 10 second timeout
 
@@ -159,14 +164,9 @@ export async function processCSVImport(csvFile, jobId, doStub, env) {
       fallbackAvailable: true,
       suggestion: 'Try manual CSV import instead'
     });
-  } finally {
-    // Ensure WebSocket closes cleanly (matches bookshelf scanner pattern)
-    try {
-      await doStub.closeConnection(1000, 'CSV import complete');
-    } catch (closeError) {
-      console.error(`[CSV Import] Failed to close connection: ${closeError.message}`);
-    }
   }
+  // NOTE: No finally block! complete() and fail() handle WebSocket cleanup with
+  // delayed closeConnection() to ensure final messages are delivered to client.
 }
 
 /**
@@ -178,7 +178,19 @@ export async function processCSVImport(csvFile, jobId, doStub, env) {
  * @returns {Promise<Array<Object>>} Parsed book data
  */
 async function callGemini(csvText, prompt, env) {
-  // Get API key from Secrets Store (requires .get() call)
+  /**
+   * GEMINI_API_KEY binding supports two patterns:
+   *   1. Secrets Store binding (recommended for production): env.GEMINI_API_KEY is a SecretsStore binding and requires .get() to retrieve the value.
+   *   2. Plain string binding (for local development/testing): env.GEMINI_API_KEY is a string.
+   *
+   * This dynamic resolution allows local development with a plaintext key (e.g., via wrangler.toml)
+   * while ensuring production uses the more secure Secrets Store.
+   *
+   * - Use Secrets Store in production for security: `[[secrets]]` in wrangler.toml, or dashboard binding.
+   * - Use plain string only for local/dev/testing: `GEMINI_API_KEY = "sk-..."` in wrangler.toml `[vars]`.
+   *
+   * If neither is configured, an error will be thrown.
+   */
   const apiKey = env.GEMINI_API_KEY?.get
     ? await env.GEMINI_API_KEY.get()
     : env.GEMINI_API_KEY;
