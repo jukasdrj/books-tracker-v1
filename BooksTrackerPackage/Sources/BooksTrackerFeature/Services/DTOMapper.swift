@@ -244,24 +244,21 @@ public final class DTOMapper {
         }
         
         do {
-            // 1. Fetch all valid Works whose IDs are in cache
-            // Convert to Set for O(1) lookup performance
+            // 1. Fetch ALL Works and filter in memory
+            // This avoids complex predicate translation and is more reliable
+            let descriptor = FetchDescriptor<Work>()
+            let allWorks = try modelContext.fetch(descriptor)
+            
+            // 2. Build Set of valid IDs from fetched Works
             let cachedIDSet = Set(allCachedIDs)
+            let validIDSet = Set(allWorks.map { $0.persistentModelID }.filter { cachedIDSet.contains($0) })
             
-            var descriptor = FetchDescriptor<Work>()
-            descriptor.predicate = #Predicate<Work> { work in
-                cachedIDSet.contains(work.persistentModelID)
-            }
-            
-            let validWorks = try modelContext.fetch(descriptor)
-            let validIDSet = Set(validWorks.map { $0.persistentModelID })
-            
-            // 2. Filter cache to only valid IDs
+            // 3. Filter cache to only valid IDs
             let originalCount = workCache.count
             workCache = workCache.filter { validIDSet.contains($0.value) }
             let prunedCount = originalCount - workCache.count
             
-            // 3. Save pruned cache to disk
+            // 4. Save pruned cache to disk
             if prunedCount > 0 {
                 saveCacheToDisk()
                 logger.info("Pruned \(prunedCount) stale cache entries (kept \(workCache.count))")
