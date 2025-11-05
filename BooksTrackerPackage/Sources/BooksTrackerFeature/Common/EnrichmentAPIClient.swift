@@ -43,13 +43,14 @@ actor EnrichmentAPIClient {
             #endif
             
             // Try to decode error response to extract error code
-            if let errorResponse = try? JSONDecoder().decode(ApiResponse<EnrichmentResult>.self, from: data),
-               case .failure(let apiError, _) = errorResponse {
-                print("🚨 API Error: \(apiError.message), Code: \(apiError.code?.rawValue ?? "UNKNOWN")")
+            // Backend returns ResponseEnvelope for both success and error cases
+            if let errorEnvelope = try? JSONDecoder().decode(ResponseEnvelope<EnrichmentResult>.self, from: data),
+               let apiError = errorEnvelope.error {
+                print("🚨 API Error: \(apiError.message), Code: \(apiError.code ?? "UNKNOWN")")
                 // Preserve error code in NSError userInfo
                 let userInfo: [String: Any] = [
                     NSLocalizedDescriptionKey: apiError.message,
-                    "errorCode": apiError.code?.rawValue ?? "UNKNOWN",
+                    "errorCode": apiError.code ?? "UNKNOWN",
                     "details": apiError.details?.value ?? NSNull()
                 ]
                 throw NSError(domain: "EnrichmentAPIClient", code: statusCode, userInfo: userInfo)
