@@ -89,6 +89,11 @@ public final class LibraryFilterService {
             
             guard let authors = work.authors else { continue }
             for author in authors {
+                // DEFENSIVE: Validate author is still in context before accessing properties
+                // During library reset, authors may be deleted while calculations are running
+                guard modelContext.model(for: author.persistentModelID) as? Author != nil else {
+                    continue
+                }
                 genderSet.insert(author.gender)
                 if let region = author.culturalRegion {
                     regionSet.insert(region)
