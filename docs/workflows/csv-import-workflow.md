@@ -47,8 +47,18 @@ flowchart TD
     NextBook -->|Yes| EnrichBook[Enrich metadata via /search]
     NextBook -->|No| Complete
 
-    EnrichBook --> InsertWork[Insert Work + Edition + UserLibraryEntry]
-    InsertWork --> UpdateProgress[WebSocket: Update progress %]
+    EnrichBook --> InsertModels[Insert Work/Author/Edition]
+    InsertModels --> InsertULE[Create UserLibraryEntry (.toRead status)]
+    style InsertULE fill:#f2dede,stroke:#a94442
+
+    note right of InsertULE
+        CRITICAL: Without UserLibraryEntry,
+        books are saved but invisible!
+        LibraryFilterService requires
+        non-empty userLibraryEntries.
+    end note
+
+    InsertULE --> UpdateProgress[WebSocket: Update progress %]
     UpdateProgress --> ProcessBooks
 
     Complete --> ShowSummary[Display import summary]
