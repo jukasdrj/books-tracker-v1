@@ -119,10 +119,18 @@ export async function enrichMultipleBooks(
 
 	// ISBN search returns single result (ISBNs are unique)
 	if (isbn) {
-		const result = await enrichSingleBook({ isbn }, env);
-		return result 
-			? { works: [result], editions: [], authors: [] }
-			: { works: [], editions: [], authors: [] };
+		// Use searchByISBN directly instead of full enrichSingleBook pipeline
+		// to get editions and authors in the response
+		const result: any = await searchByISBN(isbn, env);
+		if (!result) return { works: [], editions: [], authors: [] };
+
+		// searchByISBN returns a WorkDTO with embedded authors
+		// and possibly editions from providers like OpenLibrary
+		const authors: AuthorDTO[] = result.authors || [];
+		const editions: EditionDTO[] = result.editions || [];
+		const { authors: _, editions: __, ...work } = result;
+
+		return { works: [work], editions, authors };
 	}
 
 	// Build search query for Google Books
