@@ -136,23 +136,20 @@ actor GeminiCSVImportService {
                 throw GeminiCSVImportError.serverError(httpResponse.statusCode, errorMessage)
             }
 
-            // Decode ResponseEnvelope<GeminiCSVImportResponse>
+            // Decode canonical ApiResponse<GeminiCSVImportResponse>
             let decoder = JSONDecoder()
-            let envelope = try decoder.decode(ResponseEnvelope<GeminiCSVImportResponse>.self, from: data)
+            let envelope = try decoder.decode(ApiResponse<GeminiCSVImportResponse>.self, from: data)
 
-            // Check for errors
-            if let error = envelope.error {
+            // Check response type
+            switch envelope {
+            case .success(let importResponse, _):
+                print("[CSV Upload] ✅ Got jobId: \(importResponse.jobId)")
+                return importResponse.jobId
+
+            case .failure(let error, _):
+                print("[CSV Upload] ❌ API error: \(error.message)")
                 throw GeminiCSVImportError.serverError(httpResponse.statusCode, error.message)
             }
-
-            // Unwrap data
-            guard let importResponse = envelope.data else {
-                print("[CSV Upload] ❌ No data in response envelope")
-                throw GeminiCSVImportError.invalidResponse
-            }
-
-            print("[CSV Upload] ✅ Got jobId: \(importResponse.jobId)")
-            return importResponse.jobId
 
         } catch let error as GeminiCSVImportError {
             print("[CSV Upload] ❌ CSV Import Error: \(error.localizedDescription)")
