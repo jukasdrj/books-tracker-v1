@@ -240,18 +240,29 @@ All migrated endpoints have comprehensive test coverage:
 
 **Adding New Endpoints:**
 
-1. **For /v1 endpoints:** Use legacy format (`createSuccessResponseObject`)
-2. **For async jobs (CSV, enrichment):** Use ResponseEnvelope (`createSuccessResponse`)
+1. **For /v1 search endpoints:** Use legacy format (`createSuccessResponseObject`)
+   - Returns `{ success: true/false, data: T, meta: {...} }`
+   - Used for synchronous operations
+
+2. **For async job endpoints (CSV, enrichment):** Use ResponseEnvelope (`createSuccessResponse`)
+   - Returns `{ data: T | null, metadata: {...}, error?: {...} }`
+   - Used for background jobs that return jobId
+
+3. **For simple async operations (batch scan):** Plain JSON is acceptable
+   - Returns `{ jobId, status, ... }` directly
+   - Used when client only needs jobId and uses WebSocket for progress
 
 **Pattern Matching:**
-- Search endpoints → Legacy format
-- Background jobs → ResponseEnvelope format
+- `/v1/search/*` → Legacy format (synchronous, returns full data)
+- `/api/import/*`, `/api/enrichment/*` → ResponseEnvelope (async, returns jobId)
+- `/api/scan-bookshelf/*` → Plain JSON (async, minimal response)
 
-**Why this split?**
-- Search endpoints return data immediately (synchronous)
-- Background jobs return jobId and use WebSocket (asynchronous)
+**Why different formats?**
+- Legacy format: Rich metadata (provider, caching info) useful for search results
+- ResponseEnvelope: Standardized error handling for complex async operations
+- Plain JSON: Simplest format for basic async job submission
 
-The format choice matches the use case pattern.
+Each format serves its use case. Consistency within each pattern is more important than universal consistency.
 
 ---
 
@@ -266,12 +277,17 @@ The format choice matches the use case pattern.
 
 ## Decision Log
 
-**November 4, 2025:**
-- ✅ Completed Phase 1 (CSV Import)
-- ✅ Completed Phase 2 (Batch Enrichment)
-- ⚠️ Marked Phase 3 (Search) as NOT APPLICABLE - keep legacy format
-- ⚠️ Marked Phase 4 (Batch Scan) as NOT APPLICABLE - iOS doesn't use feature
-- 📝 Created this migration plan document
+**November 5, 2025:**
+- ✅ Completed Phase 1 (CSV Import) - migrated in commit f6457f8
+- ✅ Completed Phase 2 (Batch Enrichment) - migrated in commit f6457f8
+- ⚠️ Marked Phase 3 (Search) as NOT APPLICABLE - /v1 endpoints intentionally keep legacy format
+- ⚠️ Marked Phase 4 (Batch Scan) as NOT APPLICABLE - keep plain JSON format (iOS expects it)
+- 📝 Created this migration plan document to resolve issue about missing migration documentation
 
 **Rationale:**
-The ResponseEnvelope migration is complete for all **applicable** endpoints. The remaining endpoints intentionally use their current formats, as migration would provide no user value and introduce unnecessary risk.
+The ResponseEnvelope migration is complete for all **applicable** endpoints. The remaining endpoints intentionally use their current formats:
+- **/v1 search endpoints:** Legacy format is stable and well-tested, no breaking changes needed
+- **Batch scan endpoint:** Plain JSON format matches iOS expectations, migration provides zero value
+
+**Issue Resolution:**
+This document resolves the issue "ResponseEnvelope Migration: /api/scan-bookshelf/batch needs /v1 migration" by documenting that Phase 4 migration is NOT APPLICABLE. The endpoint works correctly in its current form.
