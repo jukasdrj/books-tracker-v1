@@ -73,7 +73,7 @@ actor EnrichmentAPIClient {
         }
 
         #if DEBUG
-        print("✅ Enrichment job started: \(result.totalCount) books queued")
+        print("✅ Enrichment job accepted by backend: \(result.totalCount) books queued for async processing")
         #endif
 
         return result
