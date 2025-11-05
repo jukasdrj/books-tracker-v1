@@ -30,6 +30,27 @@ public final class BackgroundTaskScheduler {
         scheduledTasks.append(task)
     }
 
+    /// Schedule a task with a dependency to run after app launch completes
+    /// - Parameter priority: TaskPriority (default: .background)
+    /// - Parameter value: The dependency to pass to the operation
+    /// - Parameter operation: Async operation to execute with the dependency
+    public func schedule<T>(
+        priority: TaskPriority = .background,
+        with value: T,
+        operation: @escaping @MainActor (T) async -> Void
+    ) {
+        let task = Task(priority: priority) {
+            // Wait for app to be fully interactive before running background tasks
+            try? await Task.sleep(for: deferralDelay)
+
+            LaunchMetrics.shared.recordMilestone("Background task with dependency started")
+            await operation(value)
+            LaunchMetrics.shared.recordMilestone("Background task with dependency completed")
+        }
+
+        scheduledTasks.append(task)
+    }
+
     /// Cancel all scheduled background tasks (e.g., on library reset)
     public func cancelAll() {
         let count = scheduledTasks.count
