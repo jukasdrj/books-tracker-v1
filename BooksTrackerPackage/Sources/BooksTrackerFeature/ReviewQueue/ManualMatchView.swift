@@ -26,6 +26,12 @@ public struct ManualMatchView: View {
     @State private var selectedResult: SearchResult?
     @State private var isApplyingMatch = false
     @State private var showingConfirmation = false
+    @State private var errorAlert: ErrorAlert?
+    
+    private struct ErrorAlert: Identifiable {
+        let id = UUID()
+        let message: String
+    }
     
     public init(work: Work) {
         self.work = work
@@ -71,6 +77,13 @@ public struct ManualMatchView: View {
                 }
             } message: { result in
                 Text("This will replace '\(work.title)' with '\(result.displayTitle)' by \(result.displayAuthors). This action cannot be undone.")
+            }
+            .alert(item: $errorAlert) { alert in
+                Alert(
+                    title: Text("Error Saving Match"),
+                    message: Text(alert.message),
+                    dismissButton: .default(Text("OK"))
+                )
             }
         }
     }
@@ -332,27 +345,47 @@ public struct ManualMatchView: View {
         work.amazonASINs = result.work.amazonASINs
         work.librarythingIDs = result.work.librarythingIDs
         
-        // Update authors
-        work.authors?.removeAll()
+        // Update authors - proper SwiftData relationship management
+        // Remove existing author relationships (doesn't delete Author entities)
+        if let existingAuthors = work.authors {
+            for author in existingAuthors {
+                author.works?.removeAll { $0 == work }
+            }
+            work.authors = []
+        }
+        
+        // Add new authors (already inserted in context by SearchResult)
         work.authors = result.authors
         
-        // Update/replace editions
+        // Update/replace editions - copy data, don't reassign entities
         // Keep existing user library entries but update edition metadata
-        if !result.work.availableEditions.isEmpty {
-            // If work has no editions, add the new ones
-            if work.availableEditions.isEmpty {
-                work.editions = result.work.availableEditions
+        if let newPrimaryEdition = result.work.primaryEdition {
+            if let existingPrimaryEdition = work.primaryEdition {
+                // Update existing primary edition with new data (preserves user library entries)
+                existingPrimaryEdition.coverImageURL = newPrimaryEdition.coverImageURL
+                existingPrimaryEdition.publisher = newPrimaryEdition.publisher
+                existingPrimaryEdition.publicationDate = newPrimaryEdition.publicationDate
+                existingPrimaryEdition.pageCount = newPrimaryEdition.pageCount
+                existingPrimaryEdition.isbn = newPrimaryEdition.isbn
+                existingPrimaryEdition.isbns = newPrimaryEdition.isbns
+                existingPrimaryEdition.openLibraryID = newPrimaryEdition.openLibraryID
+                existingPrimaryEdition.googleBooksVolumeID = newPrimaryEdition.googleBooksVolumeID
             } else {
-                // Update primary edition with new data
-                if let primaryEdition = work.primaryEdition,
-                   let newPrimaryEdition = result.work.primaryEdition {
-                    primaryEdition.coverImageURL = newPrimaryEdition.coverImageURL
-                    primaryEdition.publisher = newPrimaryEdition.publisher
-                    primaryEdition.publicationDate = newPrimaryEdition.publicationDate
-                    primaryEdition.pageCount = newPrimaryEdition.pageCount
-                    primaryEdition.isbn = newPrimaryEdition.isbn
-                    primaryEdition.isbns = newPrimaryEdition.isbns
-                }
+                // No existing edition - create a new one with matched data
+                let newEdition = Edition(
+                    isbn: newPrimaryEdition.isbn,
+                    publisher: newPrimaryEdition.publisher,
+                    publicationDate: newPrimaryEdition.publicationDate,
+                    pageCount: newPrimaryEdition.pageCount,
+                    format: newPrimaryEdition.format,
+                    coverImageURL: newPrimaryEdition.coverImageURL
+                )
+                newEdition.isbns = newPrimaryEdition.isbns
+                newEdition.openLibraryID = newPrimaryEdition.openLibraryID
+                newEdition.googleBooksVolumeID = newPrimaryEdition.googleBooksVolumeID
+                
+                modelContext.insert(newEdition)
+                newEdition.work = work
             }
         }
         
@@ -369,7 +402,9 @@ public struct ManualMatchView: View {
             dismiss()
             
         } catch {
+            // Show error to user
             print("❌ ManualMatchView: Failed to save - \(error)")
+            errorAlert = ErrorAlert(message: "Failed to save changes: \(error.localizedDescription)")
             isApplyingMatch = false
         }
     }
@@ -461,26 +496,32 @@ struct ManualMatchResultRow: View {
 
 #Preview {
     @Previewable @State var container: ModelContainer = {
-        let container = try! ModelContainer(for: Work.self, Author.self, Edition.self)
-        let context = container.mainContext
-        
-        let author = Author(name: "Unknown Author")
-        let work = Work(
-            title: "Unmatched Book",
-            originalLanguage: "English",
-            firstPublicationYear: nil
-        )
-        work.reviewStatus = .needsReview
-        
-        context.insert(author)
-        context.insert(work)
-        work.authors = [author]
-        
-        return container
+        do {
+            let container = try ModelContainer(for: Work.self, Author.self, Edition.self)
+            let context = container.mainContext
+            
+            let author = Author(name: "Unknown Author")
+            let work = Work(
+                title: "Unmatched Book",
+                originalLanguage: "English",
+                firstPublicationYear: nil
+            )
+            work.reviewStatus = .needsReview
+            
+            context.insert(author)
+            context.insert(work)
+            work.authors = [author]
+            
+            return container
+        } catch {
+            fatalError("Failed to create preview container: \(error)")
+        }
     }()
     
     let context = container.mainContext
-    let work = try! context.fetch(FetchDescriptor<Work>()).first!
+    guard let work = try? context.fetch(FetchDescriptor<Work>()).first else {
+        return Text("Preview failed: No work found")
+    }
     let dtoMapper = DTOMapper(modelContext: context)
     
     NavigationStack {
