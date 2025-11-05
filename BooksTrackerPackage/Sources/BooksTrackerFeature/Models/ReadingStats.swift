@@ -135,16 +135,63 @@ public struct ReadingStats: Sendable {
         }
     }
 
+    // MARK: - Caching
+
+    private static var cachedStats: [TimePeriod: ReadingStats] = [:]
+    private static var cacheTimestamp: Date?
+    private static let cacheValidityDuration: TimeInterval = 60 // 1 minute
+
+    /// Invalidate cache when library changes
+    public static func invalidateCache() {
+        cachedStats = [:]
+        cacheTimestamp = nil
+        print("ℹ️ ReadingStats cache invalidated")
+    }
+
     // MARK: - Calculation
 
-    /// Calculate reading statistics for a given time period
+    /// Calculate reading statistics for a given time period, with caching.
+    /// Cache is valid for 1 minute to avoid redundant calculations.
     public static func calculate(
         from context: ModelContext,
         period: TimePeriod,
         customStart: Date? = nil,
         customEnd: Date? = nil
     ) throws -> ReadingStats {
+        // Check if cache is expired
+        if let timestamp = cacheTimestamp, Date().timeIntervalSince(timestamp) >= cacheValidityDuration {
+            invalidateCache()
+        }
 
+        // Check for a valid cached result for the specific period
+        if let cached = cachedStats[period] {
+            return cached
+        }
+
+        // Calculate fresh stats
+        let stats = try calculateFresh(
+            from: context,
+            period: period,
+            customStart: customStart,
+            customEnd: customEnd
+        )
+
+        // Update cache
+        cachedStats[period] = stats
+        if cacheTimestamp == nil {
+            cacheTimestamp = Date()
+        }
+
+        return stats
+    }
+
+    /// Performs the actual calculation of reading statistics.
+    private static func calculateFresh(
+        from context: ModelContext,
+        period: TimePeriod,
+        customStart: Date? = nil,
+        customEnd: Date? = nil
+    ) throws -> ReadingStats {
         let (startDate, endDate) = period.dateRange(customStart: customStart, customEnd: customEnd)
 
         // Fetch all library entries
