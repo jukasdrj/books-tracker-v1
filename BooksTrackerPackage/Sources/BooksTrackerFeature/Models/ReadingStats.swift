@@ -3,7 +3,7 @@ import SwiftData
 import SwiftUI
 
 /// Time period for filtering reading statistics
-public enum TimePeriod: String, CaseIterable, Identifiable {
+public enum TimePeriod: String, CaseIterable, Identifiable, Hashable {
     case allTime = "All Time"
     case thisYear = "This Year"
     case last30Days = "Last 30 Days"
@@ -137,14 +137,49 @@ public struct ReadingStats: Sendable {
 
     // MARK: - Caching
 
-    private static var cachedStats: [TimePeriod: ReadingStats] = [:]
-    private static var cacheTimestamp: Date?
-    private static let cacheValidityDuration: TimeInterval = 60 // 1 minute
+    /// Thread-safe cache key that includes all parameters affecting calculation
+    /// FIXED: Copilot Issue #3 - Include customStart/customEnd in cache key
+    private struct CacheKey: Hashable {
+        let period: TimePeriod
+        let customStart: Date?
+        let customEnd: Date?
+    }
+
+    /// Actor to provide thread-safe access to the cache
+    /// FIXED: Copilot Issue #1 - Add thread safety to static cache
+    private actor ReadingStatsCache {
+        private var cachedStats: [CacheKey: ReadingStats] = [:]
+        private var cacheTimestamp: Date?
+        private let cacheValidityDuration: TimeInterval = 60 // 1 minute
+
+        func get(for key: CacheKey) -> ReadingStats? {
+            // Check if cache is expired
+            if let timestamp = cacheTimestamp, Date().timeIntervalSince(timestamp) >= cacheValidityDuration {
+                cachedStats = [:]
+                cacheTimestamp = nil
+                return nil
+            }
+
+            return cachedStats[key]
+        }
+
+        func set(_ stats: ReadingStats, for key: CacheKey) {
+            cachedStats[key] = stats
+            // FIXED: Copilot Issue #2 - Always update timestamp when setting new value
+            cacheTimestamp = Date()
+        }
+
+        func invalidate() {
+            cachedStats = [:]
+            cacheTimestamp = nil
+        }
+    }
+
+    private static let cache = ReadingStatsCache()
 
     /// Invalidate cache when library changes
-    public static func invalidateCache() {
-        cachedStats = [:]
-        cacheTimestamp = nil
+    public static func invalidateCache() async {
+        await cache.invalidate()
         print("ℹ️ ReadingStats cache invalidated")
     }
 
@@ -157,14 +192,16 @@ public struct ReadingStats: Sendable {
         period: TimePeriod,
         customStart: Date? = nil,
         customEnd: Date? = nil
-    ) throws -> ReadingStats {
-        // Check if cache is expired
-        if let timestamp = cacheTimestamp, Date().timeIntervalSince(timestamp) >= cacheValidityDuration {
-            invalidateCache()
-        }
+    ) async throws -> ReadingStats {
+        // Create cache key including all parameters
+        let cacheKey = CacheKey(
+            period: period,
+            customStart: customStart,
+            customEnd: customEnd
+        )
 
-        // Check for a valid cached result for the specific period
-        if let cached = cachedStats[period] {
+        // Check for cached result (thread-safe via actor)
+        if let cached = await cache.get(for: cacheKey) {
             return cached
         }
 
@@ -176,11 +213,8 @@ public struct ReadingStats: Sendable {
             customEnd: customEnd
         )
 
-        // Update cache
-        cachedStats[period] = stats
-        if cacheTimestamp == nil {
-            cacheTimestamp = Date()
-        }
+        // Update cache (thread-safe via actor)
+        await cache.set(stats, for: cacheKey)
 
         return stats
     }

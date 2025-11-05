@@ -407,7 +407,7 @@ public struct SettingsView: View {
 
                 // CRITICAL: Invalidate all stats caches to prevent accessing deleted objects
                 DiversityStats.invalidateCache()
-                ReadingStats.invalidateCache()
+                await ReadingStats.invalidateCache()
 
                 // 4. Delete all Work objects (CASCADE deletes Editions & UserLibraryEntries automatically)
                 let workDescriptor = FetchDescriptor<Work>()
