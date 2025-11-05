@@ -47,7 +47,7 @@ When CSV import is triggered:
 - No books appear in library
 
 ### Fix Location
-File: `/Users/justingardner/Downloads/xcode/books-tracker-v1/BooksTrackerPackage/Sources/BooksTrackerFeature/GeminiCSVImport/GeminiCSVImportService.swift`
+File: `BooksTrackerPackage/Sources/BooksTrackerFeature/GeminiCSVImport/GeminiCSVImportService.swift`
 Line: 115
 
 **Change:**

@@ -561,15 +561,14 @@ class ScanResultsModel {
 
         // Include both auto-selected (.confirmed) and manually selected (.detected) books
         // Exclude only .alreadyInLibrary and .rejected
-        let confirmedBooks = detectedBooks.filter {
-            $0.status == .confirmed || $0.status == .detected
-        }
+        let includedStatuses: Set<DetectedBook.Status> = [.confirmed, .detected]
+        let selectedBooks = detectedBooks.filter { includedStatuses.contains($0.status) }
         let dtoMapper = DTOMapper(modelContext: modelContext)
         var enrichedImportCount = 0
         var queuedImportCount = 0
         var addedWorksForQueue: [Work] = []
 
-        for detectedBook in confirmedBooks {
+        for detectedBook in selectedBooks {
             var importedViaPathA = false
 
             // Path A: Use pre-enriched data from backend
