@@ -64,7 +64,7 @@ export async function handleSearchISBN(
     if (!result) {
       // Book not found in any provider
       return createSuccessResponseObject(
-        { works: [], authors: [] },
+        { works: [], editions: [], authors: [] },
         {
           processingTime: Date.now() - startTime,
           provider: 'none',
@@ -81,7 +81,7 @@ export async function handleSearchISBN(
     const { authors: _, ...cleanWork } = result;
 
     return createSuccessResponseObject(
-      { works: [cleanWork], authors },
+      { works: [cleanWork], editions: [], authors },
       {
         processingTime: Date.now() - startTime,
         provider: result.primaryProvider || 'google-books',

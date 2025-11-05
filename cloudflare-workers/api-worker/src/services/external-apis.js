@@ -161,10 +161,11 @@ export async function searchGoogleBooksByISBN(isbn, env) {
  */
 function normalizeGoogleBooksResponse(apiResponse) {
   if (!apiResponse.items || apiResponse.items.length === 0) {
-    return { works: [], authors: [] };
+    return { works: [], editions: [], authors: [] };
   }
 
   const works = [];
+  const editions = [];
   const authorsMap = new Map();
 
   apiResponse.items.forEach(item => {
@@ -175,6 +176,9 @@ function normalizeGoogleBooksResponse(apiResponse) {
 
     // Use canonical normalizer for WorkDTO (ensures all required fields)
     const work = normalizeGoogleBooksToWork(item);
+    
+    // Use canonical normalizer for EditionDTO
+    const edition = normalizeGoogleBooksToEdition(item);
     
     // Extract authors and create AuthorDTOs
     const authorNames = volumeInfo.authors || ['Unknown Author'];
@@ -194,10 +198,12 @@ function normalizeGoogleBooksResponse(apiResponse) {
     });
 
     works.push(work);
+    editions.push(edition);
   });
 
   return {
     works,
+    editions,
     authors: Array.from(authorsMap.values())
   };
 }

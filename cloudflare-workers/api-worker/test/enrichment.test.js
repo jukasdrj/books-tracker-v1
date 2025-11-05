@@ -314,22 +314,26 @@ describe('enrichMultipleBooks()', () => {
       mockEnv
     );
 
-    expect(results.length).toBeGreaterThan(0);
-    expect(results).toHaveLength(2);
-    expect(results[0]).toHaveProperty('title');
-    expect(results[0]).toHaveProperty('primaryProvider', 'google-books');
-    expect(results[0]).toHaveProperty('contributors', ['google-books']);
+    expect(results.works.length).toBeGreaterThan(0);
+    expect(results.works).toHaveLength(2);
+    expect(results.works[0]).toHaveProperty('title');
+    expect(results.works[0]).toHaveProperty('primaryProvider', 'google-books');
+    expect(results.works[0]).toHaveProperty('contributors', ['google-books']);
   });
 
   test('returns empty array for unknown search', async () => {
     // Mock: All providers return no results
     externalApis.searchGoogleBooks.mockResolvedValue({
       success: true,
-      works: []
+      works: [],
+      editions: [],
+      authors: []
     });
     externalApis.searchOpenLibrary.mockResolvedValue({
       success: true,
-      works: []
+      works: [],
+      editions: [],
+      authors: []
     });
 
     const results = await enrichMultipleBooks(
@@ -337,7 +341,7 @@ describe('enrichMultipleBooks()', () => {
       mockEnv
     );
 
-    expect(results).toEqual([]);
+    expect(results).toEqual({ works: [], editions: [], authors: [] });
   });
 
   test('respects maxResults parameter', async () => {
@@ -358,7 +362,9 @@ describe('enrichMultipleBooks()', () => {
 
     externalApis.searchGoogleBooks.mockResolvedValue({
       success: true,
-      works: mockWorks
+      works: mockWorks,
+      editions: [],
+      authors: []
     });
 
     const results = await enrichMultipleBooks(
@@ -367,7 +373,7 @@ describe('enrichMultipleBooks()', () => {
       { maxResults: 5 }
     );
 
-    expect(results).toHaveLength(5);
+    expect(results.works).toHaveLength(5);
     expect(externalApis.searchGoogleBooks).toHaveBeenCalledWith(
       'Test',
       { maxResults: 5 },
@@ -378,7 +384,9 @@ describe('enrichMultipleBooks()', () => {
   test('defaults to maxResults=20 when not specified', async () => {
     externalApis.searchGoogleBooks.mockResolvedValue({
       success: true,
-      works: []
+      works: [],
+      editions: [],
+      authors: []
     });
 
     await enrichMultipleBooks({ title: 'Test' }, mockEnv);
@@ -401,14 +409,16 @@ describe('enrichMultipleBooks()', () => {
       mockEnv
     );
 
-    // Should not throw, returns empty array for graceful degradation
-    expect(results).toEqual([]);
+    // Should not throw, returns empty object for graceful degradation
+    expect(results).toEqual({ works: [], editions: [], authors: [] });
   });
 
   test('combines title and author in search query', async () => {
     externalApis.searchGoogleBooks.mockResolvedValue({
       success: true,
-      works: []
+      works: [],
+      editions: [],
+      authors: []
     });
 
     await enrichMultipleBooks(
@@ -447,8 +457,8 @@ describe('enrichMultipleBooks()', () => {
       mockEnv
     );
 
-    expect(results).toHaveLength(1);
-    expect(results[0].title).toBe('To Kill a Mockingbird');
+    expect(results.works).toHaveLength(1);
+    expect(results.works[0].title).toBe('To Kill a Mockingbird');
 
     // Should use ISBN search, not regular search
     expect(externalApis.searchGoogleBooksByISBN).toHaveBeenCalled();
@@ -466,14 +476,16 @@ describe('enrichMultipleBooks()', () => {
       mockEnv
     );
 
-    expect(results).toEqual([]);
+    expect(results).toEqual({ works: [], editions: [], authors: [] });
   });
 
   test('falls back to OpenLibrary when Google Books returns no results', async () => {
     // Mock: Google Books returns nothing
     externalApis.searchGoogleBooks.mockResolvedValue({
       success: true,
-      works: []
+      works: [],
+      editions: [],
+      authors: []
     });
 
     // Mock: OpenLibrary returns results
@@ -491,7 +503,9 @@ describe('enrichMultipleBooks()', () => {
         isbndbQuality: 0,
         reviewStatus: 'pending',
         synthetic: false
-      }]
+      }],
+      editions: [],
+      authors: []
     });
 
     const results = await enrichMultipleBooks(
@@ -499,8 +513,8 @@ describe('enrichMultipleBooks()', () => {
       mockEnv
     );
 
-    expect(results).toHaveLength(1);
-    expect(results[0].primaryProvider).toBe('openlibrary');
+    expect(results.works).toHaveLength(1);
+    expect(results.works[0].primaryProvider).toBe('openlibrary');
     expect(externalApis.searchGoogleBooks).toHaveBeenCalled();
     expect(externalApis.searchOpenLibrary).toHaveBeenCalled();
   });
@@ -508,7 +522,7 @@ describe('enrichMultipleBooks()', () => {
   test('returns empty array when no search parameters provided', async () => {
     const results = await enrichMultipleBooks({}, mockEnv);
 
-    expect(results).toEqual([]);
+    expect(results).toEqual({ works: [], editions: [], authors: [] });
 
     // Should not call any external APIs
     expect(externalApis.searchGoogleBooks).not.toHaveBeenCalled();
@@ -545,13 +559,15 @@ describe('enrichMultipleBooks()', () => {
           reviewStatus: 'approved',
           synthetic: false
         }
-      ]
+      ],
+      editions: [],
+      authors: []
     });
 
     const results = await enrichMultipleBooks({ title: 'Test' }, mockEnv);
 
     // All results should have provenance fields
-    results.forEach(work => {
+    results.works.forEach(work => {
       expect(work).toHaveProperty('primaryProvider');
       expect(work).toHaveProperty('contributors');
       expect(work).toHaveProperty('synthetic');
