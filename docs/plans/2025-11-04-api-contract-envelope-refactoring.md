@@ -109,7 +109,7 @@ If we add `/v2` endpoints in the future, those can use ResponseEnvelope. The `/v
 **Endpoints:**
 - `POST /api/scan-bookshelf/batch`
 
-**Status:** iOS does **not** use batch scanning.
+**Status:** Migration **NOT APPLICABLE** - endpoint intentionally uses plain JSON.
 
 **Current State:**
 - Backend endpoint exists (`batch-scan-handler.js`)
@@ -117,15 +117,17 @@ If we add `/v2` endpoints in the future, those can use ResponseEnvelope. The `/v
   ```json
   { "jobId": "...", "totalPhotos": 2, "status": "processing" }
   ```
-- iOS `BookshelfAIService.swift` only uses single-photo scan endpoint (`/api/scan-bookshelf`)
-- No iOS methods for batch scanning (`submitScanJob`, `pollJobStatus`, `fetchJobResults`)
+- iOS `BookshelfAIService.swift` has `submitBatch()` method that expects this plain JSON format
+- WebSocket progress updates handle the async processing
 
 **Decision:** **Skip Phase 4 migration.**
 
 **Rationale:**
-1. No iOS client code to migrate (batch scanning not used)
+1. iOS client already expects plain JSON format (breaking change would be required)
 2. Endpoint works correctly as-is
-3. Migration would be engineering churn with no user impact
+3. Migration provides no user value (batch scanning works fine)
+4. WebSocket handles progress updates (no need for envelope metadata)
+5. Migration would require updating iOS decoder, re-testing, and provides zero benefit
 
 **Future Consideration:**  
 When iOS adds batch scanning support:
