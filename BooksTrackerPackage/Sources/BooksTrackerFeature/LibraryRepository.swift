@@ -261,11 +261,17 @@ public class LibraryRepository {
         }.flatMap { $0 }
         guard !allAuthors.isEmpty else { return 0.0 }
 
-        let diverseCount = allAuthors.filter { author in
+        // DEFENSIVE: Filter out deleted authors before accessing properties
+        let validAuthors = allAuthors.filter { author in
+            modelContext.model(for: author.persistentModelID) as? Author != nil
+        }
+        guard !validAuthors.isEmpty else { return 0.0 }
+
+        let diverseCount = validAuthors.filter { author in
             author.representsMarginalizedVoices() || author.representsIndigenousVoices()
         }.count
 
-        return Double(diverseCount) / Double(allAuthors.count)
+        return Double(diverseCount) / Double(validAuthors.count)
     }
 
     /// Calculates reading statistics (completion rate, pages read, etc.).
