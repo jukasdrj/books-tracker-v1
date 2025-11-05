@@ -70,10 +70,11 @@ Always return ONLY a valid JSON array. Do not include explanatory text.`
     throw new Error('Gemini returned empty response');
   }
 
-  // Extract JSON array from response (handle markdown code blocks)
+  // With responseMimeType='application/json', text should be clean JSON
+  // Keep markdown stripping as defensive fallback for API version compatibility
   let jsonText = textResponse.trim();
 
-  // Remove markdown code blocks if present
+  // Remove markdown code blocks if present (defensive fallback)
   if (jsonText.startsWith('```json')) {
     jsonText = jsonText.replace(/```json\n?/g, '').replace(/```\n?/g, '');
   } else if (jsonText.startsWith('```')) {
