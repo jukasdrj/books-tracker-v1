@@ -344,6 +344,10 @@ public struct GeminiCSVImportView: View {
             print("[CSV WebSocket] Decoded message type: \(message.type)")
 
             switch message.type {
+            case "ready_ack":
+                print("[CSV WebSocket] ✅ Backend acknowledged ready signal, processing will start")
+                // Don't change UI state - just log that backend is ready
+
             case "progress":
                 if let progressValue = message.progress, let status = message.status {
                     print("[CSV WebSocket] Progress: \(Int(progressValue * 100))% - \(status)")
