@@ -378,7 +378,9 @@ public struct GeminiCSVImportView: View {
                 // Only log this event; UI state changes are handled in the 'progress', 'complete', and 'error' cases.
 
             case "progress":
-                if let progressValue = message.progress, let status = message.status {
+                if let data = message.data,
+                   let progressValue = data.progress,
+                   let status = data.status {
                     #if DEBUG
                     print("[CSV WebSocket] Progress: \(Int(progressValue * 100))% - \(status)")
                     #endif
@@ -386,16 +388,19 @@ public struct GeminiCSVImportView: View {
                 }
 
             case "complete":
-                if let result = message.result {
+                if let data = message.data,
+                   let books = data.books {
                     #if DEBUG
-                    print("[CSV WebSocket] ✅ Import complete: \(result.books.count) books")
+                    print("[CSV WebSocket] ✅ Import complete: \(books.count) books")
                     #endif
-                    importStatus = .completed(books: result.books, errors: result.errors)
+                    let errors = data.errors ?? []
+                    importStatus = .completed(books: books, errors: errors)
                 }
                 webSocketTask?.cancel()
 
             case "error":
-                if let error = message.error {
+                if let data = message.data,
+                   let error = data.error {
                     #if DEBUG
                     print("[CSV WebSocket] ❌ Error from backend: \(error)")
                     #endif
@@ -561,9 +566,25 @@ public struct GeminiCSVImportView: View {
 
     struct WebSocketMessage: Codable {
         let type: String
-        let progress: Double?
-        let status: String?
-        let error: String?
-        let result: GeminiCSVImportJob?
+        let jobId: String?
+        let timestamp: Double?
+        let data: MessageData?
+        
+        struct MessageData: Codable {
+            // Progress message fields
+            let progress: Double?
+            let status: String?
+            let keepAlive: Bool?
+            
+            // Complete message fields
+            let books: [GeminiCSVImportJob.ParsedBook]?
+            let errors: [GeminiCSVImportJob.ImportError]?
+            let successRate: String?
+            
+            // Error message fields
+            let error: String?
+            let fallbackAvailable: Bool?
+            let suggestion: String?
+        }
     }
 }
