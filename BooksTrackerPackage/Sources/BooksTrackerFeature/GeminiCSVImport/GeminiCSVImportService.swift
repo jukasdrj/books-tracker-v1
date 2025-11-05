@@ -113,6 +113,14 @@ actor GeminiCSVImportService {
             }
 
             if httpResponse.statusCode != 200 {
+                // Try to decode error response to extract error code
+                if let errorResponse = try? JSONDecoder().decode(ApiResponse<GeminiCSVImportResponse>.self, from: data),
+                   case .failure(let apiError, _) = errorResponse {
+                    let errorMessageWithCode = apiError.code != nil
+                        ? "\(apiError.message) (Code: \(apiError.code!.rawValue))"
+                        : apiError.message
+                    throw GeminiCSVImportError.serverError(httpResponse.statusCode, errorMessageWithCode)
+                }
                 let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
                 throw GeminiCSVImportError.serverError(httpResponse.statusCode, errorMessage)
             }

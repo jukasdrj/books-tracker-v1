@@ -33,14 +33,16 @@ export function createSuccessResponse<T>(
  * @param message The error message
  * @param status The HTTP error status code (default: 500)
  * @param code An optional internal error code
+ * @param details Optional additional error details (suggestions, context, etc.)
  * @returns Response object with enveloped error JSON
  */
 export function createErrorResponse(
   message: string,
   status: number = 500,
-  code?: string
+  code?: string,
+  details?: any
 ): Response {
-  const error: ApiError = { message, code };
+  const error: ApiError = { message, code, details };
   const envelope: ResponseEnvelope<null> = {
     data: null,
     metadata: {

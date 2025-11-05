@@ -49,7 +49,7 @@ export interface ApiError {
  * Used for all /v1/* endpoints requiring standardized responses
  */
 export interface ResponseEnvelope<T> {
-  data: T;
+  data: T | null;
   metadata: ResponseMetadata;
   error?: ApiError;
 }

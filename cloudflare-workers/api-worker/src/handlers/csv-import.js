@@ -25,7 +25,12 @@ export async function handleCSVImport(request, env) {
 
     // Check file size
     if (csvFile.size > MAX_FILE_SIZE) {
-      return createErrorResponse('CSV file too large (max 10MB)', 413, 'E_FILE_TOO_LARGE');
+      return createErrorResponse(
+        'CSV file too large (max 10MB)',
+        413,
+        'E_FILE_TOO_LARGE',
+        { suggestion: 'Try splitting your CSV into smaller files or removing unnecessary columns' }
+      );
     }
 
     // Generate jobId
