@@ -42,7 +42,7 @@ export async function scanImageWithGemini(imageData, env) {
 
     // Call Gemini API with optimized prompting strategy
     const response = await fetch(
-        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent',
+        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
         {
             method: 'POST',
             headers: {
@@ -180,7 +180,7 @@ Extract all visible book information now.`
             suggestions: [],
             metadata: {
                 provider: 'gemini',
-                model: 'gemini-2.0-flash-exp',
+                model: 'gemini-2.5-flash',
                 timestamp: new Date().toISOString(),
                 processingTimeMs: Date.now() - startTime,
                 tokenUsage: {
@@ -212,7 +212,7 @@ Extract all visible book information now.`
         suggestions: [],  // Gemini doesn't provide suggestions in current implementation
         metadata: {
             provider: 'gemini',
-            model: 'gemini-2.0-flash-exp',
+            model: 'gemini-2.5-flash',
             timestamp: new Date().toISOString(),
             processingTimeMs: Date.now() - startTime,
             tokenUsage: {
