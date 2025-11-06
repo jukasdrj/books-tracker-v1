@@ -58,7 +58,7 @@ export function normalizeISBNdbToWork(book: any): WorkDTO {
     synthetic: false,
     primaryProvider: 'isbndb',
     contributors: ['isbndb'],
-    isbndbID: book.isbn13, // ISBNdb uses ISBN-13 as primary ID
+    isbndbID: book.isbn13 || book.isbn || undefined, // Fallback to ISBN-10 if ISBN-13 missing
     goodreadsWorkIDs: [],
     amazonASINs: [],
     librarythingIDs: [],
@@ -90,7 +90,7 @@ export function normalizeISBNdbToEdition(book: any): EditionDTO {
     language: book.language,
     primaryProvider: 'isbndb',
     contributors: ['isbndb'],
-    isbndbID: book.isbn13,
+    isbndbID: book.isbn13 || book.isbn || undefined, // Fallback to ISBN-10 if ISBN-13 missing
     amazonASINs: [],
     googleBooksVolumeIDs: [],
     librarythingIDs: [],
@@ -123,5 +123,7 @@ function calculateISBNdbQuality(book: any): number {
   if (book.subjects && book.subjects.length > 0) score += 5;
   if (book.authors && book.authors.length > 0) score += 5;
 
-  return Math.min(score, 100);
+  // Ensure score is always a valid number between 0-100
+  const finalScore = Math.min(Math.max(score, 0), 100);
+  return isNaN(finalScore) ? 50 : finalScore; // Default to 50 if NaN
 }

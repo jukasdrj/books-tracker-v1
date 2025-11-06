@@ -441,14 +441,8 @@ export async function getISBNdbEditionsForWork(title, authorName, env) {
 
     // Use canonical normalizer for editions
     const editions = relevantBooks
-      .map(book => {
-        const edition = normalizeISBNdbToEdition(book);
-        return {
-          ...edition,
-          qualityScore: edition.isbndbQuality // For backward compatibility with sorting
-        };
-      })
-      .sort((a, b) => b.qualityScore - a.qualityScore);
+      .map(book => normalizeISBNdbToEdition(book))
+      .sort((a, b) => b.isbndbQuality - a.isbndbQuality); // Sort by quality score
 
     return { success: true, editions };
 
