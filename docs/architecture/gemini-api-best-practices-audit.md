@@ -159,17 +159,23 @@ metadata: {
 
 **Expected Token Usage (Gemini 2.0 Flash):**
 - **Small images** (≤384px both dimensions): **258 tokens**
-- **Large images** (3072px × 3072px): **~16 tiles × 258 = 4,128 tokens**
+- **Large images** (3072px × 3072px): **~2.25 tiles × 258 ≈ 580 tokens**
 - **Calculation Formula:**
   ```
   crop_unit = floor(min(width, height) / 1.5)
   tiles = (width / crop_unit) * (height / crop_unit)
   total_tokens = tiles × 258
+  
+  Example: 3072 × 3072 image
+  crop_unit = floor(3072 / 1.5) = 2048
+  tiles = (3072 / 2048) * (3072 / 2048) = 1.5 * 1.5 = 2.25
+  total_tokens = 2.25 * 258 ≈ 580 tokens
   ```
 
 **Actual Usage (Post-Implementation):**
 - Check CloudWatch logs for `[GeminiProvider] Token usage` entries
 - Analyze variance between estimated and actual consumption
+- **Note:** Gemini's internal tiling may differ from formula; use actual logged values for budgeting
 
 #### 2. Stop Sequences
 **Status:** 🆕 **Implemented**
@@ -263,18 +269,18 @@ stopSequences: ['\n\n\n']  // Stop on triple newline
 
 **Typical Bookshelf Scan:**
 - **Prompt Tokens:** ~150 tokens (system instruction + user prompt)
-- **Image Tokens:** ~4,128 tokens (3072px × 3072px → 16 tiles × 258)
+- **Image Tokens:** ~580 tokens (3072px × 3072px → 2.25 tiles × 258)
 - **Output Tokens:** ~500 tokens (10 books × 50 tokens/book)
-- **Total:** ~4,778 tokens per scan
+- **Total:** ~1,230 tokens per scan
 
 **Cost Per Scan:**
-- Input: (150 + 4,128) × $0.075 / 1M = **$0.00032**
+- Input: (150 + 580) × $0.075 / 1M = **$0.000055**
 - Output: 500 × $0.30 / 1M = **$0.00015**
-- **Total: ~$0.00047 per scan**
+- **Total: ~$0.00020 per scan** (~$0.20 per 1,000 scans)
 
 **Monthly Volume (1,000 scans):**
-- **Cost:** $0.47/month
-- **Budget-friendly** for current usage patterns
+- **Cost:** $0.20/month
+- **Highly budget-friendly** for current usage patterns
 
 ### Optimization Opportunities
 
