@@ -191,8 +191,8 @@ export async function enrichMultipleBooks(
       };
     }
 
-    // Fallback to ISBNdb (only if we have both title and author)
-    if (title && author) {
+    // Fallback to ISBNdb (only if we have both title and author with meaningful values)
+    if (title?.trim() && author?.trim()) {
       console.log(`enrichMultipleBooks: OpenLibrary returned no results, trying ISBNdb`);
       const isbndbResult: ApiResponse = await externalApis.searchISBNdb(title, author, env);
 

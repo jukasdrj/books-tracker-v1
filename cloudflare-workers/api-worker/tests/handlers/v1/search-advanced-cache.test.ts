@@ -87,8 +87,8 @@ describe('GET /v1/search/advanced - Cache Behavior', () => {
 
     expect(cacheWritten).toBe(true);
     expect(writtenKey).toContain('v1:advanced');
-    expect(writtenKey).toContain('great gatsby'); // normalized title (no hyphens, just spaces)
-    expect(writtenKey).toContain('f. scott fitzgerald'); // normalized author (lowercase)
+    expect(writtenKey).toContain('great gatsby'); // normalized: removes "The" prefix, lowercases
+    expect(writtenKey).toContain('f. scott fitzgerald'); // normalized: lowercases
     expect(writtenValue.data).toBeDefined();
   });
 

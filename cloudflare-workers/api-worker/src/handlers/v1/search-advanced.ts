@@ -61,7 +61,11 @@ export async function handleSearchAdvanced(
       };
     }
 
-    console.log(`v1 advanced search - title: "${title}" (normalized: "${normalizedTitle}"), author: "${author}" (normalized: "${normalizedAuthor}") (using enrichMultipleBooks, maxResults: 20)`);
+    console.log(
+      `v1 advanced search - title: "${title}" (normalized: "${normalizedTitle}"), ` +
+      `author: "${author}" (normalized: "${normalizedAuthor}") ` +
+      `(using enrichMultipleBooks, maxResults: 20)`
+    );
 
     // Use enrichMultipleBooks for search endpoints (returns up to 20 results)
     const result = await enrichMultipleBooks(
