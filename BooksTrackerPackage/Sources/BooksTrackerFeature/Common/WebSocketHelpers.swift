@@ -25,6 +25,7 @@ enum WebSocketHelpers {
         // Try a few ping/pong cycles to confirm connection
         var attempts = 0
         let maxAttempts = 5
+        var lastError: Error?
         
         while attempts < maxAttempts {
             if Date().timeIntervalSince(startTime) > timeout {
@@ -40,20 +41,26 @@ enum WebSocketHelpers {
                     _ = try await task.receive()
                 }
                 
-                try await Task.sleep(for: .milliseconds(100 * (attempts + 1)))
+                // Success! Connection is established
+                print("✅ WebSocket connection verified after \(attempts + 1) attempts")
+                return
                 
-                attempts += 1
             } catch {
-                // If we get an error on first attempt, connection likely failed
-                // On subsequent attempts, continue trying
-                if attempts == 0 {
-                    throw error
-                }
+                lastError = error
                 attempts += 1
+                
+                // If we've exhausted all attempts, throw the last error
+                if attempts >= maxAttempts {
+                    throw lastError ?? URLError(.cannotConnectToHost)
+                }
+                
+                // Wait before retrying (exponential backoff)
+                try await Task.sleep(for: .milliseconds(100 * attempts))
             }
         }
         
-        print("✅ WebSocket connection verified after \(attempts) attempts")
+        // Should not reach here, but throw if we do
+        throw lastError ?? URLError(.cannotConnectToHost)
     }
     
     /// Helper to add timeout to async operations
