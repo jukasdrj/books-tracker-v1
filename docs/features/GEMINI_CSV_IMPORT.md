@@ -32,7 +32,19 @@ AI-powered CSV import that requires zero configuration. Gemini automatically det
 - **No enrichment on backend** - books returned with minimal metadata
 
 **Stage 2: Save & Enqueue (<1s)**
-- iOS saves minimal book data to SwiftData (Work, Author, Edition)
+- iOS saves minimal book data to SwiftData (Work, Author, Edition, UserLibraryEntry)
+- **Critical:** Each imported Work MUST have a `UserLibraryEntry` to appear in the library:
+  ```swift
+  // GeminiCSVImportView.swift:505-510
+  let libraryEntry = UserLibraryEntry(readingStatus: .toRead)
+  modelContext.insert(libraryEntry)
+  libraryEntry.work = work
+  work.userLibraryEntries = [libraryEntry]
+  ```
+- **Why:** Library filtering requires non-empty `userLibraryEntries` relationship:
+  - LibraryFilterService.swift:20-30
+  - Without this, books are saved to SwiftData but invisible
+  - Default status: `.toRead` (user can change later)
 - Books appear **instantly** in library (no waiting for covers!)
 - PersistentIdentifiers enqueued to `EnrichmentQueue`
 - User can immediately browse and interact with books
@@ -66,7 +78,9 @@ Gemini 2.0 Flash API (Parsing Phase)
     ↓ 5-15s parsing only (no enrichment!)
 WebSocket sends parsed books
     ↓
-iOS saves to SwiftData (Work, Author, Edition models)
+iOS saves to SwiftData (Work, Author, Edition, UserLibraryEntry models)
+    ↓
+UserLibraryEntry created with .toRead status (CRITICAL for visibility!)
     ↓
 Books appear INSTANTLY in Library tab (minimal metadata)
     ↓
@@ -647,6 +661,24 @@ private func saveBooks(_ books: [GeminiCSVImportJob.ParsedBook]) async {
 - **IP-based:** 5 requests/minute per IP (Cloudflare rate limiter)
 - **No User Quotas:** Unlimited imports per user
 - **Backend Quotas:** Gemini API limits handled with retries
+
+## Fixed Issues
+
+### Issue: Books Imported But Not Visible (Fixed in v3.2.0)
+
+**Symptom:** CSV import reported success but books didn't appear in library.
+
+**Root Cause:** Missing `UserLibraryEntry` creation. Library filter requires non-empty `userLibraryEntries`.
+
+**Fix:** Added `UserLibraryEntry` creation in import loop (GeminiCSVImportView.swift:505-510).
+
+**Impact:** All books now default to "To Read" status on import.
+
+**Technical Details:**
+- LibraryFilterService.swift uses `work.userLibraryEntries` to determine library membership
+- Without a UserLibraryEntry, works exist in SwiftData but are filtered out from library views
+- The fix ensures every imported book gets a UserLibraryEntry with `.toRead` status by default
+- Users can change reading status after import using the library UI
 
 ## Related Documentation
 

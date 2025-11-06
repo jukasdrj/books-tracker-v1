@@ -472,7 +472,13 @@ See feature documentation screenshots in `docs/features/GEMINI_CSV_IMPORT.md`
 
 ### Data Model Changes
 
-**No new SwiftData models required.** Uses existing Work, Author, Edition models.
+**No new SwiftData models required.** Uses existing Work, Author, Edition, UserLibraryEntry models.
+
+**Critical Requirement:** Every imported Work MUST have an associated UserLibraryEntry:
+- Without UserLibraryEntry, books are saved but invisible in library views
+- LibraryFilterService.swift filters works by `userLibraryEntries` relationship
+- Default status: `.toRead` (allows users to change after import)
+- Implementation: GeminiCSVImportView.swift:505-510
 
 **New Service Models:**
 ```swift
@@ -748,6 +754,7 @@ Harry Potter,J.K. Rowling,9780439708180
 | Jan 15, 2025 | Added Gemini provider integration details | Engineering |
 | Jan 20, 2025 | Approved for v3.1.0 | PM |
 | Jan 27, 2025 | Shipped to production | Engineering |
+| Nov 5, 2025 | Documented UserLibraryEntry fix for library visibility (v3.2.0) | Documentation |
 
 ---
 
