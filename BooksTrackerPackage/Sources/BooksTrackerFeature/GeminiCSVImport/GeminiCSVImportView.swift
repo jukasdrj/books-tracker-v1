@@ -193,8 +193,12 @@ public struct GeminiCSVImportView: View {
 
             Button {
                 Task {
-                    await saveBooks(books)
-                    dismiss()
+                    let success = await saveBooks(books)
+                    if success {
+                        dismiss()
+                    }
+                    // If failed, saveBooks() already updated importStatus to .failed
+                    // View will automatically switch to failedView
                 }
             } label: {
                 Text("Add to Library")
@@ -367,53 +371,56 @@ public struct GeminiCSVImportView: View {
             print("[CSV WebSocket] Decoded message type: \(message.type)")
             #endif
 
-            switch message.type {
-            case "ready_ack":
-                #if DEBUG
-                print("[CSV WebSocket] ✅ Backend acknowledged ready signal, processing will start")
-                #endif
-                // The 'ready_ack' message is informational only: it indicates that the backend has received the
-                // initial request and will begin processing. No UI state is updated here because actual progress
-                // updates (including percentage and status) will be sent via subsequent 'progress' messages.
-                // Only log this event; UI state changes are handled in the 'progress', 'complete', and 'error' cases.
-                // Note: ready_ack messages have no 'data' field (see progress-socket.js:102-105)
-
-            case "progress":
-                if let data = message.data,
-                   let progressValue = data.progress,
-                   let status = data.status {
+            // Dispatch UI updates to MainActor (WebSocket runs on background thread)
+            Task { @MainActor in
+                switch message.type {
+                case "ready_ack":
                     #if DEBUG
-                    print("[CSV WebSocket] Progress: \(Int(progressValue * 100))% - \(status)")
+                    print("[CSV WebSocket] ✅ Backend acknowledged ready signal, processing will start")
                     #endif
-                    importStatus = .processing(progress: progressValue, message: status)
-                }
+                    // The 'ready_ack' message is informational only: it indicates that the backend has received the
+                    // initial request and will begin processing. No UI state is updated here because actual progress
+                    // updates (including percentage and status) will be sent via subsequent 'progress' messages.
+                    // Only log this event; UI state changes are handled in the 'progress', 'complete', and 'error' cases.
+                    // Note: ready_ack messages have no 'data' field (see progress-socket.js:102-105)
 
-            case "complete":
-                if let data = message.data,
-                   let books = data.books {
+                case "progress":
+                    if let data = message.data,
+                       let progressValue = data.progress,
+                       let status = data.status {
+                        #if DEBUG
+                        print("[CSV WebSocket] Progress: \(Int(progressValue * 100))% - \(status)")
+                        #endif
+                        importStatus = .processing(progress: progressValue, message: status)
+                    }
+
+                case "complete":
+                    if let data = message.data,
+                       let books = data.books {
+                        #if DEBUG
+                        print("[CSV WebSocket] ✅ Import complete: \(books.count) books")
+                        #endif
+                        let errors = data.errors ?? []
+                        importStatus = .completed(books: books, errors: errors)
+                    }
+                    webSocketTask?.cancel()
+
+                case "error":
+                    if let data = message.data,
+                       let error = data.error {
+                        #if DEBUG
+                        print("[CSV WebSocket] ❌ Error from backend: \(error)")
+                        #endif
+                        importStatus = .failed(error)
+                    }
+                    webSocketTask?.cancel()
+
+                default:
                     #if DEBUG
-                    print("[CSV WebSocket] ✅ Import complete: \(books.count) books")
+                    print("[CSV WebSocket] ⚠️ Unknown message type: \(message.type)")
                     #endif
-                    let errors = data.errors ?? []
-                    importStatus = .completed(books: books, errors: errors)
+                    break
                 }
-                webSocketTask?.cancel()
-
-            case "error":
-                if let data = message.data,
-                   let error = data.error {
-                    #if DEBUG
-                    print("[CSV WebSocket] ❌ Error from backend: \(error)")
-                    #endif
-                    importStatus = .failed(error)
-                }
-                webSocketTask?.cancel()
-
-            default:
-                #if DEBUG
-                print("[CSV WebSocket] ⚠️ Unknown message type: \(message.type)")
-                #endif
-                break
             }
 
         } catch {
@@ -432,12 +439,12 @@ public struct GeminiCSVImportView: View {
     }
 
     @MainActor
-    private func saveBooks(_ books: [GeminiCSVImportJob.ParsedBook]) async {
+    private func saveBooks(_ books: [GeminiCSVImportJob.ParsedBook]) async -> Bool {
         guard !books.isEmpty else {
             #if DEBUG
             print("⚠️ No books to save")
             #endif
-            return
+            return false
         }
 
         #if DEBUG
@@ -445,7 +452,7 @@ public struct GeminiCSVImportView: View {
         #endif
         var savedCount = 0
         var skippedCount = 0
-        var savedWorkIDs: [PersistentIdentifier] = []
+        var savedWorks: [Work] = []  // Collect Work objects, get IDs after save
 
         // **FIX #1: Move fetch outside loop** (100x performance improvement)
         // Fetch all existing works ONCE instead of per-book
@@ -459,7 +466,7 @@ public struct GeminiCSVImportView: View {
             print("❌ Failed to fetch existing works: \(error)")
             #endif
             importStatus = .failed("Database error: \(error.localizedDescription)")
-            return
+            return false
         }
 
         for book in books {
@@ -493,13 +500,20 @@ public struct GeminiCSVImportView: View {
                 originalLanguage: "Unknown",  // Gemini doesn't provide this
                 firstPublicationYear: book.publicationYear
             )
-            modelContext.insert(work)  // ✅ Get permanent ID
+            modelContext.insert(work)
 
-            // NOW set relationship (both have permanent IDs)
+            // NOW set relationship (both have temporary IDs, will be permanent after save)
             work.authors = [author]
 
-            // Track work ID for enrichment
-            savedWorkIDs.append(work.persistentModelID)
+            // Track work object (will extract permanent ID after save)
+            savedWorks.append(work)
+
+            // 🔥 FIX: Create UserLibraryEntry so book appears in library immediately
+            // CSV imports should add books to "To Read" status by default
+            let libraryEntry = UserLibraryEntry(readingStatus: .toRead)
+            modelContext.insert(libraryEntry)
+            libraryEntry.work = work
+            work.userLibraryEntries = [libraryEntry]
 
             // Create Edition ONLY if we have ISBN from Gemini
             if let isbn = book.isbn {
@@ -526,6 +540,9 @@ public struct GeminiCSVImportView: View {
             print("✅ Saved \(savedCount) books (\(skippedCount) skipped as duplicates)")
             #endif
 
+            // Extract permanent IDs AFTER save (now they're permanent!)
+            let savedWorkIDs = savedWorks.map { $0.persistentModelID }
+
             // Enqueue all saved works for background enrichment
             if !savedWorkIDs.isEmpty {
                 #if DEBUG
@@ -533,10 +550,10 @@ public struct GeminiCSVImportView: View {
                 #endif
                 EnrichmentQueue.shared.enqueueBatch(savedWorkIDs)
 
-                // ✅ Start enrichment DETACHED from MainActor
-                // This prevents blocking the UI while enrichment processes
-                // See docs/guides/ASYNC_PATTERNS.md for detailed explanation
-                Task.detached { @MainActor in
+                // ✅ Start enrichment in background Task
+                // Regular Task (not detached) safely captures modelContext from @MainActor context
+                // Enrichment runs asynchronously without blocking the UI
+                Task {
                     EnrichmentQueue.shared.startProcessing(in: modelContext) { completed, total, currentTitle in
                         #if DEBUG
                         print("📚 Enriching (\(completed)/\(total)): \(currentTitle)")
@@ -549,6 +566,8 @@ public struct GeminiCSVImportView: View {
             let generator = UINotificationFeedbackGenerator()
             generator.notificationOccurred(.success)
 
+            return true
+
         } catch {
             #if DEBUG
             print("❌ Failed to save books: \(error)")
@@ -560,6 +579,23 @@ public struct GeminiCSVImportView: View {
 
             // Update UI with error
             importStatus = .failed("Failed to save: \(error.localizedDescription)")
+            return false
         }
     }
+<<<<<<< HEAD
+=======
+
+    // MARK: - WebSocket Message Types
+
+    struct WebSocketMessage: Codable {
+        let type: String
+        let progress: Double?
+        let status: String?
+        let error: String?
+        let data: GeminiCSVImportJob?
+
+        // Computed property for backward compatibility
+        var result: GeminiCSVImportJob? { data }
+    }
+>>>>>>> origin/main
 }
