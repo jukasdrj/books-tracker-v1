@@ -35,19 +35,48 @@ enum WebSocketHelpers {
                 // Send ping message to confirm connection is working
                 try await task.send(.string("PING"))
                 
-                // Wait for any response (with timeout)
-                _ = Task {
-                    try await task.receive()
+                // Wait for response with proper timeout handling
+                try await withTimeout(seconds: 1.0) {
+                    _ = try await task.receive()
                 }
                 
                 try await Task.sleep(for: .milliseconds(100 * (attempts + 1)))
                 
                 attempts += 1
             } catch {
-                throw error
+                // If we get an error on first attempt, connection likely failed
+                // On subsequent attempts, continue trying
+                if attempts == 0 {
+                    throw error
+                }
+                attempts += 1
             }
         }
         
         print("✅ WebSocket connection verified after \(attempts) attempts")
+    }
+    
+    /// Helper to add timeout to async operations
+    private static func withTimeout<T>(
+        seconds: TimeInterval,
+        operation: @escaping () async throws -> T
+    ) async throws -> T {
+        try await withThrowingTaskGroup(of: T.self) { group in
+            group.addTask {
+                try await operation()
+            }
+            
+            group.addTask {
+                try await Task.sleep(for: .seconds(seconds))
+                throw URLError(.timedOut)
+            }
+            
+            guard let result = try await group.next() else {
+                throw URLError(.unknown)
+            }
+            
+            group.cancelAll()
+            return result
+        }
     }
 }
