@@ -4,6 +4,25 @@
 **API Version:** Gemini 2.0 Flash Experimental  
 **Related:** `docs/architecture/gemini-api-best-practices-audit.md`
 
+## Pricing Constants (November 2025)
+
+```swift
+// Gemini 2.0 Flash Pricing (as of Nov 2025)
+enum GeminiPricing {
+    static let inputTokenCostPer1M: Double = 0.075   // $0.075 per 1M tokens
+    static let outputTokenCostPer1M: Double = 0.30   // $0.30 per 1M tokens
+    
+    // Typical token distribution for bookshelf scans
+    static let inputTokenRatio: Double = 0.85  // ~85% input tokens
+    static let outputTokenRatio: Double = 0.15 // ~15% output tokens
+    
+    // Alert thresholds
+    static let highTokenUsageThreshold: Int = 10000  // Warn users above this
+}
+```
+
+**⚠️ Update these values when Gemini pricing changes.**
+
 ## Overview
 
 Backend now includes **token usage tracking** in all Gemini API responses. This enables cost monitoring, usage analytics, and budget alerts on iOS.
@@ -120,9 +139,9 @@ struct APIUsageView: View {
         let avgPerScan = Double(totalTokens) / Double(max(recentScans.count, 1))
         let estimatedMonthlyScans = 30.0 // Assume 1 scan/day
         
-        // Gemini 2.0 Flash pricing (Nov 2025)
-        let inputCost = avgPerScan * 0.85 * 0.075 / 1_000_000  // ~85% input tokens
-        let outputCost = avgPerScan * 0.15 * 0.30 / 1_000_000  // ~15% output tokens
+        // Use pricing constants
+        let inputCost = avgPerScan * GeminiPricing.inputTokenRatio * GeminiPricing.inputTokenCostPer1M / 1_000_000
+        let outputCost = avgPerScan * GeminiPricing.outputTokenRatio * GeminiPricing.outputTokenCostPer1M / 1_000_000
         
         return (inputCost + outputCost) * estimatedMonthlyScans
     }
@@ -155,7 +174,7 @@ func logScanCompletion(result: BookshelfScanResult) {
 ```swift
 // After scan completes
 if let tokenUsage = result.metadata?.tokenUsage {
-    if tokenUsage.totalTokens > 10000 {
+    if tokenUsage.totalTokens > GeminiPricing.highTokenUsageThreshold {
         // High token usage alert
         showAlert(
             title: "Large Scan Processed",
