@@ -202,10 +202,19 @@ public final class EnrichmentQueue {
             let jobId = UUID().uuidString
             self.setCurrentJobId(jobId)
 
-            self.webSocketHandler = EnrichmentWebSocketHandler(jobId: jobId, progressHandler: { processed, total, title in
-                progressHandler(processed, total, title)
-                NotificationCoordinator.postEnrichmentProgress(completed: processed, total: total, currentTitle: title)
-            })
+            self.webSocketHandler = EnrichmentWebSocketHandler(
+                jobId: jobId,
+                progressHandler: { processed, total, title in
+                    progressHandler(processed, total, title)
+                    NotificationCoordinator.postEnrichmentProgress(completed: processed, total: total, currentTitle: title)
+                },
+                completionHandler: { enrichedBooks in
+                    // Process enriched books and apply them to the library
+                    Task { @MainActor in
+                        await self.applyEnrichedBooks(enrichedBooks, to: works, in: modelContext)
+                    }
+                }
+            )
             self.webSocketHandler?.connect()
 
             let result = await EnrichmentService.shared.batchEnrichWorks(works, jobId: jobId, in: modelContext)
@@ -288,6 +297,78 @@ public final class EnrichmentQueue {
     /// Clear the current job ID (called when job completes)
     public func clearCurrentJobId() {
         currentJobId = nil
+    }
+    
+    /// Apply enriched books from backend to the library
+    /// This processes the enrichment data received via WebSocket and updates the corresponding works
+    @MainActor
+    private func applyEnrichedBooks(
+        _ enrichedBooks: [EnrichmentProgressMessage.EnrichedBook],
+        to works: [Work],
+        in modelContext: ModelContext
+    ) async {
+        print("📚 Applying \(enrichedBooks.count) enriched books to library")
+        
+        let dtoMapper = DTOMapper(modelContext: modelContext)
+        
+        for enrichedBook in enrichedBooks {
+            guard enrichedBook.success, let enrichmentData = enrichedBook.enriched else {
+                print("⚠️ Skipping failed enrichment for '\(enrichedBook.title)'")
+                continue
+            }
+            
+            // Find the matching work in our local works array
+            guard let work = works.first(where: { w in
+                w.title.lowercased() == enrichedBook.title.lowercased()
+            }) else {
+                print("⚠️ Could not find local work for '\(enrichedBook.title)'")
+                continue
+            }
+            
+            do {
+                // Map the first work DTO to update the work
+                if let workDTO = enrichmentData.works.first {
+                    // Update work metadata
+                    if work.firstPublicationYear == nil, let year = workDTO.firstPublicationYear {
+                        work.firstPublicationYear = year
+                    }
+                    
+                    if work.openLibraryWorkID == nil {
+                        work.openLibraryWorkID = workDTO.openLibraryWorkID
+                    }
+                    
+                    if work.googleBooksVolumeID == nil, let gbID = workDTO.googleBooksVolumeIDs.first {
+                        work.googleBooksVolumeID = gbID
+                    }
+                }
+                
+                // Map editions and add to work
+                for editionDTO in enrichmentData.editions {
+                    let edition = try dtoMapper.mapToEdition(editionDTO)
+                    edition.work = work
+                    print("✅ Added edition with cover: \(edition.coverImageURL != nil) for '\(work.title)'")
+                }
+                
+                // Map authors and add to work
+                for authorDTO in enrichmentData.authors {
+                    let author = try dtoMapper.mapToAuthor(authorDTO)
+                    work.addAuthor(author)
+                }
+                
+                work.touch()
+                
+            } catch {
+                print("❌ Error applying enrichment to '\(work.title)': \(error)")
+            }
+        }
+        
+        // Save all changes
+        do {
+            try modelContext.save()
+            print("✅ Successfully applied enrichment data to \(enrichedBooks.count) books")
+        } catch {
+            print("❌ Failed to save enrichment data: \(error)")
+        }
     }
 
     // MARK: - Persistence

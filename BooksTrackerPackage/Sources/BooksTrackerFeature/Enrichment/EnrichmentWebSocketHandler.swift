@@ -6,11 +6,17 @@ final class EnrichmentWebSocketHandler {
     private var webSocket: URLSessionWebSocketTask?
     private let jobId: String
     private let progressHandler: @MainActor (Int, Int, String) -> Void
+    private let completionHandler: @MainActor ([EnrichmentProgressMessage.EnrichedBook]) -> Void
     private var isConnected = false
 
-    init(jobId: String, progressHandler: @escaping @MainActor (Int, Int, String) -> Void) {
+    init(
+        jobId: String,
+        progressHandler: @escaping @MainActor (Int, Int, String) -> Void,
+        completionHandler: @escaping @MainActor ([EnrichmentProgressMessage.EnrichedBook]) -> Void = { _ in }
+    ) {
         self.jobId = jobId
         self.progressHandler = progressHandler
+        self.completionHandler = completionHandler
     }
 
     /// Connect to WebSocket and start listening for messages.
@@ -50,7 +56,11 @@ final class EnrichmentWebSocketHandler {
         switch progressMessage {
         case .progress(let processedCount, let totalCount, let currentTitle):
             progressHandler(processedCount, totalCount, currentTitle)
-        case .complete:
+        case .complete(_, let books):
+            // Process enriched books before disconnecting
+            if let books = books {
+                completionHandler(books)
+            }
             disconnect()
         case .unknown:
             break
