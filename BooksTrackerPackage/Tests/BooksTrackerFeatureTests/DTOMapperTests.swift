@@ -189,7 +189,7 @@ struct DTOMapperTests {
             originalLanguage: "English",
             firstPublicationYear: 1925,
             description: "A novel about the American Dream",
-            coverImageURL: "https://books.google.com/books/content?id=abc123&printsec=frontcover&img=1",
+            coverImageURL: "https://example.com/covers/gatsby.jpg",
             synthetic: false,
             primaryProvider: "google-books",
             contributors: ["google-books"],
@@ -212,7 +212,7 @@ struct DTOMapperTests {
         let work = try mapper.mapToWork(workDTO)
 
         // Verify coverImageURL is persisted to Work model
-        #expect(work.coverImageURL == "https://books.google.com/books/content?id=abc123&printsec=frontcover&img=1")
+        #expect(work.coverImageURL == "https://example.com/covers/gatsby.jpg")
         #expect(work.title == "The Great Gatsby")
     }
 
