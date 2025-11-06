@@ -58,9 +58,6 @@ enum WebSocketHelpers {
                 try await Task.sleep(for: .milliseconds(100 * attempts))
             }
         }
-        
-        // Should not reach here, but throw if we do
-        throw lastError ?? URLError(.cannotConnectToHost)
     }
     
     /// Helper to add timeout to async operations
