@@ -159,6 +159,18 @@ Library tab updates in real-time (no refresh needed)
 - JSON message parsing with Codable models
 - Automatic reconnection on errors
 
+### Key Components
+
+| Component | Responsibility | File |
+|-----------|---------------|------|
+| **GeminiCSVImportView** | Upload + progress UI | `GeminiCSVImport/GeminiCSVImportView.swift` |
+| **GeminiCSVImportService** | Backend API client | `GeminiCSVImport/GeminiCSVImportService.swift` |
+| **LibraryFilterService** | Filters library books | `Library/LibraryFilterService.swift` |
+| **EnrichmentService** | Fetches book metadata | `Enrichment/EnrichmentService.swift` |
+| **EnrichmentQueue** | Manages background enrichment | `Enrichment/EnrichmentQueue.swift` |
+| **api-worker** | Gemini parsing + enrichment | `cloudflare-workers/api-worker/src/handlers/gemini-csv-import.js` |
+| **ProgressWebSocketDO** | Real-time progress updates | `cloudflare-workers/api-worker/src/durable-objects/ProgressWebSocketDO.js` |
+
 ### Backend Endpoint
 
 **POST** `/api/import/csv-gemini`
@@ -677,7 +689,7 @@ private func saveBooks(_ books: [GeminiCSVImportJob.ParsedBook]) async {
 
 **Impact:** All books now default to "To Read" status on import.
 
-**Related:** GitHub Issue #XXX (if created)
+**Related:** GitHub Issue #258
 
 ## Related Documentation
 
