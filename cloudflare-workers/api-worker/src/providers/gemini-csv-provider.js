@@ -3,7 +3,7 @@
 const GEMINI_API_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 
 /**
- * Parse CSV file using Gemini 2.0 Flash API
+ * Parse CSV file using Gemini 2.5 Flash API
  *
  * Features:
  * - System instructions for role definition (Gemini best practice)

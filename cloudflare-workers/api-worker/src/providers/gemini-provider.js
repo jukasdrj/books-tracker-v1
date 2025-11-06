@@ -2,7 +2,7 @@
  * Google Gemini AI vision provider
  * Extracted from ai-scanner service for compartmentalization
  *
- * Uses Gemini 2.0 Flash Experimental for high-accuracy bookshelf scanning
+ * Uses Gemini 2.5 Flash (production-stable) for high-accuracy bookshelf scanning
  */
 
 /**
