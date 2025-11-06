@@ -10,11 +10,14 @@ import { createSuccessResponseObject, createErrorResponseObject } from '../../ty
 import { enrichMultipleBooks } from '../../services/enrichment.ts';
 import type { AuthorDTO } from '../../types/canonical.js';
 import { normalizeTitle, normalizeAuthor } from '../../utils/normalization.js';
+import { setCached, generateCacheKey } from '../../utils/cache.js';
+import { UnifiedCacheService } from '../../services/unified-cache.js';
 
 export async function handleSearchAdvanced(
   title: string,
   author: string,
-  env: any
+  env: any,
+  ctx: ExecutionContext
 ): Promise<ApiResponse<BookSearchResponse>> {
   const startTime = Date.now();
 
@@ -32,8 +35,31 @@ export async function handleSearchAdvanced(
 
   try {
     // Normalize both title and author for consistent cache keys
-    const normalizedTitle = hasTitle ? normalizeTitle(title) : undefined;
-    const normalizedAuthor = hasAuthor ? normalizeAuthor(author) : undefined;
+    const normalizedTitle = hasTitle ? normalizeTitle(title) : '';
+    const normalizedAuthor = hasAuthor ? normalizeAuthor(author) : '';
+
+    // Check cache first
+    const cacheKey = generateCacheKey('v1:advanced', {
+      title: normalizedTitle,
+      author: normalizedAuthor
+    });
+
+    const cache = new UnifiedCacheService(env, ctx);
+    const cachedResult = await cache.get(cacheKey, 'advanced', {
+      query: `${title} ${author}`.trim()
+    });
+
+    if (cachedResult?.data) {
+      console.log(`✅ Cache HIT: /v1/search/advanced (${cacheKey})`);
+      return {
+        ...cachedResult.data,
+        meta: {
+          ...cachedResult.data.meta,
+          cached: true,
+          cacheSource: cachedResult.source // EDGE or KV
+        }
+      };
+    }
 
     console.log(`v1 advanced search - title: "${title}" (normalized: "${normalizedTitle}"), author: "${author}" (normalized: "${normalizedAuthor}") (using enrichMultipleBooks, maxResults: 20)`);
 
@@ -76,7 +102,7 @@ export async function handleSearchAdvanced(
       return cleanWork;
     });
 
-    return createSuccessResponseObject(
+    const response = createSuccessResponseObject(
       { works: cleanWorks, editions: result.editions, authors },
       {
         processingTime: Date.now() - startTime,
@@ -84,6 +110,13 @@ export async function handleSearchAdvanced(
         cached: false,
       }
     );
+
+    // Write to cache (6h TTL, same as /search/title)
+    const ttl = 6 * 60 * 60; // 21600 seconds
+    ctx.waitUntil(setCached(cacheKey, response, ttl, env));
+    console.log(`💾 Cache WRITE: /v1/search/advanced (${cacheKey}, TTL: ${ttl}s)`);
+
+    return response;
   } catch (error: any) {
     console.error('Error in v1 advanced search:', error);
     return createErrorResponseObject(
