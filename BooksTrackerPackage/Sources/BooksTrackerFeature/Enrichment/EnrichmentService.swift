@@ -258,9 +258,9 @@ public final class EnrichmentService {
                 score += 10
             }
 
-            // Prefer results with cover images
+            // Prefer results with cover images (increased weight from +5 to +20)
             if result.coverImage != nil {
-                score += 5
+                score += 20
             }
 
             return (result, score)
