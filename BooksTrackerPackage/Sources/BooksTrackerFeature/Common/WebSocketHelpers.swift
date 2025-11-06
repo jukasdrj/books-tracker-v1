@@ -23,8 +23,12 @@ enum WebSocketHelpers {
         let startTime = Date()
         
         // Try a few ping/pong cycles to confirm connection
-        var attempts = 0
         let maxAttempts = 5
+        guard maxAttempts > 0 else {
+            throw URLError(.unknown, userInfo: [NSLocalizedDescriptionKey: "Invalid maxAttempts value"])
+        }
+        
+        var attempts = 0
         var lastError: Error?
         
         while attempts < maxAttempts {
