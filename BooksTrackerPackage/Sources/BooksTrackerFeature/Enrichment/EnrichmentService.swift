@@ -276,9 +276,6 @@ public final class EnrichmentService {
         with searchResult: EnrichmentSearchResult,
         in modelContext: ModelContext
     ) {
-        // [DEBUGGER:updateWork:entry] Log cover image status
-        print("[DEBUGGER:updateWork:entry] work='\(work.title)', searchResult.coverImage=\(searchResult.coverImage ?? "nil")")
-        
         // Update work metadata
         if work.firstPublicationYear == nil, let year = searchResult.publicationYear {
             work.firstPublicationYear = year
@@ -322,12 +319,8 @@ public final class EnrichmentService {
 
         // Update existing edition with missing data
         if let edition = edition {
-            // [DEBUGGER:updateWork:edition_update] Log cover update
-            print("[DEBUGGER:updateWork:edition_update] edition.coverImageURL=\(edition.coverImageURL ?? "nil"), searchResult.coverImage=\(searchResult.coverImage ?? "nil")")
-            
             if edition.coverImageURL == nil, let coverURL = searchResult.coverImage {
                 edition.coverImageURL = coverURL
-                print("[DEBUGGER:updateWork:edition_update] SET edition.coverImageURL to '\(coverURL)'")
             }
 
             if edition.pageCount == nil, let pageCount = searchResult.pageCount {
@@ -408,13 +401,8 @@ private struct EnrichmentSearchResult {
         self.author = authors.first?.name ?? "Unknown Author"
         self.isbn = edition?.isbn
         
-        // [DEBUGGER:EnrichmentSearchResult:init] Cover image source detection
-        let workCover = workDTO.coverImageURL
-        let editionCover = edition?.coverImageURL
-        print("[DEBUGGER:EnrichmentSearchResult:init] title='\(workDTO.title)', workCover=\(workCover ?? "nil"), editionCover=\(editionCover ?? "nil")")
-        
         // Use edition cover if available, otherwise fall back to work cover
-        self.coverImage = editionCover ?? workCover
+        self.coverImage = edition?.coverImageURL ?? workDTO.coverImageURL
         
         self.publicationYear = workDTO.firstPublicationYear
         self.publicationDate = edition?.publicationDate

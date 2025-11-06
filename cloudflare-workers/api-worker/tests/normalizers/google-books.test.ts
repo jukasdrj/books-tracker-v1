@@ -28,6 +28,23 @@ describe('normalizeGoogleBooksToWork', () => {
     expect(work.synthetic).toBe(false);
   });
 
+  it('should extract coverImageURL from Google Books item', () => {
+    const googleBooksItem = {
+      id: 'beSP5CCpiGUC',
+      volumeInfo: {
+        title: '1984',
+        authors: ['George Orwell'],
+        imageLinks: {
+          thumbnail: 'http://books.google.com/covers/1984.jpg'
+        }
+      }
+    };
+
+    const work = normalizeGoogleBooksToWork(googleBooksItem);
+
+    expect(work.coverImageURL).toBe('https://books.google.com/covers/1984.jpg');
+  });
+
   it('should handle missing optional fields', () => {
     const minimalItem = {
       id: 'xyz123',
