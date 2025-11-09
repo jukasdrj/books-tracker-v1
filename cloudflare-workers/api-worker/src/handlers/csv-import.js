@@ -118,17 +118,11 @@ export async function processCSVImportCore(csvText, jobId, doStub, env) {
       const prompt = buildCSVParserPrompt();
       parsedBooks = await callGemini(csvText, prompt, env);
 
-      // Validate Gemini response
-      if (!Array.isArray(parsedBooks) || parsedBooks.length === 0) {
-        throw new Error('Gemini returned invalid format');
-      }
-
-      const validBooks = parsedBooks.filter(b => b.title && b.author);
-      if (validBooks.length === 0) {
+      // With structured output, response is guaranteed to be a valid array.
+      // The schema also requires 'title' and 'author', so no manual filtering is needed.
+      if (parsedBooks.length === 0) {
         throw new Error('No valid books found in CSV');
       }
-
-      parsedBooks = validBooks;
 
       // Cache for 7 days
       await env.KV_CACHE.put(cacheKey, JSON.stringify(parsedBooks), {
@@ -136,29 +130,14 @@ export async function processCSVImportCore(csvText, jobId, doStub, env) {
       });
     }
 
-    // Stage 2: Validation (50-100%)
-    await doStub.updateProgress(0.5, `Parsed ${parsedBooks.length} books. Validating...`);
-
-    // Validate parsed books (title and author required)
-    const validBooks = parsedBooks.filter(book => {
-      if (!book.title || !book.author) {
-        return false;
-      }
-      return true;
-    });
-
-    await doStub.updateProgress(0.75, `Validated ${validBooks.length}/${parsedBooks.length} books`);
+    // Stage 2: Validation (50-100%) - No longer needed, schema guarantees validity
+    await doStub.updateProgress(0.75, `Gemini parsed ${parsedBooks.length} books`);
 
     // Complete immediately (no enrichment)
-    const invalidCount = parsedBooks.length - validBooks.length;
-    const errors = invalidCount > 0
-      ? [{ title: 'Validation', error: `${invalidCount} books missing title or author` }]
-      : [];
-
     await doStub.complete({
-      books: validBooks,
-      errors: errors,
-      successRate: `${validBooks.length}/${parsedBooks.length}`
+      books: parsedBooks,
+      errors: [],
+      successRate: `${parsedBooks.length}/${parsedBooks.length}`
     });
 
   } catch (error) {

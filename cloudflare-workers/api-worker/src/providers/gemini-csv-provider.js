@@ -1,4 +1,5 @@
 // src/providers/gemini-csv-provider.js
+import { CSVBookSchema } from '../types/gemini-schemas.js';
 
 const GEMINI_API_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent';
 
@@ -54,6 +55,7 @@ Always return ONLY a valid JSON array. Do not include explanatory text.`
         topP: 0.95,       // Nucleus sampling for quality
         maxOutputTokens: 8192,
         responseMimeType: 'application/json',  // Force JSON output (eliminates markdown code blocks)
+        responseSchema: CSVBookSchema,         // NEW: Enforce structured output
         stopSequences: ['\n\n\n']  // Stop on triple newline (prevents unnecessary continuation)
       }
     })
@@ -79,24 +81,9 @@ Always return ONLY a valid JSON array. Do not include explanatory text.`
     throw new Error('Gemini returned empty response');
   }
 
-  // With responseMimeType='application/json', text should be clean JSON
-  // Keep markdown stripping as defensive fallback for API version compatibility
-  let jsonText = textResponse.trim();
-
-  // Remove markdown code blocks if present (defensive fallback)
-  if (jsonText.startsWith('```json')) {
-    jsonText = jsonText.replace(/```json\n?/g, '').replace(/```\n?/g, '');
-  } else if (jsonText.startsWith('```')) {
-    jsonText = jsonText.replace(/```\n?/g, '');
-  }
-
-  // Parse JSON
+  // With structured output, the response is guaranteed to be valid JSON
   try {
-    const parsed = JSON.parse(jsonText);
-    if (!Array.isArray(parsed)) {
-      throw new Error('Gemini response is not an array');
-    }
-    return parsed;
+    return JSON.parse(textResponse);
   } catch (error) {
     throw new Error(`Invalid JSON from Gemini: ${error.message}`);
   }
