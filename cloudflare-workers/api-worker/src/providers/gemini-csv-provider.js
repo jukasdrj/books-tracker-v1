@@ -3,13 +3,78 @@
 const GEMINI_API_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent';
 
 /**
+ * JSON Schema for CSV parser response
+ * Enforces type safety and validation at the Gemini API level
+ * Guarantees all books have required title and author fields
+ */
+const CSV_BOOK_SCHEMA = {
+  type: "ARRAY",
+  items: {
+    type: "OBJECT",
+    properties: {
+      title: {
+        type: "STRING",
+        description: "Book title (required)"
+      },
+      author: {
+        type: "STRING",
+        description: "Author name (required)"
+      },
+      isbn: {
+        type: "STRING",
+        description: "ISBN-10 or ISBN-13",
+        nullable: true
+      },
+      publicationYear: {
+        type: "INTEGER",
+        description: "Year of publication",
+        nullable: true
+      },
+      publisher: {
+        type: "STRING",
+        description: "Publisher name",
+        nullable: true
+      },
+      pageCount: {
+        type: "INTEGER",
+        description: "Number of pages",
+        nullable: true
+      },
+      genre: {
+        type: "STRING",
+        description: "Primary genre or subject",
+        nullable: true
+      },
+      rating: {
+        type: "NUMBER",
+        description: "User rating (0-5)",
+        nullable: true,
+        minimum: 0,
+        maximum: 5
+      },
+      dateRead: {
+        type: "STRING",
+        description: "Date finished reading (YYYY-MM-DD)",
+        nullable: true
+      },
+      notes: {
+        type: "STRING",
+        description: "User notes or review",
+        nullable: true
+      }
+    },
+    required: ["title", "author"]
+  }
+};
+
+/**
  * Parse CSV file using Gemini 2.5 Flash-Lite API
  *
  * Features:
  * - System instructions for role definition (Gemini best practice)
  * - Low temperature (0.1) for maximum determinism with Flash-Lite
  * - responseMimeType for guaranteed JSON output (no markdown stripping needed)
- * - Validates JSON array output
+ * - responseSchema for type safety (Gemini won't return books without title+author)
  * - Supports large CSVs (up to 8K tokens output)
  *
  * @param {string} csvText - Raw CSV content
@@ -54,6 +119,7 @@ Always return ONLY a valid JSON array. Do not include explanatory text.`
         topP: 0.95,       // Nucleus sampling for quality
         maxOutputTokens: 8192,
         responseMimeType: 'application/json',  // Force JSON output (eliminates markdown code blocks)
+        responseSchema: CSV_BOOK_SCHEMA,  // Schema-enforced validation (guarantees title+author)
         stopSequences: ['\n\n\n']  // Stop on triple newline (prevents unnecessary continuation)
       }
     })
@@ -90,9 +156,10 @@ Always return ONLY a valid JSON array. Do not include explanatory text.`
     jsonText = jsonText.replace(/```\n?/g, '');
   }
 
-  // Parse JSON
+  // Parse JSON (schema guarantees valid array structure)
   try {
     const parsed = JSON.parse(jsonText);
+    // Schema guarantees array structure, but defensive check remains
     if (!Array.isArray(parsed)) {
       throw new Error('Gemini response is not an array');
     }

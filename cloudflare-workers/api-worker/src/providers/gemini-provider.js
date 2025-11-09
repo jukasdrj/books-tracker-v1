@@ -6,6 +6,50 @@
  */
 
 /**
+ * JSON Schema for bookshelf scanner response
+ * Enforces type safety and validation at the Gemini API level
+ */
+const BOOKSHELF_RESPONSE_SCHEMA = {
+    type: "ARRAY",
+    items: {
+        type: "OBJECT",
+        properties: {
+            title: {
+                type: "STRING",
+                description: "Book title extracted from spine"
+            },
+            author: {
+                type: "STRING",
+                description: "Author name if visible on spine",
+                nullable: true
+            },
+            format: {
+                type: "STRING",
+                enum: ["hardcover", "paperback", "mass-market", "unknown"],
+                description: "Physical format detected from visual cues"
+            },
+            confidence: {
+                type: "NUMBER",
+                description: "Certainty level about extracted text (0.0-1.0)",
+                minimum: 0,
+                maximum: 1
+            },
+            boundingBox: {
+                type: "OBJECT",
+                properties: {
+                    x1: { type: "NUMBER", minimum: 0, maximum: 1 },
+                    y1: { type: "NUMBER", minimum: 0, maximum: 1 },
+                    x2: { type: "NUMBER", minimum: 0, maximum: 1 },
+                    y2: { type: "NUMBER", minimum: 0, maximum: 1 }
+                },
+                required: ["x1", "y1", "x2", "y2"]
+            }
+        },
+        required: ["title", "confidence", "boundingBox", "format"]
+    }
+};
+
+/**
  * Scan bookshelf image using Gemini AI
  * @param {ArrayBuffer} imageData - Raw JPEG image data
  * @param {Object} env - Worker environment with GEMINI_API_KEY
@@ -120,6 +164,7 @@ Extract all visible book information now.`
                     topP: 0.95,        // Nucleus sampling for quality
                     maxOutputTokens: 2048,  // Prevent truncation
                     responseMimeType: 'application/json',  // Force JSON output
+                    responseSchema: BOOKSHELF_RESPONSE_SCHEMA,  // Schema-enforced validation
                     stopSequences: ['\n\n\n']  // Stop on triple newline (prevents unnecessary continuation)
                 }
             })
@@ -192,19 +237,14 @@ Extract all visible book information now.`
         };
     }
 
-    // Normalize book data
+    // Normalize book data (schema guarantees valid structure, no validation needed)
     const normalizedBooks = books.map(book => ({
         title: book.title || '',
         author: book.author || '',
         isbn: book.isbn || null,  // Gemini rarely detects ISBNs, but include field
-        format: book.format || 'unknown',  // NEW: Format detection (hardcover, paperback, mass-market, unknown)
-        confidence: Math.max(0, Math.min(1, parseFloat(book.confidence) || 0.5)),
-        boundingBox: {
-            x1: Math.max(0, Math.min(1, parseFloat(book.boundingBox?.x1) || 0)),
-            y1: Math.max(0, Math.min(1, parseFloat(book.boundingBox?.y1) || 0)),
-            x2: Math.max(0, Math.min(1, parseFloat(book.boundingBox?.x2) || 1)),
-            y2: Math.max(0, Math.min(1, parseFloat(book.boundingBox?.y2) || 1))
-        }
+        format: book.format,  // Schema-enforced enum validation
+        confidence: book.confidence,  // Schema-enforced 0-1 range
+        boundingBox: book.boundingBox  // Schema-enforced coordinate validation
     })).filter(book => book.title.length > 0);
 
     return {

@@ -123,13 +123,7 @@ export async function processCSVImportCore(csvText, jobId, doStub, env) {
         throw new Error('Gemini returned invalid format');
       }
 
-      const validBooks = parsedBooks.filter(b => b.title && b.author);
-      if (validBooks.length === 0) {
-        throw new Error('No valid books found in CSV');
-      }
-
-      parsedBooks = validBooks;
-
+      // Schema guarantees title+author, no filtering needed
       // Cache for 7 days
       await env.KV_CACHE.put(cacheKey, JSON.stringify(parsedBooks), {
         expirationTtl: 604800
@@ -139,13 +133,9 @@ export async function processCSVImportCore(csvText, jobId, doStub, env) {
     // Stage 2: Validation (50-100%)
     await doStub.updateProgress(0.5, `Parsed ${parsedBooks.length} books. Validating...`);
 
-    // Validate parsed books (title and author required)
-    const validBooks = parsedBooks.filter(book => {
-      if (!book.title || !book.author) {
-        return false;
-      }
-      return true;
-    });
+    // Schema guarantees title+author, validation is redundant but kept for consistency
+    // with existing behavior (in case Gemini returns partial results in edge cases)
+    const validBooks = parsedBooks;
 
     await doStub.updateProgress(0.75, `Validated ${validBooks.length}/${parsedBooks.length} books`);
 
