@@ -4,8 +4,8 @@
  * These schemas guarantee the structure and types of JSON responses from Gemini API,
  * eliminating manual validation overhead and ensuring type safety at the API level.
  *
- * CRITICAL: Gemini API requires UPPERCASE type names ("ARRAY", "OBJECT", "STRING")
- * See: https://ai.google.dev/gemini-api/docs/structured-output
+ * CRITICAL: Gemini API requires lowercase type names ("array", "object", "string")
+ * Per JSON Schema standard: https://ai.google.dev/gemini-api/docs/structured-output
  *
  * @module gemini-schemas
  */
@@ -24,59 +24,59 @@
  * - ISBN format: 10 or 13 digits (when present)
  */
 export const BOOKSHELF_RESPONSE_SCHEMA = {
-  type: "ARRAY",
+  type: "array",
   items: {
-    type: "OBJECT",
+    type: "object",
     properties: {
       title: {
-        type: "STRING",
+        type: "string",
         description: "Book title extracted from spine"
       },
       author: {
-        type: "STRING",
+        type: "string",
         description: "Author name if visible on spine",
         nullable: true
       },
       isbn: {
-        type: "STRING",
+        type: "string",
         description: "ISBN-10 or ISBN-13 if visible",
         nullable: true
       },
       format: {
-        type: "STRING",
+        type: "string",
         enum: ["hardcover", "paperback", "mass-market", "unknown"],
         description: "Physical format detected from visual cues (spine thickness, cover material)"
       },
       confidence: {
-        type: "NUMBER",
+        type: "number",
         description: "Detection confidence level (0.0 = uncertain, 1.0 = certain)",
         minimum: 0.0,
         maximum: 1.0
       },
       boundingBox: {
-        type: "OBJECT",
+        type: "object",
         description: "Normalized coordinates (0.0-1.0) of book spine in image",
         properties: {
           x1: {
-            type: "NUMBER",
+            type: "number",
             description: "Left edge (0.0 = left side of image)",
             minimum: 0.0,
             maximum: 1.0
           },
           y1: {
-            type: "NUMBER",
+            type: "number",
             description: "Top edge (0.0 = top of image)",
             minimum: 0.0,
             maximum: 1.0
           },
           x2: {
-            type: "NUMBER",
+            type: "number",
             description: "Right edge (1.0 = right side of image)",
             minimum: 0.0,
             maximum: 1.0
           },
           y2: {
-            type: "NUMBER",
+            type: "number",
             description: "Bottom edge (1.0 = bottom of image)",
             minimum: 0.0,
             maximum: 1.0
@@ -106,58 +106,58 @@ export const BOOKSHELF_RESPONSE_SCHEMA = {
  * eliminating the need for manual filtering loops in csv-import.js
  */
 export const CSV_BOOK_SCHEMA = {
-  type: "ARRAY",
+  type: "array",
   items: {
-    type: "OBJECT",
+    type: "object",
     properties: {
       title: {
-        type: "STRING",
+        type: "string",
         description: "Book title (required)"
       },
       author: {
-        type: "STRING",
+        type: "string",
         description: "Author name (required)"
       },
       isbn: {
-        type: "STRING",
+        type: "string",
         description: "ISBN-10 or ISBN-13",
         nullable: true
       },
       publicationYear: {
-        type: "INTEGER",
+        type: "integer",
         description: "Year of publication",
         nullable: true
       },
       publisher: {
-        type: "STRING",
+        type: "string",
         description: "Publisher name",
         nullable: true
       },
       pageCount: {
-        type: "INTEGER",
+        type: "integer",
         description: "Number of pages",
         nullable: true,
         minimum: 1
       },
       genre: {
-        type: "STRING",
+        type: "string",
         description: "Primary genre or subject",
         nullable: true
       },
       rating: {
-        type: "NUMBER",
+        type: "number",
         description: "User rating (0-5 scale)",
         nullable: true,
         minimum: 0,
         maximum: 5
       },
       dateRead: {
-        type: "STRING",
+        type: "string",
         description: "Date finished reading (YYYY-MM-DD format)",
         nullable: true
       },
       notes: {
-        type: "STRING",
+        type: "string",
         description: "User notes or review",
         nullable: true
       }
