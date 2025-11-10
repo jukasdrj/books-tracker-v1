@@ -251,7 +251,7 @@ public final class EnrichmentQueue {
         print("🛑 Canceling backend job: \(jobId)")
 
         do {
-            let url = URL(string: "https://books-api-proxy.jukasdrj.workers.dev/api/enrichment/cancel")!
+            let url = EnrichmentConfig.enrichmentCancelURL
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")

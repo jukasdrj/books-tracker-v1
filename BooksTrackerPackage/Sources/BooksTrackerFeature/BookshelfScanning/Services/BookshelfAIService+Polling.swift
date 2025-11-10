@@ -34,8 +34,7 @@ extension BookshelfAIService {
 
         // STEP 2: Upload image
         // UPDATED: Use unified api-worker endpoint
-        let baseURL = "https://api-worker.jukasdrj.workers.dev"
-        let uploadURL = URL(string: "\(baseURL)/api/scan-bookshelf?jobId=\(jobId)")!
+        let uploadURL = URL(string: "\(EnrichmentConfig.baseURL)/api/scan-bookshelf?jobId=\(jobId)")!
         var uploadRequest = URLRequest(url: uploadURL)
         uploadRequest.httpMethod = "POST"
         uploadRequest.setValue("image/jpeg", forHTTPHeaderField: "Content-Type")
