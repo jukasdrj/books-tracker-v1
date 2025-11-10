@@ -170,9 +170,7 @@ public struct InsightsView: View {
 
             #if DEBUG
             let duration = Date().timeIntervalSince(startTime)
-            #if DEBUG
             print("📊 Insights calculation took \(String(format: "%.2f", duration * 1000))ms")
-            #endif
             #endif
         } catch {
             errorMessage = "Failed to calculate statistics: \(error.localizedDescription)"

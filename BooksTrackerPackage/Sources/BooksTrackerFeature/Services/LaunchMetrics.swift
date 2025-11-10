@@ -21,9 +21,7 @@ public final class LaunchMetrics {
         milestones.append((name, timestamp))
         #if DEBUG
         let elapsed = (timestamp - launchStartTime) * 1000
-        #if DEBUG
         print("⏱️ \(name): +\(Int(elapsed))ms")
-        #endif
         #endif
     }
 
@@ -37,29 +35,17 @@ public final class LaunchMetrics {
     public func printReport() {
         #if DEBUG
         guard !milestones.isEmpty else { return }
-        #if DEBUG
         print("\n📊 Launch Performance Report")
-        #endif
-        #if DEBUG
         print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-        #endif
         for (name, timestamp) in milestones {
             let elapsed = (timestamp - launchStartTime) * 1000
-            #if DEBUG
             print("  \(name): +\(Int(elapsed))ms")
-            #endif
         }
         if let total = totalLaunchTime() {
-            #if DEBUG
             print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-            #endif
-            #if DEBUG
             print("  Total: \(Int(total))ms")
-            #endif
         }
-        #if DEBUG
         print()
-        #endif
         #endif
     }
 }
