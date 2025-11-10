@@ -178,4 +178,4 @@ if let work = modelContext.model(for: enrichedBook.workPersistentID) as? Work {
 - **Planning Session:** Generated with Zen MCP planner tool (Gemini 2.5 Pro)
 - **Consensus Analysis:** Multi-model validation (Grok-4, Gemini 2.5 Pro, GPT-5 Pro)
 - **Related Issues:** #312, #313, #314
-- **PR:** (to be linked after creation)
+- **PR:** https://github.com/jukasdrj/books-tracker-v1/pull/328
