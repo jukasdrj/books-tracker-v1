@@ -5,8 +5,12 @@ import SwiftData
 
 /// Error thrown when enrichment activity timeout is reached
 struct EnrichmentTimeoutError: Error, LocalizedError {
+    let timeout: TimeInterval
+
     var errorDescription: String? {
-        "Enrichment timed out after 5 minutes of inactivity. The backend may be experiencing issues. Please try again."
+        let minutes = Int(timeout / 60)
+        let minuteString = minutes > 1 ? "minutes" : "minute"
+        return "Enrichment timed out after \(minutes) \(minuteString) of inactivity. The backend may be experiencing issues. Please try again."
     }
 }
 
@@ -256,11 +260,11 @@ public final class EnrichmentQueue {
                 self.clear()
                 NotificationCoordinator.postEnrichmentCompleted()
 
-            } catch is EnrichmentTimeoutError {
+            } catch let error as EnrichmentTimeoutError {
                 // Timeout path
                 print("⏱️ Enrichment timed out after \(Int(timeoutDuration))s of inactivity")
                 NotificationCoordinator.postEnrichmentFailed(
-                    error: "Enrichment timed out after 5 minutes. Please check your connection and try again."
+                    error: error.localizedDescription
                 )
             } catch is CancellationError {
                 // User cancellation path
@@ -368,8 +372,15 @@ public final class EnrichmentQueue {
         currentJobId = nil
     }
 
-    /// Reset activity timer (called when WebSocket receives messages)
-    /// - Note: Must be called on MainActor for thread safety
+    /**
+     Resets the enrichment activity timer to the current time.
+
+     - Important: This method **must** be called whenever enrichment activity occurs, such as when receiving WebSocket messages or when enrichment completions are processed. Failure to call this method will result in premature timeouts and interruption of enrichment jobs.
+
+     - Note: This method is automatically called by the WebSocket handler callbacks. If you manually trigger enrichment activity outside of those handlers, you are responsible for calling this method.
+
+     - Thread Safety: Must be called on MainActor.
+     */
     public func resetActivityTimer() {
         lastActivityTime = Date()
     }
@@ -386,7 +397,7 @@ public final class EnrichmentQueue {
 
             if timeSinceActivity > timeoutDuration {
                 print("⏱️ Enrichment timeout: No activity for \(Int(timeSinceActivity))s (limit: \(Int(timeoutDuration))s)")
-                throw EnrichmentTimeoutError()
+                throw EnrichmentTimeoutError(timeout: timeoutDuration)
             }
 
             // Check every 10 seconds

@@ -152,6 +152,11 @@ public struct ContentView: View {
                         currentBookTitle = payload.currentTitle
                     },
                     onEnrichmentCompleted: { isEnriching = false },
+                    onEnrichmentFailed: { payload in
+                        isEnriching = false
+                        // TODO: Display error to user (e.g., banner or alert)
+                        print("❌ Enrichment failed: \(payload.errorMessage)")
+                    },
                     onSearchForAuthor: { payload in
                         selectedTab = .search
                         searchCoordinator.setPendingAuthorSearch(payload.authorName)
