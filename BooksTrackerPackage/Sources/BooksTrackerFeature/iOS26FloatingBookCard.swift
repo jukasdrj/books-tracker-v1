@@ -23,8 +23,9 @@ struct iOS26FloatingBookCard: View {
     }
 
     // Primary edition for display
+    // Uses work.primaryEdition which leverages AutoStrategy (+10 points for covers)
     private var primaryEdition: Edition? {
-        userEntry?.edition ?? work.availableEditions.first
+        userEntry?.edition ?? work.primaryEdition
     }
 
     var body: some View {
@@ -72,7 +73,7 @@ struct iOS26FloatingBookCard: View {
     // MARK: - Floating Cover Image
 
     private var floatingCoverImage: some View {
-        CachedAsyncImage(url: primaryEdition?.coverURL) { image in
+        CachedAsyncImage(url: CoverImageService.coverURL(for: primaryEdition, work: work)) { image in
             image
                 .resizable()
                 .aspectRatio(2/3, contentMode: .fill)
