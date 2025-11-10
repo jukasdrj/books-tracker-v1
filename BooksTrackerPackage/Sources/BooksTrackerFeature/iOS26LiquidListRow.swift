@@ -17,9 +17,10 @@ struct iOS26LiquidListRow: View {
     }
 
     // Primary edition for display
-    // Uses work.primaryEdition which leverages AutoStrategy (+10 points for covers)
+    // ✅ FIXED: Now uses work.primaryEdition which delegates to EditionSelectionStrategy
+    // AutoStrategy gives +10 bonus for editions with covers
     private var primaryEdition: Edition? {
-        userEntry?.edition ?? work.primaryEdition
+        work.primaryEdition
     }
 
     init(work: Work, displayStyle: ListRowStyle = .standard) {
@@ -77,7 +78,8 @@ struct iOS26LiquidListRow: View {
     // MARK: - Cover Thumbnail
 
     private var coverThumbnail: some View {
-        CachedAsyncImage(url: CoverImageService.coverURL(for: primaryEdition, work: work)) { image in
+        // ✅ FIXED: Uses CoverImageService with Edition → Work fallback logic
+        CachedAsyncImage(url: CoverImageService.coverURL(for: work)) { image in
             image
                 .resizable()
                 .aspectRatio(2/3, contentMode: .fill)
