@@ -37,23 +37,30 @@ struct iOS26FluidGridSystem<Item: Identifiable, Content: View>: View {
                 }
             }
             .animation(.smooth(duration: 0.6), value: adaptiveColumns(for: geometry.size).count)
+            .frame(height: estimatedHeight(for: items.count, in: geometry.size))
         }
-        .frame(height: estimatedHeight(for: items.count))
+        .clipped()  // Prevent shadow bleed into next section
     }
 
     // MARK: - Height Estimation
 
     /// Estimates grid height based on item count and column configuration
     /// Prevents GeometryReader collapse in ScrollView contexts
-    private func estimatedHeight(for itemCount: Int) -> CGFloat {
+    private func estimatedHeight(for itemCount: Int, in size: CGSize) -> CGFloat {
         guard itemCount > 0 else { return 0 }
 
-        // Estimate based on typical book card height (~250pt) + spacing
-        let estimatedCardHeight: CGFloat = 250
-        let columnCount = max(columns.count, 2)  // Default to 2 columns minimum
+        // Accurate estimation: 240pt card (iOS26FloatingBookCard.swift:102) + 50pt info/padding = 290pt
+        let estimatedCardHeight: CGFloat = 290
+
+        // Buffer for shadows/materials (added ONCE at bottom, not per row)
+        let visualEffectsBuffer: CGFloat = 16
+
+        // Use actual adaptive column logic instead of static columns.count
+        let columnCount = calculateOptimalColumns(for: size)
         let rowCount = ceil(Double(itemCount) / Double(columnCount))
 
-        return CGFloat(rowCount) * (estimatedCardHeight + spacing) - spacing
+        // CORRECT: buffer added once after all rows, not multiplied per row
+        return CGFloat(rowCount) * (estimatedCardHeight + spacing) - spacing + visualEffectsBuffer
     }
 
     // MARK: - Adaptive Column Logic
