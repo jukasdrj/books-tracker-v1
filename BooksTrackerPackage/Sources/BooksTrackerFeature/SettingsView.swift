@@ -429,30 +429,30 @@ public struct SettingsView: View {
                     // Clear caches before resetting context
                     mapper?.clearCache()
                     DiversityStats.invalidateCache()
-                    
+
                     // Reset context - forces @Query observers to refetch
                     context.reset()
-                    
-                    // Invalidate reading stats after context reset
-                    Task {
-                        await ReadingStats.invalidateCache()
-                    }
-                    
+                }
+
+                // Invalidate reading stats after context reset
+                await MainActor.run {
+                    await ReadingStats.invalidateCache()
+
                     // STEP 7: Post notification AFTER reset
                     NotificationCenter.default.post(
                         name: .libraryWasReset,
                         object: nil
                     )
-                    
+
                     // STEP 8: Cleanup UserDefaults and settings
                     UserDefaults.standard.removeObject(forKey: "RecentBookSearches")
                     SampleDataGenerator(modelContext: context).resetSampleDataFlag()
                     flags.resetToDefaults()
-                    
+
                     // Success haptic feedback
                     let generator = UINotificationFeedbackGenerator()
                     generator.notificationOccurred(.success)
-                    
+
                     print("✅ Library reset complete - All works, settings, and queue cleared")
                 }
                 
