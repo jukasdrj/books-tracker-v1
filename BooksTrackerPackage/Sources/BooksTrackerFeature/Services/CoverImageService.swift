@@ -125,7 +125,7 @@ public final class CoverImageService {
         if work.primaryEdition?.coverURL != nil {
             return "primaryEdition"
         }
-        if work.coverImageURL != nil && !work.coverImageURL!.isEmpty {
+        if let coverImageURL = work.coverImageURL, !coverImageURL.isEmpty {
             return "work"
         }
         return "none"
