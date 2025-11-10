@@ -64,7 +64,9 @@ public struct InsightsView: View {
                 if let diversity = diversityStats {
                     HeroStatsCard(stats: diversity.heroStats) { stat in
                         // TODO: Jump to section (Phase 4)
+                        #if DEBUG
                         print("Tapped: \(stat.title)")
+                        #endif
                     }
                 }
 
@@ -88,7 +90,9 @@ public struct InsightsView: View {
                 // Cultural regions chart
                 CulturalRegionsChart(stats: diversity.culturalRegionStats) { region in
                     // TODO: Filter library (Phase 4)
+                    #if DEBUG
                     print("Tapped region: \(region.displayName)")
+                    #endif
                 }
 
                 // Gender chart
@@ -97,13 +101,17 @@ public struct InsightsView: View {
                     totalAuthors: diversity.totalAuthors
                 ) { gender in
                     // TODO: Filter library (Phase 4)
+                    #if DEBUG
                     print("Tapped gender: \(gender.displayName)")
+                    #endif
                 }
 
                 // Language tags
                 LanguageTagCloud(stats: diversity.languageStats) { language in
                     // TODO: Filter library (Phase 4)
+                    #if DEBUG
                     print("Tapped language: \(language)")
+                    #endif
                 }
             }
         }
@@ -162,7 +170,9 @@ public struct InsightsView: View {
 
             #if DEBUG
             let duration = Date().timeIntervalSince(startTime)
+            #if DEBUG
             print("📊 Insights calculation took \(String(format: "%.2f", duration * 1000))ms")
+            #endif
             #endif
         } catch {
             errorMessage = "Failed to calculate statistics: \(error.localizedDescription)"

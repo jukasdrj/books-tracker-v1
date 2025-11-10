@@ -38,7 +38,9 @@ public struct ImageCompressionService {
                    data.count <= maxSizeBytes {
                     #if DEBUG
                     let compressionRatio = Double(data.count) / Double(maxSizeBytes) * 100.0
+                    #if DEBUG
                     print("[Compression] ✅ Success: \(Int(resolution))px @ \(Int(quality * 100))% quality = \(data.count / 1000)KB (\(String(format: "%.1f", compressionRatio))% of limit)")
+                    #endif
                     #endif
                     return data
                 }
