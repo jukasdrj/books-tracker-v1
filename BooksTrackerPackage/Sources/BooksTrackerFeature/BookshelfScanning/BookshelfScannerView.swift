@@ -472,7 +472,9 @@ class BookshelfScanModel {
         // CRITICAL: Prevent device from sleeping during scan (25-40s AI processing)
         // iOS will kill the app if it enters background while WebSocket is waiting
         UIApplication.shared.isIdleTimerDisabled = true
+        #if DEBUG
         print("🔒 Idle timer disabled - device won't sleep during scan")
+        #endif
 
         // Save original image first for correction UI
         self.lastSavedImagePath = saveOriginalImage(image)
@@ -483,7 +485,9 @@ class BookshelfScanModel {
                 // Progress handler runs on MainActor - safe for UI updates
                 self.currentProgress = progress
                 self.currentStage = stage
+                #if DEBUG
                 print("📸 WebSocket progress: \(Int(progress * 100))% - \(stage)")
+                #endif
             }
 
             // Attach original image path to each detected book for correction UI
@@ -513,14 +517,18 @@ class BookshelfScanModel {
 
             // Re-enable idle timer on success
             UIApplication.shared.isIdleTimerDisabled = false
+            #if DEBUG
             print("🔓 Idle timer re-enabled")
+            #endif
 
         } catch {
             scanState = .error(error.localizedDescription)
 
             // CRITICAL: Re-enable idle timer on error (prevent battery drain)
             UIApplication.shared.isIdleTimerDisabled = false
+            #if DEBUG
             print("🔓 Idle timer re-enabled (error case)")
+            #endif
         }
     }
 }
