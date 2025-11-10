@@ -436,10 +436,14 @@ public struct SettingsView: View {
                 let generator = UINotificationFeedbackGenerator()
                 generator.notificationOccurred(.success)
 
+                #if DEBUG
                 print("✅ Library reset complete - All works, settings, and queue cleared")
+                #endif
                 
             } catch {
+                #if DEBUG
                 print("❌ Failed to reset library: \(error)")
+                #endif
                 
                 await MainActor.run {
                     // Error haptic
@@ -473,11 +477,15 @@ public struct SettingsView: View {
                 let allWorks = try modelContext.fetch(fetchDescriptor)
 
                 guard !allWorks.isEmpty else {
+                    #if DEBUG
                     print("📚 No books in library to enrich")
+                    #endif
                     return
                 }
 
+                #if DEBUG
                 print("📚 Queueing \(allWorks.count) books for enrichment")
+                #endif
 
                 // Queue all works for enrichment
                 let workIDs = allWorks.map { $0.persistentModelID }
@@ -486,17 +494,23 @@ public struct SettingsView: View {
                 // Start processing with progress handler
                 EnrichmentQueue.shared.startProcessing(in: modelContext) { completed, total, currentTitle in
                     // Progress is automatically shown via EnrichmentBanner in ContentView
+                    #if DEBUG
                     print("📊 Progress: \(completed)/\(total) - \(currentTitle)")
+                    #endif
                 }
 
                 // Haptic feedback
                 let generator = UINotificationFeedbackGenerator()
                 generator.notificationOccurred(.success)
 
+                #if DEBUG
                 print("✅ Enrichment started for \(allWorks.count) books")
+                #endif
 
             } catch {
+                #if DEBUG
                 print("❌ Failed to fetch works for enrichment: \(error)")
+                #endif
 
                 // Error haptic
                 let generator = UINotificationFeedbackGenerator()
@@ -610,7 +624,9 @@ struct CoverSelectionView: View {
                 }
                 try modelContext.save()
             } catch {
+                #if DEBUG
                 print("Failed to clear manual selections: \(error)")
+                #endif
             }
         }
     }

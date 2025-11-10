@@ -611,12 +611,16 @@ class ScanResultsModel {
 
                     try modelContext.save()
 
+                    #if DEBUG
                     print("✅ Imported enriched book: \(work.title)")
+                    #endif
                     enrichedImportCount += 1
                     importedViaPathA = true
 
                 } catch {
+                    #if DEBUG
                     print("❌ Path A failed for enriched book: \(error). Falling back to Path B.")
+                    #endif
                     // Fall through to Path B below
                 }
             }
@@ -679,11 +683,15 @@ class ScanResultsModel {
                     // Track for enrichment queue
                     addedWorksForQueue.append(work)
 
+                    #if DEBUG
                     print("⚠️ Queued book for enrichment: \(work.title)")
+                    #endif
                     queuedImportCount += 1
 
                 } catch {
+                    #if DEBUG
                     print("❌ Failed to import book (Path B): \(error)")
+                    #endif
                 }
             }
         }
@@ -692,7 +700,9 @@ class ScanResultsModel {
         if !addedWorksForQueue.isEmpty {
             let workIDs = addedWorksForQueue.map { $0.persistentModelID }
             EnrichmentQueue.shared.enqueueBatch(workIDs)
+            #if DEBUG
             print("📚 Queued \(workIDs.count) books from scan for background enrichment")
+            #endif
 
             // Delay enrichment to allow SwiftData to fully persist newly created works
             Task {
@@ -704,8 +714,12 @@ class ScanResultsModel {
         }
 
         // Analytics logging
+        #if DEBUG
         print("📊 Import complete: \(enrichedImportCount) enriched, \(queuedImportCount) queued")
+        #endif
+        #if DEBUG
         print("📊 Analytics: bookshelf_import_completed - total: \(selectedBooks.count), enriched: \(enrichedImportCount), queued: \(queuedImportCount)")
+        #endif
 
         isAdding = false
     }

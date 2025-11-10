@@ -448,16 +448,22 @@ class BookshelfScanModel {
         let fileURL = tempDirectory.appendingPathComponent(filename)
 
         guard let imageData = image.jpegData(compressionQuality: 0.8) else {
+            #if DEBUG
             print("⚠️ Failed to convert image to JPEG data")
+            #endif
             return nil
         }
 
         do {
             try imageData.write(to: fileURL)
+            #if DEBUG
             print("✅ Saved original image to: \(fileURL.path)")
+            #endif
             return fileURL.path
         } catch {
+            #if DEBUG
             print("❌ Failed to save original image: \(error)")
+            #endif
             return nil
         }
     }

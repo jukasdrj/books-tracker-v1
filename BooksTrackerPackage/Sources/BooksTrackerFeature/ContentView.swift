@@ -155,7 +155,9 @@ public struct ContentView: View {
                     onEnrichmentFailed: { payload in
                         isEnriching = false
                         // TODO: Display error to user (e.g., banner or alert)
+                        #if DEBUG
                         print("❌ Enrichment failed: \(payload.errorMessage)")
+                        #endif
                     },
                     onSearchForAuthor: { payload in
                         selectedTab = .search

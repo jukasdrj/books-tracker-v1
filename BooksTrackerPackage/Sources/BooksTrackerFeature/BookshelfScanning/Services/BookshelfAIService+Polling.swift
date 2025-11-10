@@ -22,7 +22,9 @@ extension BookshelfAIService {
         provider: AIProvider,
         progressHandler: @MainActor @escaping (Double, String) -> Void
     ) async throws(BookshelfAIError) -> ([DetectedBook], [SuggestionViewModel]) {
+        #if DEBUG
         print("📊 Using HTTP polling fallback for job \(jobId)")
+        #endif
 
         // STEP 1: Compress image
         let config = provider.preprocessingConfig
@@ -50,7 +52,9 @@ extension BookshelfAIService {
             guard let httpResponse = response as? HTTPURLResponse, (200...299).contains(httpResponse.statusCode) else {
                 throw BookshelfAIError.serverError(500, "Upload failed")
             }
+            #if DEBUG
             print("✅ Image uploaded with jobId: \(jobId) (polling mode)")
+            #endif
         } catch {
             throw .networkError(error)
         }
@@ -72,11 +76,15 @@ extension BookshelfAIService {
                     progressHandler(progress, statusMessage)
                 }
 
+                #if DEBUG
                 print("📊 Poll #\(pollCount): \(Int(progress * 100))% - \(statusMessage)")
+                #endif
 
                 // Check if complete
                 if let result = status.result {
+                    #if DEBUG
                     print("✅ Polling complete after \(pollCount) polls")
+                    #endif
 
                     let detectedBooks = result.books.compactMap { aiBook in
                         self.convertToDetectedBook(aiBook)
