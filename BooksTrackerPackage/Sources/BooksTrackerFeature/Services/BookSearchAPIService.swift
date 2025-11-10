@@ -126,11 +126,11 @@ public class BookSearchAPIService {
 
         if isAuthorOnlySearch, let authorName = author {
             // Use v1 advanced search with author-only parameter
-            urlComponents = URLComponents(string: "\(baseURL)/v1/search/advanced")!
+            urlComponents = URLComponents(string: "\(EnrichmentConfig.baseURL)/v1/search/advanced")!
             queryItems.append(URLQueryItem(name: "author", value: authorName))
         } else {
             // Use v1 advanced search endpoint for multi-criteria queries
-            urlComponents = URLComponents(string: "\(baseURL)/v1/search/advanced")!
+            urlComponents = URLComponents(string: "\(EnrichmentConfig.baseURL)/v1/search/advanced")!
 
             if let author = author, !author.isEmpty {
                 queryItems.append(URLQueryItem(name: "author", value: author))
