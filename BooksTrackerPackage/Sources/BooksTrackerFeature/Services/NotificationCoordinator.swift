@@ -40,6 +40,16 @@ public final class NotificationCoordinator {
     }
 
     @MainActor
+    public static func postEnrichmentFailed(error: String) {
+        let payload = EnrichmentFailedPayload(errorMessage: error)
+        NotificationCenter.default.post(
+            name: .enrichmentFailed,
+            object: nil,
+            userInfo: ["payload": payload]
+        )
+    }
+
+    @MainActor
     public static func postSearchForAuthor(authorName: String) {
         let payload = SearchForAuthorPayload(authorName: authorName)
         NotificationCenter.default.post(

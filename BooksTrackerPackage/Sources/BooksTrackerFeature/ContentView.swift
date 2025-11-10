@@ -185,6 +185,7 @@ extension Notification.Name {
     static let enrichmentStarted = Notification.Name("EnrichmentStarted")
     static let enrichmentProgress = Notification.Name("EnrichmentProgress")
     static let enrichmentCompleted = Notification.Name("EnrichmentCompleted")
+    static let enrichmentFailed = Notification.Name("EnrichmentFailed")
     static let libraryWasReset = Notification.Name("LibraryWasReset")
     static let searchForAuthor = Notification.Name("SearchForAuthor")
 }
