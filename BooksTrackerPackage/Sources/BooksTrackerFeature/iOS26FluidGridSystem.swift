@@ -48,12 +48,17 @@ struct iOS26FluidGridSystem<Item: Identifiable, Content: View>: View {
     private func estimatedHeight(for itemCount: Int) -> CGFloat {
         guard itemCount > 0 else { return 0 }
 
-        // Estimate based on typical book card height (~250pt) + spacing
-        let estimatedCardHeight: CGFloat = 250
+        // ✅ FIXED: Accurate height for iOS26FloatingBookCard
+        // Image (240pt) + spacing (10pt) + info card (50pt) = 300pt
+        let estimatedCardHeight: CGFloat = 300
+        
+        // Buffer for shadow effects and material blur rendering
+        let visualEffectsBuffer: CGFloat = 16
+        
         let columnCount = max(columns.count, 2)  // Default to 2 columns minimum
         let rowCount = ceil(Double(itemCount) / Double(columnCount))
 
-        return CGFloat(rowCount) * (estimatedCardHeight + spacing) - spacing
+        return CGFloat(rowCount) * (estimatedCardHeight + visualEffectsBuffer + spacing) - spacing
     }
 
     // MARK: - Adaptive Column Logic
