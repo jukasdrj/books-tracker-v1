@@ -2,6 +2,19 @@ import SwiftUI
 
 // MARK: - iOS 26 Fluid Grid System
 
+/// Height constants for iOS26FloatingBookCard used in grid estimation
+private enum CardDimensions {
+    /// Cover image height from iOS26FloatingBookCard.swift:102
+    static let coverHeight: CGFloat = 240
+    /// VStack spacing + info card height (author, title, etc.)
+    static let infoAreaHeight: CGFloat = 50
+    /// Total card height: cover + spacing + info area
+    static let totalCardHeight: CGFloat = coverHeight + infoAreaHeight // 290pt
+
+    /// Buffer for shadows and glass material effects (added once at bottom of grid)
+    static let visualEffectsBuffer: CGFloat = 16
+}
+
 /// Advanced fluid grid that adapts to screen size and content
 /// V1.0 Specification: 2 columns on phone, more on tablet with smooth transitions
 struct iOS26FluidGridSystem<Item: Identifiable, Content: View>: View {
@@ -49,18 +62,12 @@ struct iOS26FluidGridSystem<Item: Identifiable, Content: View>: View {
     private func estimatedHeight(for itemCount: Int, in size: CGSize) -> CGFloat {
         guard itemCount > 0 else { return 0 }
 
-        // Accurate estimation: 240pt card (iOS26FloatingBookCard.swift:102) + 50pt info/padding = 290pt
-        let estimatedCardHeight: CGFloat = 290
-
-        // Buffer for shadows/materials (added ONCE at bottom, not per row)
-        let visualEffectsBuffer: CGFloat = 16
-
         // Use actual adaptive column logic instead of static columns.count
         let columnCount = calculateOptimalColumns(for: size)
         let rowCount = ceil(Double(itemCount) / Double(columnCount))
 
-        // CORRECT: buffer added once after all rows, not multiplied per row
-        return CGFloat(rowCount) * (estimatedCardHeight + spacing) - spacing + visualEffectsBuffer
+        // Calculate total height: rows × (card + spacing) - last spacing + buffer
+        return CGFloat(rowCount) * (CardDimensions.totalCardHeight + spacing) - spacing + CardDimensions.visualEffectsBuffer
     }
 
     // MARK: - Adaptive Column Logic
