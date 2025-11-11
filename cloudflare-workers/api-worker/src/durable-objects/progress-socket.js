@@ -1,4 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
+import { WebSocketMessageFactory } from '../types/websocket-messages.js';
 
 /**
  * Durable Object for managing WebSocket connections per job
@@ -15,6 +16,7 @@ export class ProgressWebSocketDO extends DurableObject {
     this.isReady = false; // NEW: Track if client sent ready signal
     this.readyPromise = null; // NEW: Promise to await ready signal
     this.readyResolver = null; // NEW: Resolver for ready promise
+    this.currentState = {};
   }
 
   /**
@@ -69,7 +71,7 @@ export class ProgressWebSocketDO extends DurableObject {
     console.log(`[${this.jobId}] WebSocket connection accepted, waiting for ready signal`);
 
     // Setup event handlers
-    this.webSocket.addEventListener('message', (event) => {
+    this.webSocket.addEventListener('message', async (event) => {
       console.log(`[${this.jobId}] Received message:`, event.data);
 
       // Parse incoming message
@@ -87,24 +89,32 @@ export class ProgressWebSocketDO extends DurableObject {
           return;
         }
 
-        // Handle ready signal
-        if (msg.type === 'ready') {
-          console.log(`[${this.jobId}] ✅ Client ready signal received`);
-          this.isReady = true;
+        switch (msg.type) {
+          case 'ready':
+            console.log(`[${this.jobId}] ✅ Client ready signal received`);
+            this.isReady = true;
 
-          // Resolve the ready promise to unblock processing
-          if (this.readyResolver) {
-            this.readyResolver();
-            this.readyResolver = null; // Prevent multiple resolves
-          }
+            // Resolve the ready promise to unblock processing
+            if (this.readyResolver) {
+              this.readyResolver();
+              this.readyResolver = null; // Prevent multiple resolves
+            }
 
-          // Send acknowledgment back to client
-          this.webSocket.send(JSON.stringify({
-            type: 'ready_ack',
-            timestamp: Date.now()
-          }));
-        } else {
-          console.log(`[${this.jobId}] Unknown message type: ${msg.type}`);
+            // Send acknowledgment back to client
+            this.webSocket.send(JSON.stringify({
+              type: 'ready_ack',
+              timestamp: Date.now()
+            }));
+            break;
+          case 'ping':
+            this.handlePing(msg.pipeline, msg.payload);
+            break;
+          case 'sync_request':
+            await this.handleSyncRequest(msg.pipeline);
+            break;
+          default:
+            console.log(`[${this.jobId}] Unknown message type: ${msg.type}`);
+            break;
         }
       } catch (error) {
         console.error(`[${this.jobId}] Failed to parse message:`, error);
@@ -129,6 +139,79 @@ export class ProgressWebSocketDO extends DurableObject {
         'Access-Control-Allow-Origin': '*'
       }
     });
+  }
+
+  sendMessage(message) {
+    if (!this.webSocket) {
+      console.warn(`[${this.jobId}] No WebSocket connection available. Dropping message.`, { type: message.type });
+      return false;
+    }
+    try {
+      this.webSocket.send(JSON.stringify(message));
+      console.log(`[${this.jobId}] Message sent successfully: ${message.type}`);
+      return true;
+    } catch (error) {
+      console.error(`[${this.jobId}] Failed to send message:`, error);
+      return false;
+    }
+  }
+
+  async sendJobStarted(pipeline, payload) {
+    console.log(`[${this.jobId}] sendJobStarted called for pipeline: ${pipeline}`);
+    const message = WebSocketMessageFactory.createJobStarted(this.jobId, pipeline, payload);
+    this.currentState = { status: 'running', processedCount: 0, totalCount: payload.totalCount };
+    await this.storage.put('currentState', this.currentState);
+    return this.sendMessage(message);
+  }
+
+  async updateProgressV2(pipeline, payload) {
+    const message = WebSocketMessageFactory.createJobProgress(this.jobId, pipeline, payload);
+    this.currentState.processedCount = payload.processedCount;
+    this.currentState.currentTitle = payload.currentTitle;
+    await this.storage.put('currentState', this.currentState);
+    return this.sendMessage(message);
+  }
+
+  async completeV2(pipeline, payload) {
+    console.log(`[${this.jobId}] completeV2 called for pipeline: ${pipeline}`);
+    const message = WebSocketMessageFactory.createJobComplete(this.jobId, pipeline, payload);
+    this.currentState = { status: 'complete', ...payload };
+    await this.storage.put('currentState', this.currentState);
+    this.sendMessage(message);
+    setTimeout(() => {
+      this.closeConnection('Job completed');
+    }, 1000);
+  }
+
+  async sendError(pipeline, payload) {
+    console.error(`[${this.jobId}] sendError called for pipeline: ${pipeline}`, payload);
+    const message = WebSocketMessageFactory.createError(this.jobId, pipeline, payload);
+    this.currentState = { status: 'error', ...payload };
+    await this.storage.put('currentState', this.currentState);
+    this.sendMessage(message);
+    setTimeout(() => {
+      this.closeConnection('Job failed');
+    }, 1000);
+  }
+
+  handlePing(pipeline, payload) {
+    console.log(`[${this.jobId}] Received ping, sending pong.`);
+    const pongMessage = WebSocketMessageFactory.createPong(this.jobId, pipeline, { clientTime: payload?.clientTime });
+    this.sendMessage(pongMessage);
+  }
+
+  async handleSyncRequest(pipeline) {
+    console.log(`[${this.jobId}] Received sync request, sending current state.`);
+    const currentState = await this.storage.get('currentState');
+    const message = {
+      type: 'sync_response',
+      jobId: this.jobId,
+      pipeline: pipeline,
+      timestamp: Date.now(),
+      version: '1.0.0',
+      payload: { state: currentState || this.currentState }
+    };
+    this.sendMessage(message);
   }
 
   /**
@@ -255,6 +338,7 @@ export class ProgressWebSocketDO extends DurableObject {
   }
 
   /**
+   * @deprecated Use updateProgressV2 instead.
    * RPC Method: Update progress for batch enrichment and CSV import
    * Called by background processors to send progress updates to iOS client
    *
@@ -264,6 +348,7 @@ export class ProgressWebSocketDO extends DurableObject {
    * @returns {Promise<{success: boolean}>}
    */
   async updateProgress(progress, status, keepAlive = false) {
+    console.warn(`[${this.jobId}] DEPRECATION WARNING: updateProgress is deprecated. Use updateProgressV2 instead.`);
     console.log(`[${this.jobId}] updateProgress called`, { progress, status, keepAlive });
 
     if (!this.webSocket) {
@@ -293,6 +378,7 @@ export class ProgressWebSocketDO extends DurableObject {
   }
 
   /**
+   * @deprecated Use completeV2 instead.
    * RPC Method: Complete job successfully
    * Called by background processors when job finishes successfully
    *
@@ -300,6 +386,7 @@ export class ProgressWebSocketDO extends DurableObject {
    * @returns {Promise<{success: boolean}>}
    */
   async complete(data) {
+    console.warn(`[${this.jobId}] DEPRECATION WARNING: complete is deprecated. Use completeV2 instead.`);
     console.log(`[${this.jobId}] complete called`, { data });
 
     if (!this.webSocket) {
@@ -334,6 +421,7 @@ export class ProgressWebSocketDO extends DurableObject {
   }
 
   /**
+   * @deprecated Use sendError instead.
    * RPC Method: Fail job with error
    * Called by background processors when job encounters an error
    *
@@ -341,6 +429,7 @@ export class ProgressWebSocketDO extends DurableObject {
    * @returns {Promise<{success: boolean}>}
    */
   async fail(errorData) {
+    console.warn(`[${this.jobId}] DEPRECATION WARNING: fail is deprecated. Use sendError instead.`);
     console.log(`[${this.jobId}] fail called`, { errorData });
 
     if (!this.webSocket) {

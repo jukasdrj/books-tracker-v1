@@ -157,7 +157,11 @@ export async function handleBatchEnrichment(request, env, ctx) {
  * @param {Object} env - Worker environment bindings
  */
 async function processBatchEnrichment(books, doStub, env) {
+  const startTime = Date.now();
   try {
+    await doStub.sendJobStarted('batch_enrichment', {
+      totalCount: books.length,
+    });
     // Reuse existing enrichBooksParallel() logic
     const enrichedBooks = await enrichBooksParallel(
       books,
@@ -186,21 +190,29 @@ async function processBatchEnrichment(books, doStub, env) {
         }
       },
       async (completed, total, title, hasError) => {
-        const progress = completed / total;
-        const status = hasError
-          ? `Enriching (${completed}/${total}): ${title} [failed]`
-          : `Enriching (${completed}/${total}): ${title}`;
-        await doStub.updateProgress(progress, status);
+        await doStub.updateProgressV2('batch_enrichment', {
+          processedCount: completed,
+          currentTitle: title,
+          userMessage: hasError ? `Failed: ${title}` : 'Finding cover art and details...',
+        });
       },
       10 // Concurrency limit
     );
-
-    await doStub.complete({ books: enrichedBooks });
-
+    const successCount = enrichedBooks.filter(b => b.success).length;
+    await doStub.completeV2('batch_enrichment', {
+      successCount,
+      failureCount: books.length - successCount,
+      duration: Math.floor((Date.now() - startTime) / 1000),
+      results: { books: enrichedBooks },
+      summary: `Enriched ${successCount} of ${books.length} books`,
+    });
   } catch (error) {
-    await doStub.fail({
-      error: error.message,
-      suggestion: 'Retry batch enrichment request'
+    await doStub.sendError('batch_enrichment', {
+      code: 'ENRICHMENT_FAILED',
+      message: error.message,
+      userMessage: 'Enrichment failed. Please try again.',
+      retryable: true,
+      details: { stack: error.stack },
     });
   }
 }
