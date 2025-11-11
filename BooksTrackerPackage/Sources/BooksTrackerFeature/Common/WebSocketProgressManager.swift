@@ -583,64 +583,103 @@ public final class WebSocketProgressManager {
         }
     }
 
-    /// Parse JSON progress update
+    /// Parse JSON progress update (unified schema)
     private func parseProgressUpdate(_ json: String) async {
         guard let data = json.data(using: .utf8) else { return }
 
+        // Check for legacy ready_ack message
+        if json.contains("\"type\":\"ready_ack\"") {
+            #if DEBUG
+            print("✅ Backend acknowledged ready signal")
+            #endif
+            return
+        }
+
         do {
             let decoder = JSONDecoder()
-            let message = try decoder.decode(WebSocketMessage.self, from: data)
+            // Use unified WebSocket schema (Phase 1 #363)
+            let message = try decoder.decode(TypedWebSocketMessage.self, from: data)
 
-            // Convert to JobProgress, preserving keepAlive flag and scan result
-            let progress = JobProgress(
-                totalItems: message.data.totalItems,
-                processedItems: message.data.processedItems,
-                currentStatus: message.data.currentStatus,
-                keepAlive: message.data.keepAlive,  // Pass through keepAlive flag
-                scanResult: message.data.result.map { scanData in
-                    // Convert ScanResultData to ScanResultPayload
-                    ScanResultPayload(
-                        totalDetected: scanData.totalDetected,
-                        approved: scanData.approved,
-                        needsReview: scanData.needsReview,
-                        books: (scanData.books ?? []).map { book in
-                            ScanResultPayload.BookPayload(
-                                title: book.title,
-                                author: book.author,
-                                isbn: book.isbn,
-                                format: book.format,  // NEW: Format from Gemini
-                                confidence: book.confidence,
-                                boundingBox: ScanResultPayload.BookPayload.BoundingBoxPayload(
-                                    x1: book.boundingBox.x1,
-                                    y1: book.boundingBox.y1,
-                                    x2: book.boundingBox.x2,
-                                    y2: book.boundingBox.y2
-                                ),
-                                enrichment: book.enrichment.map { enr in
-                                    ScanResultPayload.BookPayload.EnrichmentPayload(
-                                        status: enr.status,
-                                        work: enr.work,
-                                        editions: enr.editions,
-                                        authors: enr.authors,
-                                        provider: enr.provider,
-                                        cachedResult: enr.cachedResult
-                                    )
-                                }
-                            )
-                        },
-                        metadata: ScanResultPayload.ScanMetadataPayload(
-                            processingTime: scanData.metadata.processingTime,
-                            enrichedCount: scanData.metadata.enrichedCount,
-                            timestamp: scanData.metadata.timestamp,
-                            modelUsed: scanData.metadata.modelUsed
-                        )
-                    )
+            // Verify this is for ai_scan pipeline
+            guard message.pipeline == .aiScan else {
+                #if DEBUG
+                print("⚠️ Ignoring message for different pipeline: \(message.pipeline)")
+                #endif
+                return
+            }
+
+            switch message.payload {
+            case .jobProgress(let progressPayload):
+                // Convert to legacy JobProgress format for compatibility
+                let progress = JobProgress(
+                    totalItems: 1, // AI scan is single-item
+                    processedItems: progressPayload.progress >= 1.0 ? 1 : 0,
+                    currentStatus: progressPayload.status,
+                    keepAlive: progressPayload.keepAlive,
+                    scanResult: nil  // Only in completion
+                )
+
+                await MainActor.run {
+                    progressHandler?(progress)
                 }
-            )
 
-            // Call progress handler on MainActor
-            await MainActor.run {
-                progressHandler?(progress)
+            case .jobComplete(let completePayload):
+                // Extract AI scan-specific completion data
+                guard case .aiScan(let aiPayload) = completePayload else {
+                    #if DEBUG
+                    print("❌ Wrong completion payload type for ai_scan")
+                    #endif
+                    return
+                }
+
+                // Convert unified schema to legacy ScanResultPayload
+                let scanResult = ScanResultPayload(
+                    totalDetected: aiPayload.totalDetected,
+                    approved: aiPayload.approved,
+                    needsReview: aiPayload.needsReview,
+                    books: aiPayload.books.map { book in
+                        ScanResultPayload.BookPayload(
+                            title: book.title ?? "",
+                            author: book.author ?? "",
+                            isbn: book.isbn,
+                            format: nil, // Not in unified schema yet
+                            confidence: book.confidence ?? 0.0,
+                            boundingBox: book.boundingBox.map { bbox in
+                                ScanResultPayload.BookPayload.BoundingBoxPayload(
+                                    x1: bbox.x1, y1: bbox.y1, x2: bbox.x2, y2: bbox.y2
+                                )
+                            } ?? ScanResultPayload.BookPayload.BoundingBoxPayload(x1: 0, y1: 0, x2: 0, y2: 0),
+                            enrichment: nil  // Enrichment not in unified schema
+                        )
+                    },
+                    metadata: ScanResultPayload.ScanMetadataPayload(
+                        processingTime: 0,  // Not in unified schema
+                        enrichedCount: aiPayload.approved,
+                        timestamp: String(message.timestamp),
+                        modelUsed: "gemini-2.0-flash"
+                    )
+                )
+
+                let progress = JobProgress(
+                    totalItems: 1,
+                    processedItems: 1,
+                    currentStatus: "Complete!",
+                    keepAlive: false,
+                    scanResult: scanResult
+                )
+
+                await MainActor.run {
+                    progressHandler?(progress)
+                }
+
+            case .error(let errorPayload):
+                #if DEBUG
+                print("❌ WebSocket error: \(errorPayload.message)")
+                #endif
+
+            case .jobStarted, .ping, .pong:
+                // No action needed
+                break
             }
 
         } catch {
