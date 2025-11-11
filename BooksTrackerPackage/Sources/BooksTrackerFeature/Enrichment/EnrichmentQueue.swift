@@ -27,7 +27,7 @@ public final class EnrichmentQueue {
     private var queue: [EnrichmentQueueItem] = []
     private var processing: Bool = false
     private var currentTask: Task<Void, Never>?
-    private var webSocketHandler: EnrichmentWebSocketHandler?
+    private var webSocketClient: RobustWebSocketClient?
     // Track current backend job ID for cancellation
     private var currentJobId: String?
     // Activity tracking for timeout watchdog
@@ -217,8 +217,8 @@ public final class EnrichmentQueue {
             // ✅ GUARANTEE cleanup on ALL exit paths (success, timeout, error, cancellation)
             defer {
                 self.processing = false
-                self.webSocketHandler?.disconnect()
-                self.webSocketHandler = nil
+                self.webSocketClient?.disconnect()
+                self.webSocketClient = nil
                 self.clearCurrentJobId()
                 #if DEBUG
                 print("🧹 Enrichment cleanup executed")
@@ -299,29 +299,65 @@ public final class EnrichmentQueue {
         modelContext: ModelContext,
         progressHandler: @escaping (Int, Int, String) -> Void
     ) async {
-        self.webSocketHandler = EnrichmentWebSocketHandler(
-            jobId: jobId,
-            progressHandler: { [weak self] processed, total, title in
-                // ✅ Reset activity timer on EVERY WebSocket message
-                self?.resetActivityTimer()
-                progressHandler(processed, total, title)
-                NotificationCoordinator.postEnrichmentProgress(completed: processed, total: total, currentTitle: title)
+        let wsURL = EnrichmentConfig.webSocketURL(jobId: jobId)
+
+        webSocketClient = RobustWebSocketClient(
+            url: wsURL,
+            onMessage: { [weak self] message in
+                self?.handleWebSocketMessage(message, modelContext: modelContext, progressHandler: progressHandler)
             },
-            completionHandler: { [weak self] enrichedBooks in
-                guard let self = self else { return }
-                // ✅ Reset activity timer on completion message
-                self.resetActivityTimer()
-                // Apply enriched data to SwiftData models
-                self.applyEnrichedData(enrichedBooks, in: modelContext)
+            onError: { error in
+                NotificationCoordinator.postEnrichmentFailed(error: error.localizedDescription)
+            },
+            onConnectionStateChange: { state in
+                // Handle connection state changes if needed
             }
         )
-        await self.webSocketHandler?.connect()
+
+        webSocketClient?.connect()
 
         _ = await EnrichmentService.shared.batchEnrichWorks(works, jobId: jobId, in: modelContext)
 
         #if DEBUG
         print("✅ Batch enrichment job accepted. \(works.count) books queued for background processing via WebSocket")
         #endif
+    }
+
+    private func handleWebSocketMessage(
+        _ message: String,
+        modelContext: ModelContext,
+        progressHandler: @escaping (Int, Int, String) -> Void
+    ) {
+        guard let data = message.data(using: .utf8) else { return }
+
+        do {
+            let message = try JSONDecoder().decode(WebSocketMessageV2<[EnrichedBookPayload]>.self, from: data)
+
+            Task { @MainActor in
+                switch message.type {
+                case .progress:
+                    if let progress = message.payload.progress, let statusMessage = message.payload.statusMessage {
+                        let completed = Int(progress * Double(queue.count))
+                        progressHandler(completed, queue.count, statusMessage)
+                        NotificationCoordinator.postEnrichmentProgress(completed: completed, total: queue.count, currentTitle: statusMessage)
+                    }
+                case .complete:
+                    if let enrichedBooks = message.payload.data {
+                        applyEnrichedData(enrichedBooks, in: modelContext)
+                    }
+                    webSocketClient?.disconnect()
+                case .error:
+                    if let errorMessage = message.payload.errorMessage {
+                        NotificationCoordinator.postEnrichmentFailed(error: errorMessage)
+                    }
+                    webSocketClient?.disconnect()
+                default:
+                    break
+                }
+            }
+        } catch {
+            // Handle decoding error
+        }
     }
 
     /// Stop background processing

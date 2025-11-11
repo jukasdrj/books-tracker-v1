@@ -30,29 +30,19 @@ enum GeminiCSVImportError: Error, LocalizedError {
 
 // MARK: - Gemini CSV Import Response Models
 
-public struct GeminiCSVImportResponse: Codable, Sendable {
-    public let jobId: String
+public struct ParsedBook: Codable, Sendable, Equatable {
+    public let title: String
+    public let author: String
+    public let isbn: String?
+    public let coverUrl: String?
+    public let publisher: String?
+    public let publicationYear: Int?
+    public let enrichmentError: String?
 }
 
-public struct GeminiCSVImportJob: Codable, Sendable {
-    public let books: [ParsedBook]
-    public let errors: [ImportError]
-    public let successRate: String
-
-    public struct ParsedBook: Codable, Sendable, Equatable {
-        public let title: String
-        public let author: String
-        public let isbn: String?
-        public let coverUrl: String?
-        public let publisher: String?
-        public let publicationYear: Int?
-        public let enrichmentError: String?
-    }
-
-    public struct ImportError: Codable, Sendable, Equatable {
-        public let title: String
-        public let error: String
-    }
+public struct ImportError: Codable, Sendable, Equatable {
+    public let title: String
+    public let error: String
 }
 
 // MARK: - Gemini CSV Import Service
@@ -142,36 +132,19 @@ actor GeminiCSVImportService {
 
             // Accept both 200 (OK) and 202 (Accepted) for async job start
             if ![200, 202].contains(httpResponse.statusCode) {
-                // Try to decode error response to extract error code
-                if let errorResponse = try? JSONDecoder().decode(ApiResponse<GeminiCSVImportResponse>.self, from: data),
-                   case .failure(let apiError, _) = errorResponse {
-                    let errorMessageWithCode = apiError.code != nil
-                        ? "\(apiError.message) (Code: \(apiError.code!.rawValue))"
-                        : apiError.message
-                    throw GeminiCSVImportError.serverError(httpResponse.statusCode, errorMessageWithCode)
-                }
                 let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
                 throw GeminiCSVImportError.serverError(httpResponse.statusCode, errorMessage)
             }
 
-            // Decode canonical ApiResponse<GeminiCSVImportResponse>
+            // Decode the job ID from the response
             let decoder = JSONDecoder()
-            let envelope = try decoder.decode(ApiResponse<GeminiCSVImportResponse>.self, from: data)
+            let response = try decoder.decode([String: String].self, from: data)
 
-            // Check response type
-            switch envelope {
-            case .success(let importResponse, _):
-                #if DEBUG
-                print("[CSV Upload] ✅ Got jobId: \(importResponse.jobId)")
-                #endif
-                return importResponse.jobId
-
-            case .failure(let error, _):
-                #if DEBUG
-                print("[CSV Upload] ❌ API error: \(error.message)")
-                #endif
-                throw GeminiCSVImportError.serverError(httpResponse.statusCode, error.message)
+            guard let jobId = response["jobId"] else {
+                throw GeminiCSVImportError.invalidResponse
             }
+
+            return jobId
 
         } catch let error as GeminiCSVImportError {
             #if DEBUG

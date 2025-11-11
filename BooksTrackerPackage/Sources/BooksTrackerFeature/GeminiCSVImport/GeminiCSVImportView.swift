@@ -23,8 +23,7 @@ public struct GeminiCSVImportView: View {
     @State private var progress: Double = 0.0
     @State private var statusMessage: String = ""
     @State private var errorMessage: String?
-    @State private var webSocketTask: Task<Void, Never>?
-    @State private var webSocket: URLSessionWebSocketTask?
+    @State private var webSocketClient: RobustWebSocketClient?
 
     public init() {}
 
@@ -32,7 +31,7 @@ public struct GeminiCSVImportView: View {
         case idle
         case uploading
         case processing(progress: Double, message: String)
-        case completed(books: [GeminiCSVImportJob.ParsedBook], errors: [GeminiCSVImportJob.ImportError])
+        case completed(books: [ParsedBook], errors: [ImportError])
         case failed(String)
     }
 
@@ -68,7 +67,7 @@ public struct GeminiCSVImportView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
-                        cancelImport()
+                        webSocketClient?.disconnect()
                         dismiss()
                     }
                     .disabled(importStatus == .uploading)
@@ -80,9 +79,6 @@ public struct GeminiCSVImportView: View {
                 allowsMultipleSelection: false
             ) { result in
                 handleFileSelection(result)
-            }
-            .onDisappear {
-                cancelImport()
             }
         }
     }
@@ -152,7 +148,7 @@ public struct GeminiCSVImportView: View {
         .padding()
     }
 
-    private func completedView(books: [GeminiCSVImportJob.ParsedBook], errors: [GeminiCSVImportJob.ImportError]) -> some View {
+    private func completedView(books: [ParsedBook], errors: [ImportError]) -> some View {
         VStack(spacing: 20) {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 64))
@@ -287,181 +283,56 @@ public struct GeminiCSVImportView: View {
 
     private func startWebSocketProgress(jobId: String) {
         let wsURL = EnrichmentConfig.webSocketURL(jobId: jobId)
-        #if DEBUG
-        print("[CSV WebSocket] Connecting to backend")
-        #endif
 
-        webSocketTask = Task {
-            do {
-                // Use a new URLSession with default configuration, which is more reliable for
-                // WebSockets than the shared session. This mirrors the implementation in
-                // EnrichmentWebSocketHandler.
-                let session = URLSession(configuration: .default)
-                let webSocketTask = session.webSocketTask(with: wsURL)
-                self.webSocket = webSocketTask
-                webSocketTask.resume()
-                
-                // ✅ CRITICAL: Wait for WebSocket handshake to complete
-                // Prevents POSIX error 57 "Socket is not connected"
-                try await WebSocketHelpers.waitForConnection(webSocketTask, timeout: 10.0)
-                
-                #if DEBUG
-                print("[CSV WebSocket] ✅ WebSocket connection established")
-                #endif
-
-                // Send ready signal to backend (required for processing to start)
-                let readyMessage: [String: Any] = [
-                    "type": "ready",
-                    "timestamp": Date().timeIntervalSince1970 * 1000
-                ]
-                if let messageData = try? JSONSerialization.data(withJSONObject: readyMessage),
-                   let messageString = String(data: messageData, encoding: .utf8) {
-                    try await webSocketTask.send(.string(messageString))
-                    #if DEBUG
-                    print("[CSV WebSocket] ✅ Sent ready signal to backend")
-                    #endif
-                }
-
-                // Listen for messages
-                #if DEBUG
-                print("[CSV WebSocket] Waiting for messages...")
-                #endif
-                while !Task.isCancelled {
-                    let message = try await webSocketTask.receive()
-                    #if DEBUG
-                    print("[CSV WebSocket] 📨 Received message")
-                    #endif
-
-                    switch message {
-                    case .string(let text):
-                        #if DEBUG
-                        print("[CSV WebSocket] Message text: \(text.prefix(200))")
-                        #endif
-                        handleWebSocketMessage(text)
-                    case .data(let data):
-                        #if DEBUG
-                        print("[CSV WebSocket] Message data: \(data.count) bytes")
-                        #endif
-                        if let text = String(data: data, encoding: .utf8) {
-                            handleWebSocketMessage(text)
-                        }
-                    @unknown default:
-                        #if DEBUG
-                        print("[CSV WebSocket] ⚠️ Unknown message type")
-                        #endif
-                        break
-                    }
-                }
-                #if DEBUG
-                print("[CSV WebSocket] Message loop ended (task cancelled)")
-                #endif
-
-            } catch {
-                // Per best practices, use String(describing:) for detailed internal logging
-                // This provides more context than error.localizedDescription for debugging
-                let errorMessage = String(describing: error)
-                #if DEBUG
-                print("[CSV WebSocket] ❌ Error: \(errorMessage)")
-                #endif
-                if !Task.isCancelled {
-                    importStatus = .failed("Connection lost: \(errorMessage)")
-                }
+        webSocketClient = RobustWebSocketClient(
+            url: wsURL,
+            onMessage: { [weak self] message in
+                self?.handleWebSocketMessage(message)
+            },
+            onError: { [weak self] error in
+                self?.importStatus = .failed("Connection error: \(error.localizedDescription)")
+            },
+            onConnectionStateChange: { state in
+                // Handle connection state changes if needed
             }
-        }
+        )
+
+        webSocketClient?.connect()
     }
 
     private func handleWebSocketMessage(_ text: String) {
-        guard let data = text.data(using: .utf8) else {
-            #if DEBUG
-            print("[CSV WebSocket] ❌ Failed to convert text to data")
-            #endif
-            return
-        }
+        guard let data = text.data(using: .utf8) else { return }
 
         do {
-            let message = try JSONDecoder().decode(CSVWebSocketMessage.self, from: data)
-            #if DEBUG
-            print("[CSV WebSocket] Decoded message type: \(message.type)")
-            #endif
+            let message = try JSONDecoder().decode(WebSocketMessageV2<[ParsedBook]>.self, from: data)
 
-            // Dispatch UI updates to MainActor (WebSocket runs on background thread)
             Task { @MainActor in
                 switch message.type {
-                case "ready_ack":
-                    #if DEBUG
-                    print("[CSV WebSocket] ✅ Backend acknowledged ready signal, processing will start")
-                    #endif
-                    // The 'ready_ack' message is informational only: it indicates that the backend has received the
-                    // initial request and will begin processing. No UI state is updated here because actual progress
-                    // updates (including percentage and status) will be sent via subsequent 'progress' messages.
-                    // Only log this event; UI state changes are handled in the 'progress', 'complete', and 'error' cases.
-                    // Note: ready_ack messages have no 'data' field (see progress-socket.js:102-105)
-
-                case "progress":
-                    if let data = message.data,
-                       let progressValue = data.progress,
-                       let status = data.status {
-                        #if DEBUG
-                        print("[CSV WebSocket] Progress: \(Int(progressValue * 100))% - \(status)")
-                        #endif
-                        importStatus = .processing(progress: progressValue, message: status)
+                case .progress:
+                    if let progress = message.payload.progress, let statusMessage = message.payload.statusMessage {
+                        importStatus = .processing(progress: progress, message: statusMessage)
                     }
-
-                case "complete":
-                    if let data = message.data,
-                       let books = data.books {
-                        #if DEBUG
-                        print("[CSV WebSocket] ✅ Import complete: \(books.count) books")
-                        #endif
-                        let errors = data.errors ?? []
-                        importStatus = .completed(books: books, errors: errors)
+                case .complete:
+                    if let books = message.payload.data {
+                        importStatus = .completed(books: books, errors: [])
+                        webSocketClient?.disconnect()
                     }
-                    // Proactively close the connection from the client side
-                    // This prevents the ENOTCONN (57) "Socket not connected" error
-                    self.webSocket?.cancel(with: .goingAway, reason: "Job complete".data(using: .utf8))
-                    self.webSocketTask?.cancel()
-                    return  // Exit message loop - job is complete
-
-                case "error":
-                    if let data = message.data,
-                       let error = data.error {
-                        #if DEBUG
-                        print("[CSV WebSocket] ❌ Error from backend: \(error)")
-                        #endif
-                        importStatus = .failed(error)
+                case .error:
+                    if let errorMessage = message.payload.errorMessage {
+                        importStatus = .failed(errorMessage)
+                        webSocketClient?.disconnect()
                     }
-                    self.webSocket?.cancel(with: .goingAway, reason: "Job failed".data(using: .utf8))
-                    self.webSocketTask?.cancel()
-                    return  // Exit message loop - job failed
-
                 default:
-                    #if DEBUG
-                    print("[CSV WebSocket] ⚠️ Unknown message type: \(message.type)")
-                    #endif
                     break
                 }
             }
-
         } catch {
-            #if DEBUG
-            print("[CSV WebSocket] ❌ Failed to decode WebSocket message: \(error)")
-            #endif
-            #if DEBUG
-            print("[CSV WebSocket] Raw message: \(text)")
-            #endif
+            // Handle decoding error
         }
     }
 
-    private func cancelImport() {
-        // Explicitly close the WebSocket with a normal "going away" message
-        webSocket?.cancel(with: .goingAway, reason: "User canceled".data(using: .utf8))
-        webSocketTask?.cancel()
-        webSocket = nil
-        webSocketTask = nil
-    }
-
     @MainActor
-    private func saveBooks(_ books: [GeminiCSVImportJob.ParsedBook]) async -> Bool {
+    private func saveBooks(_ books: [ParsedBook]) async -> Bool {
         guard !books.isEmpty else {
             #if DEBUG
             print("⚠️ No books to save")
