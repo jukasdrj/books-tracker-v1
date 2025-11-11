@@ -172,6 +172,14 @@ export async function processBookshelfScan(jobId, imageData, request, env, doStu
       publicationYear: b.enrichment?.editions?.[0]?.publicationYear || null
     }));
 
+    // Final progress update before completion (100%)
+    await doStub.updateProgressV2('ai_scan', {
+      progress: 1.0,
+      status: 'Scan complete, finalizing results...',
+      processedCount: 3,
+      currentItem: 'Finalizing'
+    });
+
     // Send completion using V2 schema
     await doStub.completeV2('ai_scan', {
       totalDetected: detectedBooks.length,

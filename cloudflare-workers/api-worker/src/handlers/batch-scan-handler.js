@@ -5,9 +5,28 @@
 
 import { scanImageWithGemini } from '../providers/gemini-provider.js';
 import { createSuccessResponse, createErrorResponse } from '../utils/api-responses.js';
+import { enrichBooksParallel } from '../services/parallel-enrichment.js';
 
 const MAX_PHOTOS_PER_BATCH = 5;
 const MAX_IMAGE_SIZE = 10_000_000; // 10MB per image
+
+/**
+ * Helper function to map book objects to DetectedBook format
+ * Centralizes transformation logic to ensure consistency across all code paths
+ */
+function mapToDetectedBook(book) {
+  return {
+    title: book?.title,
+    author: book?.author,
+    isbn: book?.isbn,
+    confidence: book?.confidence,
+    boundingBox: book?.boundingBox,
+    enrichmentStatus: book?.enrichment?.status || book?.enrichmentStatus || 'pending',
+    coverUrl: book?.enrichment?.work?.coverImageURL || book?.coverUrl || null,
+    publisher: book?.enrichment?.editions?.[0]?.publisher || book?.publisher || null,
+    publicationYear: book?.enrichment?.editions?.[0]?.publicationYear || book?.publicationYear || null
+  };
+}
 
 export async function handleBatchScan(request, env, ctx) {
   try {
@@ -128,26 +147,48 @@ async function processBatchPhotos(jobId, images, env, doStub) {
         // Return partial results from completed photos
         const partialBooks = deduplicateBooks(allBooks);
 
-        const approvedCount = partialBooks.filter(b => b.confidence >= 0.6).length;
-        const reviewCount = partialBooks.filter(b => b.confidence < 0.6).length;
+        // Enrich partial results before returning
+        await doStub.updateProgressV2('ai_scan', {
+          progress: 0.8,
+          status: `Job canceled, enriching ${partialBooks.length} partial results...`,
+          processedCount: i,
+          currentItem: 'Enrichment phase'
+        });
+
+        const enrichedPartialBooks = await enrichBooksParallel(
+          partialBooks,
+          async (book) => {
+            const enrichedCount = enrichedPartialBooks ? enrichedPartialBooks.filter(b => b.enrichment).length : 0;
+            const enrichProgress = 0.8 + (0.2 * (enrichedCount / partialBooks.length));
+            await doStub.updateProgressV2('ai_scan', {
+              progress: enrichProgress,
+              status: `Enriching canceled job results... (${enrichedCount + 1}/${partialBooks.length})`,
+              processedCount: enrichedCount + 1,
+              currentItem: book.title || 'Unknown title'
+            });
+          },
+          env,
+          10
+        );
+
+        const approvedCount = enrichedPartialBooks.filter(b => b.confidence >= 0.6).length;
+        const reviewCount = enrichedPartialBooks.filter(b => b.confidence < 0.6).length;
+
+        // Final progress update before completion
+        await doStub.updateProgressV2('ai_scan', {
+          progress: 1.0,
+          status: 'Job canceled, returning partial results...',
+          processedCount: enrichedPartialBooks.length,
+          currentItem: 'Finalizing'
+        });
 
         // FIX: Removed non-standard 'canceled: true' field (not in AIScanCompletePayload schema)
         // Client will know about cancellation from progress messages showing partial results
         await doStub.completeV2('ai_scan', {
-          totalDetected: partialBooks.length,
+          totalDetected: enrichedPartialBooks.length,
           approved: approvedCount,
           needsReview: reviewCount,
-          books: partialBooks.map(book => ({
-            title: book.title,
-            author: book.author,
-            isbn: book.isbn,
-            confidence: book.confidence,
-            boundingBox: book.boundingBox,
-            enrichmentStatus: book.enrichmentStatus || 'pending',
-            coverUrl: book.coverUrl,
-            publisher: book.publisher,
-            publicationYear: book.publicationYear
-          }))
+          books: enrichedPartialBooks.map(mapToDetectedBook)
         });
 
         return; // Exit early with partial results
@@ -208,26 +249,50 @@ async function processBatchPhotos(jobId, images, env, doStub) {
     // Phase 3: Deduplicate books by ISBN
     const uniqueBooks = deduplicateBooks(allBooks);
 
-    // Calculate approved vs review queue counts (threshold: 0.6 confidence)
-    const approvedCount = uniqueBooks.filter(b => b.confidence >= 0.6).length;
-    const reviewCount = uniqueBooks.filter(b => b.confidence < 0.6).length;
+    // Phase 4: Enrich books with metadata (parallel)
+    // Update progress to show enrichment phase starting
+    await doStub.updateProgressV2('ai_scan', {
+      progress: 0.8,
+      status: `Enriching ${uniqueBooks.length} books with metadata...`,
+      processedCount: uploadResults.length,
+      currentItem: 'Enrichment phase'
+    });
 
-    // Send final completion using V2 schema
+    const enrichedBooks = await enrichBooksParallel(
+      uniqueBooks,
+      async (book) => {
+        // Progress callback for each enriched book
+        const enrichedCount = enrichedBooks ? enrichedBooks.filter(b => b.enrichment).length : 0;
+        const enrichProgress = 0.8 + (0.2 * (enrichedCount / uniqueBooks.length));
+        await doStub.updateProgressV2('ai_scan', {
+          progress: enrichProgress,
+          status: `Enriching books... (${enrichedCount + 1}/${uniqueBooks.length})`,
+          processedCount: enrichedCount + 1,
+          currentItem: book.title || 'Unknown title'
+        });
+      },
+      env,
+      10 // maxConcurrent
+    );
+
+    // Calculate approved vs review queue counts (threshold: 0.6 confidence)
+    const approvedCount = enrichedBooks.filter(b => b.confidence >= 0.6).length;
+    const reviewCount = enrichedBooks.filter(b => b.confidence < 0.6).length;
+
+    // Final progress update before completion (100%)
+    await doStub.updateProgressV2('ai_scan', {
+      progress: 1.0,
+      status: 'Batch scan complete, finalizing results...',
+      processedCount: uniqueBooks.length,
+      currentItem: 'Finalizing'
+    });
+
+    // Send final completion using V2 schema with enriched data
     await doStub.completeV2('ai_scan', {
-      totalDetected: uniqueBooks.length,
+      totalDetected: enrichedBooks.length,
       approved: approvedCount,
       needsReview: reviewCount,
-      books: uniqueBooks.map(book => ({
-        title: book.title,
-        author: book.author,
-        isbn: book.isbn,
-        confidence: book.confidence,
-        boundingBox: book.boundingBox,
-        enrichmentStatus: book.enrichmentStatus || 'pending',
-        coverUrl: book.coverUrl,
-        publisher: book.publisher,
-        publicationYear: book.publicationYear
-      }))
+      books: enrichedBooks.map(mapToDetectedBook)
     });
 
   } catch (error) {
