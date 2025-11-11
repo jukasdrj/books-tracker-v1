@@ -55,11 +55,8 @@ export async function handleBatchScan(request, env, ctx) {
 
     console.log(`[Batch Scan] Auth token generated for job ${jobId}`);
 
-    await doStub.initBatch({
-      jobId,
-      totalPhotos: images.length,
-      status: 'uploading'
-    });
+    // Initialize job state for batch scan
+    await doStub.initializeJobState('ai_scan', images.length);
 
     // Process batch asynchronously (don't await)
     ctx.waitUntil(processBatchPhotos(jobId, images, env, doStub));
@@ -103,7 +100,12 @@ async function processBatchPhotos(jobId, images, env, doStub) {
     const uploadResults = await Promise.all(uploadPromises);
 
     // Update progress after uploads - send initial processing status
-    await doStub.updateProgress(0.1, 'Photos uploaded, starting AI processing...');
+    await doStub.updateProgressV2('ai_scan', {
+      progress: 0.1,
+      status: 'Photos uploaded, starting AI processing...',
+      processedCount: 0,
+      currentItem: `Uploaded ${uploadResults.length} photos`
+    });
 
     // Phase 2: Process images sequentially with Gemini
     for (let i = 0; i < uploadResults.length; i++) {
@@ -118,35 +120,46 @@ async function processBatchPhotos(jobId, images, env, doStub) {
         continue;
       }
 
-      // Check if job canceled
-      const isCanceled = await doStub.isBatchCanceled();
-      if (isCanceled.canceled) {
+      // Check if job canceled (batch-specific cancellation check)
+      const { canceled: isCanceled } = await doStub.isBatchCanceled();
+      if (isCanceled) {
         console.log(`Job ${jobId} canceled at photo ${i}, returning partial results`);
 
         // Return partial results from completed photos
         const partialBooks = deduplicateBooks(allBooks);
 
-        await doStub.completeBatch({
-          status: 'canceled',
-          totalBooks: partialBooks.length,
-          photoResults: photoResults.concat(
-            // Mark remaining photos as skipped
-            uploadResults.slice(i).map((upload, idx) => ({
-              index: i + idx,
-              status: 'skipped',
-              booksFound: 0
-            }))
-          ),
-          books: partialBooks
+        const approvedCount = partialBooks.filter(b => b.confidence >= 0.6).length;
+        const reviewCount = partialBooks.filter(b => b.confidence < 0.6).length;
+
+        // FIX: Removed non-standard 'canceled: true' field (not in AIScanCompletePayload schema)
+        // Client will know about cancellation from progress messages showing partial results
+        await doStub.completeV2('ai_scan', {
+          totalDetected: partialBooks.length,
+          approved: approvedCount,
+          needsReview: reviewCount,
+          books: partialBooks.map(book => ({
+            title: book.title,
+            author: book.author,
+            isbn: book.isbn,
+            confidence: book.confidence,
+            boundingBox: book.boundingBox,
+            enrichmentStatus: book.enrichmentStatus || 'pending',
+            coverUrl: book.coverUrl,
+            publisher: book.publisher,
+            publicationYear: book.publicationYear
+          }))
         });
 
         return; // Exit early with partial results
       }
 
       // Update progress: processing this photo
-      await doStub.updatePhoto({
-        photoIndex: i,
-        status: 'processing'
+      const progress = (i + 0.5) / uploadResults.length;
+      await doStub.updateProgressV2('ai_scan', {
+        progress,
+        status: `Processing photo ${i + 1} of ${uploadResults.length}...`,
+        processedCount: i,
+        currentItem: `Photo ${i + 1}`
       });
 
       try {
@@ -165,10 +178,12 @@ async function processBatchPhotos(jobId, images, env, doStub) {
         allBooks.push(...result.books);
 
         // Update progress: photo complete
-        await doStub.updatePhoto({
-          photoIndex: i,
-          status: 'complete',
-          booksFound: result.books.length
+        const completionProgress = (i + 1) / uploadResults.length;
+        await doStub.updateProgressV2('ai_scan', {
+          progress: completionProgress,
+          status: `Completed photo ${i + 1} of ${uploadResults.length} - Found ${result.books.length} books`,
+          processedCount: i + 1,
+          currentItem: `Photo ${i + 1}: ${result.books.length} books`
         });
 
       } catch (error) {
@@ -180,10 +195,12 @@ async function processBatchPhotos(jobId, images, env, doStub) {
         });
 
         // Update progress: photo error
-        await doStub.updatePhoto({
-          photoIndex: i,
-          status: 'error',
-          error: error.message
+        const errorProgress = (i + 1) / uploadResults.length;
+        await doStub.updateProgressV2('ai_scan', {
+          progress: errorProgress,
+          status: `Error processing photo ${i + 1}: ${error.message}`,
+          processedCount: i + 1,
+          currentItem: `Photo ${i + 1}: Error`
         });
       }
     }
@@ -191,19 +208,37 @@ async function processBatchPhotos(jobId, images, env, doStub) {
     // Phase 3: Deduplicate books by ISBN
     const uniqueBooks = deduplicateBooks(allBooks);
 
-    // Send final completion
-    await doStub.completeBatch({
-      status: 'complete',
-      totalBooks: uniqueBooks.length,
-      photoResults,
-      books: uniqueBooks
+    // Calculate approved vs review queue counts (threshold: 0.6 confidence)
+    const approvedCount = uniqueBooks.filter(b => b.confidence >= 0.6).length;
+    const reviewCount = uniqueBooks.filter(b => b.confidence < 0.6).length;
+
+    // Send final completion using V2 schema
+    await doStub.completeV2('ai_scan', {
+      totalDetected: uniqueBooks.length,
+      approved: approvedCount,
+      needsReview: reviewCount,
+      books: uniqueBooks.map(book => ({
+        title: book.title,
+        author: book.author,
+        isbn: book.isbn,
+        confidence: book.confidence,
+        boundingBox: book.boundingBox,
+        enrichmentStatus: book.enrichmentStatus || 'pending',
+        coverUrl: book.coverUrl,
+        publisher: book.publisher,
+        publicationYear: book.publicationYear
+      }))
     });
 
   } catch (error) {
     console.error('Batch processing error:', error);
-    await doStub.fail({
-      error: error.message,
-      fallbackAvailable: false
+    await doStub.sendError('ai_scan', {
+      code: 'E_BATCH_SCAN_FAILED',
+      message: error.message,
+      retryable: true,
+      details: {
+        fallbackAvailable: false
+      }
     });
   }
 }
