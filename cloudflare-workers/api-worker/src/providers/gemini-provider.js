@@ -100,10 +100,10 @@ Extract all visible book information now.`
                     temperature: 0.4,  // Balanced: deterministic enough for accuracy, flexible enough for inference
                     topK: 40,          // Allow some variation for better book spine recognition
                     topP: 0.95,        // Nucleus sampling for quality
-                    maxOutputTokens: 2048,  // Prevent truncation
+                    maxOutputTokens: 8192,  // Increased from 2048 to prevent truncation with many books
                     responseMimeType: 'application/json',  // Force JSON output
-                    responseSchema: BOOKSHELF_RESPONSE_SCHEMA,  // Schema-enforced validation (guarantees structure)
-                    stopSequences: ['\n\n\n']  // Stop on triple newline (prevents unnecessary continuation)
+                    responseSchema: BOOKSHELF_RESPONSE_SCHEMA  // Schema-enforced validation (guarantees structure)
+                    // Removed stopSequences - was causing premature truncation
                 }
             })
         }
