@@ -112,7 +112,7 @@ public enum MessagePayload: Codable, Sendable {
 // MARK: - Job Started Payload
 
 public struct JobStartedPayload: Codable, Sendable {
-    public let type: String = "job_started"
+    public let type: String
     public let totalCount: Int?
     public let estimatedDuration: Int?      // Seconds
 }
@@ -120,7 +120,7 @@ public struct JobStartedPayload: Codable, Sendable {
 // MARK: - Job Progress Payload
 
 public struct JobProgressPayload: Codable, Sendable {
-    public let type: String = "job_progress"
+    public let type: String
     public let progress: Double             // 0.0 - 1.0
     public let status: String
     public let processedCount: Int?
@@ -174,8 +174,8 @@ public enum JobCompletePayload: Codable, Sendable {
 // MARK: - Batch Enrichment Complete Payload
 
 public struct BatchEnrichmentCompletePayload: Codable, Sendable {
-    public let type: String = "job_complete"
-    public let pipeline: String = "batch_enrichment"
+    public let type: String
+    public let pipeline: String
     public let totalProcessed: Int
     public let successCount: Int
     public let failureCount: Int
@@ -207,8 +207,8 @@ public struct EnrichedDataPayload: Codable, Sendable {
 // MARK: - CSV Import Complete Payload
 
 public struct CSVImportCompletePayload: Codable, Sendable {
-    public let type: String = "job_complete"
-    public let pipeline: String = "csv_import"
+    public let type: String
+    public let pipeline: String
     public let books: [ParsedBook]
     public let errors: [ImportError]
     public let successRate: String          // e.g., "45/50"
@@ -232,8 +232,8 @@ public struct ImportError: Codable, Sendable {
 // MARK: - AI Scan Complete Payload
 
 public struct AIScanCompletePayload: Codable, Sendable {
-    public let type: String = "job_complete"
-    public let pipeline: String = "ai_scan"
+    public let type: String
+    public let pipeline: String
     public let totalDetected: Int
     public let approved: Int
     public let needsReview: Int
@@ -262,13 +262,14 @@ public struct BoundingBox: Codable, Sendable {
 // MARK: - Error Payload
 
 public struct ErrorPayload: Codable, Sendable {
-    public let type: String = "error"
+    public let type: String
     public let code: String
     public let message: String
     public let details: AnyCodable?         // Optional: Additional context
     public let retryable: Bool?
 
-    public init(code: String, message: String, details: AnyCodable? = nil, retryable: Bool? = nil) {
+    public init(type: String = "error", code: String, message: String, details: AnyCodable? = nil, retryable: Bool? = nil) {
+        self.type = type
         self.code = code
         self.message = message
         self.details = details
@@ -279,12 +280,12 @@ public struct ErrorPayload: Codable, Sendable {
 // MARK: - Ping/Pong Payloads
 
 public struct PingPayload: Codable, Sendable {
-    public let type: String = "ping"
+    public let type: String
     public let timestamp: Int64
 }
 
 public struct PongPayload: Codable, Sendable {
-    public let type: String = "pong"
+    public let type: String
     public let timestamp: Int64
     public let latency: Int?                // Milliseconds
 }
