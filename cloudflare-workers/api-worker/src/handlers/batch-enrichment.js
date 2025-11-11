@@ -211,7 +211,6 @@ async function processBatchEnrichment(books, doStub, env, jobId) {
 
     // Call DO with pipeline and payload (DO constructs the message envelope)
     await doStub.completeV2('batch_enrichment', {
-      pipeline: 'batch_enrichment',
       totalProcessed,
       successCount,
       failureCount,

@@ -327,8 +327,15 @@ public final class EnrichmentQueue {
                 // ✅ Reset activity timer on completion message
                 self.resetActivityTimer()
 
-                // Extract enriched books from BatchEnrichmentCompletePayload
-                let enrichedBooks = completePayload.enrichedBooks
+                // Unwrap the batch enrichment case
+                guard case .batchEnrichment(let batchPayload) = completePayload else {
+                    #if DEBUG
+                    print("⚠️ Unexpected payload type for batch enrichment")
+                    #endif
+                    return
+                }
+
+                let enrichedBooks = batchPayload.enrichedBooks
 
                 // Apply enriched data to SwiftData models
                 self.applyEnrichedData(enrichedBooks, in: modelContext)

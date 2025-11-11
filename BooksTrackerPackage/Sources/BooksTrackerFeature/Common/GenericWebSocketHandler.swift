@@ -94,6 +94,13 @@ public final class GenericWebSocketHandler {
                     #if DEBUG
                     print("❌ WebSocket error (\(self.pipeline.rawValue)): \(error.localizedDescription)")
                     #endif
+                    let errorPayload = ErrorPayload(
+                        code: "WEBSOCKET_TRANSPORT_ERROR",
+                        message: error.localizedDescription,
+                        details: nil,
+                        retryable: true // Transport errors are often retryable
+                    )
+                    self.errorHandler(errorPayload)
                     self.disconnect()
                 }
             }
@@ -136,6 +143,14 @@ public final class GenericWebSocketHandler {
                 print("Raw JSON: \(jsonString)")
             }
             #endif
+            let errorPayload = ErrorPayload(
+                code: "CLIENT_DECODING_ERROR",
+                message: "Failed to decode WebSocket message: \(error.localizedDescription)",
+                details: AnyCodable(String(data: data, encoding: .utf8)),
+                retryable: false
+            )
+            errorHandler(errorPayload)
+            disconnect()
         }
     }
 
