@@ -192,6 +192,9 @@ export class ProgressWebSocketDO extends DurableObject {
    * RPC Method: Refresh authentication token
    * Called by iOS client to extend token expiration for long-running jobs
    *
+   * Security: Enforces 30-minute refresh window to prevent infinite token extension
+   * Tokens can only be refreshed in the last 30 minutes before expiration
+   *
    * @param {string} oldToken - Current token to validate
    * @returns {Promise<{token?: string, expiresIn?: number, error?: string}>}
    */
@@ -213,14 +216,29 @@ export class ProgressWebSocketDO extends DurableObject {
         return { error: 'Invalid token' };
       }
 
+      // Check if token is expired
       if (Date.now() > expiration) {
         console.warn(`[${this.jobId || 'unknown'}] Token refresh failed - token expired`);
         return { error: 'Token expired' };
       }
 
+      // Enforce 30-minute refresh window (prevents infinite extension)
+      // Tokens can only be refreshed in the last 30 minutes before expiration
+      const REFRESH_WINDOW_MS = 30 * 60 * 1000; // 30 minutes
+      const timeUntilExpiration = expiration - Date.now();
+      if (timeUntilExpiration > REFRESH_WINDOW_MS) {
+        const minutesRemaining = Math.floor(timeUntilExpiration / 60000);
+        console.warn(`[${this.jobId || 'unknown'}] Token refresh too early - ${minutesRemaining} minutes remaining`);
+        return {
+          error: 'Refresh not allowed yet',
+          details: `Token can be refreshed ${Math.floor((timeUntilExpiration - REFRESH_WINDOW_MS) / 60000)} minutes from now`
+        };
+      }
+
       // Generate new token and extend expiration by 2 hours
+      const TOKEN_EXPIRATION_MS = 2 * 60 * 60 * 1000; // 2 hours
       const newToken = crypto.randomUUID();
-      const newExpiration = Date.now() + (2 * 60 * 60 * 1000);
+      const newExpiration = Date.now() + TOKEN_EXPIRATION_MS;
       await this.storage.put('authToken', newToken);
       await this.storage.put('authTokenExpiration', newExpiration);
 

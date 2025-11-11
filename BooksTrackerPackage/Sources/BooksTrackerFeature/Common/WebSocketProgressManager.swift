@@ -82,7 +82,7 @@ public final class WebSocketProgressManager {
     private var progressHandler: ((JobProgress) -> Void)?
     private var disconnectionHandler: ((Error) -> Void)?
     private var boundJobId: String?
-    private var authToken: String?  // Stored for reconnection
+    // NOTE: authToken now stored securely in Keychain (see KeychainHelper)
 
     // Reconnection state
     private var reconnectionConfig: ReconnectionConfig = .default
@@ -111,8 +111,10 @@ public final class WebSocketProgressManager {
             throw URLError(.badURL, userInfo: ["reason": "WebSocket already connected"])
         }
 
-        // Store auth token for reconnection
-        self.authToken = token
+        // Store auth token securely in Keychain for reconnection
+        if let token = token {
+            try KeychainHelper.saveToken(token, for: jobId)
+        }
 
         // Create connection endpoint with client-provided jobId and optional token
         let url: URL
@@ -235,9 +237,27 @@ public final class WebSocketProgressManager {
             return
         }
 
-        guard let jobId = boundJobId, let token = authToken else {
+        guard let jobId = boundJobId else {
             #if DEBUG
-            print("❌ Cannot reconnect: missing jobId or token")
+            print("❌ Cannot reconnect: missing jobId")
+            #endif
+            return
+        }
+
+        // Retrieve token from Keychain
+        let token: String?
+        do {
+            token = try KeychainHelper.getToken(for: jobId)
+        } catch {
+            #if DEBUG
+            print("❌ Cannot reconnect: failed to retrieve token from Keychain: \(error)")
+            #endif
+            return
+        }
+
+        guard token != nil else {
+            #if DEBUG
+            print("❌ Cannot reconnect: no token found in Keychain")
             #endif
             return
         }
@@ -271,8 +291,8 @@ public final class WebSocketProgressManager {
                 receiveTask?.cancel()
                 receiveTask = nil
 
-                // Try to reconnect
-                _ = try await establishConnection(jobId: jobId, token: token)
+                // Try to reconnect (token already in Keychain)
+                _ = try await establishConnection(jobId: jobId, token: token!)
 
                 // If successful, sync state from server
                 await syncStateAfterReconnection()
@@ -307,61 +327,118 @@ public final class WebSocketProgressManager {
 
     /// Sync state from server after reconnection
     /// Fetches latest job state to avoid missing progress updates
+    /// Retries up to 3 times with exponential backoff on failure
     private func syncStateAfterReconnection() async {
-        guard let jobId = boundJobId, let token = authToken else {
+        guard let jobId = boundJobId else {
             #if DEBUG
-            print("⚠️ Cannot sync state: missing jobId or token")
+            print("⚠️ Cannot sync state: missing jobId")
             #endif
             return
         }
 
+        // Retrieve token from Keychain
+        let token: String
         do {
-            // Call backend to get current job state
-            let stateURL = URL(string: "\(EnrichmentConfig.apiBaseURL)/api/job-state/\(jobId)")!
-            var request = URLRequest(url: stateURL)
-            request.httpMethod = "GET"
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-
-            let (data, response) = try await URLSession.shared.data(for: request)
-
-            guard let httpResponse = response as? HTTPURLResponse else {
+            guard let retrievedToken = try KeychainHelper.getToken(for: jobId) else {
                 #if DEBUG
-                print("⚠️ State sync failed: invalid response")
+                print("⚠️ Cannot sync state: no token found in Keychain")
                 #endif
                 return
             }
-
-            guard httpResponse.statusCode == 200 else {
-                #if DEBUG
-                print("⚠️ State sync failed: HTTP \(httpResponse.statusCode)")
-                #endif
-                return
-            }
-
-            // Parse state response
-            let decoder = JSONDecoder()
-            let jobState = try decoder.decode(JobState.self, from: data)
-
-            #if DEBUG
-            print("✅ State synced: \(jobState.status) - \(jobState.processedCount)/\(jobState.totalCount)")
-            #endif
-
-            // If we have a progress handler, synthesize a progress update
-            if let handler = progressHandler {
-                let progress = JobProgress(
-                    totalItems: jobState.totalCount,
-                    processedItems: jobState.processedCount,
-                    currentStatus: "Reconnected - resuming at \(jobState.processedCount)/\(jobState.totalCount)",
-                    keepAlive: false,
-                    scanResult: nil
-                )
-                handler(progress)
-            }
-
+            token = retrievedToken
         } catch {
             #if DEBUG
-            print("⚠️ State sync error: \(error)")
+            print("⚠️ Cannot sync state: Keychain error: \(error)")
             #endif
+            return
+        }
+
+        // Retry with exponential backoff (3 attempts: 1s, 2s, 4s)
+        let maxRetries = 3
+        for attempt in 1...maxRetries {
+            do {
+                // Call backend to get current job state
+                let stateURL = URL(string: "\(EnrichmentConfig.apiBaseURL)/api/job-state/\(jobId)")!
+                var request = URLRequest(url: stateURL)
+                request.httpMethod = "GET"
+                request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+                request.timeoutInterval = 10.0  // 10 second timeout
+
+                let (data, response) = try await URLSession.shared.data(for: request)
+
+                guard let httpResponse = response as? HTTPURLResponse else {
+                    throw URLError(.badServerResponse)
+                }
+
+                // Handle non-200 responses
+                guard httpResponse.statusCode == 200 else {
+                    if httpResponse.statusCode >= 500 && attempt < maxRetries {
+                        // Server error - retry
+                        let delay = pow(2.0, Double(attempt))
+                        #if DEBUG
+                        print("⚠️ State sync failed (HTTP \(httpResponse.statusCode)), retrying in \(delay)s...")
+                        #endif
+                        try await Task.sleep(for: .seconds(delay))
+                        continue
+                    } else {
+                        // Client error or final attempt - don't retry
+                        #if DEBUG
+                        print("⚠️ State sync failed: HTTP \(httpResponse.statusCode)")
+                        #endif
+                        return
+                    }
+                }
+
+                // Parse state response
+                let decoder = JSONDecoder()
+                let jobState = try decoder.decode(JobState.self, from: data)
+
+                #if DEBUG
+                print("✅ State synced: \(jobState.status) - \(jobState.processedCount)/\(jobState.totalCount)")
+                #endif
+
+                // If we have a progress handler, synthesize a progress update
+                if let handler = progressHandler {
+                    let progress = JobProgress(
+                        totalItems: jobState.totalCount,
+                        processedItems: jobState.processedCount,
+                        currentStatus: "Reconnected - resuming at \(jobState.processedCount)/\(jobState.totalCount)",
+                        keepAlive: false,
+                        scanResult: nil
+                    )
+                    handler(progress)
+                }
+
+                // Success - exit retry loop
+                return
+
+            } catch {
+                if attempt < maxRetries {
+                    // Retry with exponential backoff
+                    let delay = pow(2.0, Double(attempt))
+                    #if DEBUG
+                    print("⚠️ State sync attempt \(attempt) failed: \(error). Retrying in \(delay)s...")
+                    #endif
+                    try? await Task.sleep(for: .seconds(delay))
+                } else {
+                    // Final attempt failed
+                    #if DEBUG
+                    print("❌ State sync failed after \(maxRetries) attempts: \(error)")
+                    #endif
+
+                    // Notify user of sync failure
+                    if let handler = progressHandler {
+                        let progress = JobProgress(
+                            totalItems: 0,
+                            processedItems: 0,
+                            currentStatus: "Reconnected - state sync failed, progress may be inaccurate",
+                            keepAlive: false,
+                            scanResult: nil
+                        )
+                        handler(progress)
+                    }
+                }
+            }
         }
     }
 
@@ -381,8 +458,13 @@ public final class WebSocketProgressManager {
         isConnected = false
         progressHandler = nil
         disconnectionHandler = nil
+
+        // Clean up token from Keychain
+        if let jobId = boundJobId {
+            KeychainHelper.deleteToken(for: jobId)
+        }
+
         boundJobId = nil
-        authToken = nil
         reconnectionAttempt = 0
 
         #if DEBUG
@@ -442,8 +524,9 @@ public final class WebSocketProgressManager {
                     // Mark as disconnected
                     self.isConnected = false
 
-                    // Attempt automatic reconnection if we have jobId and token
-                    if boundJobId != nil && authToken != nil {
+                    // Attempt automatic reconnection if we have jobId and token in Keychain
+                    if let jobId = boundJobId,
+                       let _ = try? KeychainHelper.getToken(for: jobId) {
                         #if DEBUG
                         print("🔄 Connection lost - attempting reconnection...")
                         #endif
