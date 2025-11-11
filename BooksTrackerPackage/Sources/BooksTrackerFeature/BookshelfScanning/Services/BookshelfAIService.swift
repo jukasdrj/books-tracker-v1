@@ -707,6 +707,7 @@ actor BookshelfAIService {
 /// Response from batch submission endpoint
 public struct BatchSubmissionResponse: Codable, Sendable {
     public let jobId: String
+    public let token: String?
     public let totalPhotos: Int
     public let status: String
 }

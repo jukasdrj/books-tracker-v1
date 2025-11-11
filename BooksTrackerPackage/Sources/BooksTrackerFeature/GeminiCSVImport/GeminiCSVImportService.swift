@@ -32,6 +32,7 @@ enum GeminiCSVImportError: Error, LocalizedError {
 
 public struct GeminiCSVImportResponse: Codable, Sendable {
     public let jobId: String
+    public let token: String?
 }
 
 public struct GeminiCSVImportJob: Codable, Sendable {
@@ -77,7 +78,7 @@ actor GeminiCSVImportService {
     /// - Parameter csvText: Raw CSV content
     /// - Returns: JobId for progress tracking
     /// - Throws: GeminiCSVImportError on failure
-    func uploadCSV(csvText: String) async throws -> String {
+    func uploadCSV(csvText: String) async throws -> GeminiCSVImportResponse {
         #if DEBUG
         print("[CSV Upload] Starting upload, size: \(csvText.utf8.count) bytes")
         #endif
@@ -164,7 +165,7 @@ actor GeminiCSVImportService {
                 #if DEBUG
                 print("[CSV Upload] ✅ Got jobId: \(importResponse.jobId)")
                 #endif
-                return importResponse.jobId
+                return importResponse
 
             case .failure(let error, _):
                 #if DEBUG

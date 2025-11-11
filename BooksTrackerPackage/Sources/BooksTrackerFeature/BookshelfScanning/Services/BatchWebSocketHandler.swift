@@ -7,23 +7,26 @@ import Foundation
 actor BatchWebSocketHandler {
     private var webSocket: URLSessionWebSocketTask?
     private let jobId: String
+    private let token: String?
     private let onProgress: @MainActor (BatchProgress) -> Void
     private let onDisconnect: (@MainActor () -> Void)?
     private var isConnected = false
 
     init(
         jobId: String,
+        token: String?,
         onProgress: @MainActor @escaping (BatchProgress) -> Void,
         onDisconnect: (@MainActor () -> Void)? = nil
     ) {
         self.jobId = jobId
+        self.token = token
         self.onProgress = onProgress
         self.onDisconnect = onDisconnect
     }
 
     /// Connect to WebSocket and start listening
     func connect() async throws {
-        let wsURL = EnrichmentConfig.webSocketURL(jobId: jobId)
+        let wsURL = EnrichmentConfig.webSocketURL(jobId: jobId, token: token)
 
         let session = URLSession(configuration: .default)
         webSocket = session.webSocketTask(with: wsURL)

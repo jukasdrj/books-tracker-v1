@@ -52,8 +52,12 @@ export async function handleCSVImport(request, env, ctx) {
     const csvText = await csvFile.text();
     await doStub.scheduleCSVProcessing(csvText, jobId);
 
+    // Generate and set WebSocket auth token
+    const token = crypto.randomUUID();
+    await doStub.setAuthToken(token);
+
     return Response.json(
-      createSuccessResponseObject({ jobId }, {}),
+      createSuccessResponseObject({ jobId, token }, {}),
       { status: 202 }
     );
 

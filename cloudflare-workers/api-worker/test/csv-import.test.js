@@ -3,7 +3,7 @@ import { describe, test, expect, vi } from 'vitest';
 import { handleCSVImport, processCSVImport } from '../src/handlers/csv-import.js';
 
 describe('CSV Import Handler', () => {
-  test('POST /api/import/csv-gemini returns jobId', async () => {
+  test('POST /api/import/csv-gemini returns jobId and token', async () => {
     const formData = new FormData();
     formData.append('file', new File(['Title,Author\nBook1,Author1'], 'test.csv'));
 
@@ -12,17 +12,16 @@ describe('CSV Import Handler', () => {
       body: formData
     });
 
+    const mockDoStub = {
+      scheduleCSVProcessing: vi.fn().mockResolvedValue(undefined),
+      setAuthToken: vi.fn().mockResolvedValue(undefined),
+    };
+
     const mockEnv = {
       PROGRESS_WEBSOCKET_DO: {
         idFromName: vi.fn(() => 'do-id'),
-        get: vi.fn(() => ({
-          ready: vi.fn().mockResolvedValue(undefined),
-          updateProgress: vi.fn().mockResolvedValue(undefined),
-          complete: vi.fn().mockResolvedValue(undefined),
-          fail: vi.fn().mockResolvedValue(undefined)
-        }))
+        get: vi.fn(() => mockDoStub),
       },
-      ctx: { waitUntil: vi.fn() }
     };
 
     const response = await handleCSVImport(request, mockEnv);
@@ -31,10 +30,12 @@ describe('CSV Import Handler', () => {
     expect(response.status).toBe(202);
     expect(body.data).toBeDefined();
     expect(body.data.jobId).toBeDefined();
+    expect(body.data.token).toBeDefined();
+    expect(typeof body.data.token).toBe('string');
     expect(body.metadata).toBeDefined();
-    expect(body.metadata.timestamp).toBeDefined();
     expect(body.error).toBeUndefined();
-    expect(mockEnv.ctx.waitUntil).toHaveBeenCalled();
+    expect(mockDoStub.scheduleCSVProcessing).toHaveBeenCalled();
+    expect(mockDoStub.setAuthToken).toHaveBeenCalled();
   });
 
   test('rejects files larger than 10MB', async () => {

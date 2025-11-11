@@ -88,6 +88,7 @@ public final class BatchCaptureModel {
             // Connect WebSocket for progress updates
             let handler = BatchWebSocketHandler(
                 jobId: jobId,
+                token: response.token,
                 onProgress: { [weak self] updatedProgress in
                     guard let self = self else { return }
                     self.batchProgress = updatedProgress

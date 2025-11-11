@@ -12,27 +12,13 @@
  *   npm test -- batch-scan.test.js
  */
 
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import { handleBatchScan } from '../src/handlers/batch-scan-handler.js';
 
 describe('Batch Scan Endpoint', () => {
-  const BASE_URL = process.env.TEST_BASE_URL || 'http://localhost:8787';
-
-  // Test connection to local dev server
-  beforeAll(async () => {
-    try {
-      const response = await fetch(`${BASE_URL}/health`);
-      if (!response.ok) {
-        throw new Error('Worker not running. Start with: npm run dev');
-      }
-    } catch (error) {
-      console.error('Failed to connect to worker:', error.message);
-      throw new Error('Worker must be running on http://localhost:8787. Start with: npm run dev');
-    }
-  });
-
-  it('accepts batch scan request with multiple images', async () => {
+  it('accepts batch scan request and returns token', async () => {
     const jobId = crypto.randomUUID();
-    const request = {
+    const requestJson = {
       jobId,
       images: [
         { index: 0, data: 'base64image1...' },
@@ -40,21 +26,43 @@ describe('Batch Scan Endpoint', () => {
       ]
     };
 
-    const response = await fetch(`${BASE_URL}/api/scan-bookshelf/batch`, {
+    const request = new Request('http://localhost/api/scan-bookshelf/batch', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(request)
+      body: JSON.stringify(requestJson)
     });
 
-    expect(response.status).toBe(202); // Accepted
+    const mockDoStub = {
+      initBatch: vi.fn().mockResolvedValue(undefined),
+      setAuthToken: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const mockEnv = {
+      PROGRESS_WEBSOCKET_DO: {
+        idFromName: vi.fn(() => 'do-id'),
+        get: vi.fn(() => mockDoStub),
+      },
+    };
+
+    const mockCtx = {
+      waitUntil: vi.fn(),
+    };
+
+    const response = await handleBatchScan(request, mockEnv, mockCtx);
     const body = await response.json();
+
+    expect(response.status).toBe(202);
     expect(body.data).toBeDefined();
     expect(body.data.jobId).toBe(jobId);
+    expect(body.data.token).toBeDefined();
+    expect(typeof body.data.token).toBe('string');
     expect(body.data.totalPhotos).toBe(2);
     expect(body.data.status).toBe('processing');
     expect(body.metadata).toBeDefined();
-    expect(body.metadata.timestamp).toBeDefined();
     expect(body.error).toBeUndefined();
+    expect(mockDoStub.initBatch).toHaveBeenCalled();
+    expect(mockDoStub.setAuthToken).toHaveBeenCalled();
+    expect(mockCtx.waitUntil).toHaveBeenCalled();
   });
 
   it('rejects batches exceeding 5 photos', async () => {

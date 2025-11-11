@@ -272,11 +272,11 @@ public struct GeminiCSVImportView: View {
 
             // Upload to backend
             let service = GeminiCSVImportService.shared
-            let uploadedJobId = try await service.uploadCSV(csvText: csvText)
+            let response = try await service.uploadCSV(csvText: csvText)
 
             // Start WebSocket connection
-            jobId = uploadedJobId
-            startWebSocketProgress(jobId: uploadedJobId)
+            jobId = response.jobId
+            startWebSocketProgress(jobId: response.jobId, token: response.token)
 
         } catch let error as GeminiCSVImportError {
             importStatus = .failed(error.localizedDescription)
@@ -285,8 +285,8 @@ public struct GeminiCSVImportView: View {
         }
     }
 
-    private func startWebSocketProgress(jobId: String) {
-        let wsURL = EnrichmentConfig.webSocketURL(jobId: jobId)
+    private func startWebSocketProgress(jobId: String, token: String?) {
+        let wsURL = EnrichmentConfig.webSocketURL(jobId: jobId, token: token)
         #if DEBUG
         print("[CSV WebSocket] Connecting to backend")
         #endif

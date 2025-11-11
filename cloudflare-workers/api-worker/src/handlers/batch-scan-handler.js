@@ -55,12 +55,17 @@ export async function handleBatchScan(request, env, ctx) {
       status: 'uploading'
     });
 
+    // Generate and set WebSocket auth token
+    const token = crypto.randomUUID();
+    await doStub.setAuthToken(token);
+
     // Process batch asynchronously (don't await)
     ctx.waitUntil(processBatchPhotos(jobId, images, env, doStub));
 
     // Return accepted response immediately
     return createSuccessResponse({
       jobId,
+      token,
       totalPhotos: images.length,
       status: 'processing'
     }, {}, 202);
