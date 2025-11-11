@@ -33,12 +33,14 @@ export const BOOKSHELF_RESPONSE_SCHEMA = {
         description: "Book title extracted from spine"
       },
       author: {
-        type: ["string", "null"],
-        description: "Author name if visible on spine"
+        type: "string",
+        description: "Author name if visible on spine",
+        nullable: true
       },
       isbn: {
-        type: ["string", "null"],
-        description: "ISBN-10 or ISBN-13 if visible"
+        type: "string",
+        description: "ISBN-10 or ISBN-13 if visible",
+        nullable: true
       },
       format: {
         type: "string",
