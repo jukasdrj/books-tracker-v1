@@ -28,6 +28,39 @@ public struct ConnectionToken: Sendable {
     }
 }
 
+/// Reconnection configuration with exponential backoff
+public struct ReconnectionConfig: Sendable {
+    let maxRetries: Int
+    let initialDelay: TimeInterval       // Initial delay (1s)
+    let maxDelay: TimeInterval          // Maximum delay (30s)
+    let backoffMultiplier: Double       // Exponential multiplier (2.0)
+
+    public static let `default` = ReconnectionConfig(
+        maxRetries: 5,
+        initialDelay: 1.0,
+        maxDelay: 30.0,
+        backoffMultiplier: 2.0
+    )
+
+    /// Calculate delay for a given attempt using exponential backoff
+    func delay(for attempt: Int) -> TimeInterval {
+        let exponentialDelay = initialDelay * pow(backoffMultiplier, Double(attempt))
+        return min(exponentialDelay, maxDelay)
+    }
+}
+
+/// Job state from Durable Object storage
+/// Used for state sync after reconnection
+struct JobState: Codable, Sendable {
+    let pipeline: String
+    let totalCount: Int
+    let processedCount: Int
+    let status: String          // "running", "complete", "failed"
+    let startTime: Int64        // Milliseconds since epoch
+    let version: Int
+    let endTime: Int64?         // Optional: present when complete/failed
+}
+
 /// Manages WebSocket connections for real-time progress updates
 /// Replaces polling-based progress tracking with server push notifications
 ///
@@ -49,6 +82,13 @@ public final class WebSocketProgressManager {
     private var progressHandler: ((JobProgress) -> Void)?
     private var disconnectionHandler: ((Error) -> Void)?
     private var boundJobId: String?
+    private var authToken: String?  // Stored for reconnection
+
+    // Reconnection state
+    private var reconnectionConfig: ReconnectionConfig = .default
+    private var reconnectionAttempt: Int = 0
+    private var isReconnecting: Bool = false
+    private var reconnectionTask: Task<Void, Never>?
 
     // Backend configuration
     // UNIFIED: All WebSocket progress tracking goes to api-worker (monolith architecture)
@@ -61,16 +101,34 @@ public final class WebSocketProgressManager {
     /// STEP 1: Establish WebSocket connection BEFORE job starts
     /// This prevents race condition where server processes before client listens
     ///
-    /// - Parameter jobId: Client-generated job identifier for WebSocket binding
+    /// - Parameters:
+    ///   - jobId: Client-generated job identifier for WebSocket binding
+    ///   - token: Optional authentication token for WebSocket connection
     /// - Returns: ConnectionToken proving connection is ready
     /// - Throws: URLError if connection fails or times out
-    public func establishConnection(jobId: String) async throws -> ConnectionToken {
+    public func establishConnection(jobId: String, token: String? = nil) async throws -> ConnectionToken {
         guard webSocketTask == nil else {
             throw URLError(.badURL, userInfo: ["reason": "WebSocket already connected"])
         }
 
-        // Create connection endpoint with client-provided jobId
-        let url = EnrichmentConfig.webSocketURL(jobId: jobId)
+        // Store auth token for reconnection
+        self.authToken = token
+
+        // Create connection endpoint with client-provided jobId and optional token
+        let url: URL
+        if let token = token {
+            var components = URLComponents(string: "\(EnrichmentConfig.webSocketBaseURL)/ws/progress")!
+            components.queryItems = [
+                URLQueryItem(name: "jobId", value: jobId),
+                URLQueryItem(name: "token", value: token)
+            ]
+            guard let urlWithToken = components.url else {
+                throw URLError(.badURL, userInfo: ["reason": "Failed to construct WebSocket URL with token"])
+            }
+            url = urlWithToken
+        } else {
+            url = EnrichmentConfig.webSocketURL(jobId: jobId)
+        }
 
         // Create URLSession with WebSocket configuration
         let session = URLSession(configuration: .default)
@@ -84,6 +142,7 @@ public final class WebSocketProgressManager {
 
         self.webSocketTask = task
         self.isConnected = true
+        self.reconnectionAttempt = 0  // Reset reconnection counter on successful connection
 
         #if DEBUG
         print("🔌 WebSocket established (ready for job configuration)")
@@ -93,12 +152,12 @@ public final class WebSocketProgressManager {
         await startReceiving()
 
         // Return token proving connection is ready
-        let token = ConnectionToken(
+        let connectionToken = ConnectionToken(
             connectionId: UUID().uuidString,
             createdAt: Date()
         )
 
-        return token
+        return connectionToken
     }
 
     /// STEP 2: Configure established WebSocket for specific job
@@ -166,8 +225,153 @@ public final class WebSocketProgressManager {
         }
     }
 
+    /// Attempt to reconnect with exponential backoff
+    /// Called automatically when connection drops unexpectedly
+    private func attemptReconnection() async {
+        guard !isReconnecting else {
+            #if DEBUG
+            print("⚠️ Reconnection already in progress")
+            #endif
+            return
+        }
+
+        guard let jobId = boundJobId, let token = authToken else {
+            #if DEBUG
+            print("❌ Cannot reconnect: missing jobId or token")
+            #endif
+            return
+        }
+
+        isReconnecting = true
+
+        while reconnectionAttempt < reconnectionConfig.maxRetries {
+            let delay = reconnectionConfig.delay(for: reconnectionAttempt)
+            reconnectionAttempt += 1
+
+            #if DEBUG
+            print("🔄 Reconnection attempt \(reconnectionAttempt)/\(reconnectionConfig.maxRetries) after \(delay)s")
+            #endif
+
+            // Wait with exponential backoff
+            try? await Task.sleep(for: .seconds(delay))
+
+            // Check if we've been cancelled
+            guard !Task.isCancelled else {
+                #if DEBUG
+                print("⚠️ Reconnection cancelled")
+                #endif
+                break
+            }
+
+            // Attempt reconnection
+            do {
+                // Clean up old connection
+                webSocketTask?.cancel(with: .goingAway, reason: nil)
+                webSocketTask = nil
+                receiveTask?.cancel()
+                receiveTask = nil
+
+                // Try to reconnect
+                _ = try await establishConnection(jobId: jobId, token: token)
+
+                // If successful, sync state from server
+                await syncStateAfterReconnection()
+
+                #if DEBUG
+                print("✅ Reconnection successful after \(reconnectionAttempt) attempts")
+                #endif
+
+                isReconnecting = false
+                return
+
+            } catch {
+                #if DEBUG
+                print("❌ Reconnection attempt \(reconnectionAttempt) failed: \(error)")
+                #endif
+                lastError = error
+            }
+        }
+
+        // Exhausted all retries
+        isReconnecting = false
+        #if DEBUG
+        print("❌ Reconnection failed after \(reconnectionConfig.maxRetries) attempts")
+        #endif
+
+        // Notify disconnection handler
+        if let handler = disconnectionHandler {
+            let error = URLError(.networkConnectionLost, userInfo: ["reason": "Reconnection failed"])
+            handler(error)
+        }
+    }
+
+    /// Sync state from server after reconnection
+    /// Fetches latest job state to avoid missing progress updates
+    private func syncStateAfterReconnection() async {
+        guard let jobId = boundJobId, let token = authToken else {
+            #if DEBUG
+            print("⚠️ Cannot sync state: missing jobId or token")
+            #endif
+            return
+        }
+
+        do {
+            // Call backend to get current job state
+            let stateURL = URL(string: "\(EnrichmentConfig.apiBaseURL)/api/job-state/\(jobId)")!
+            var request = URLRequest(url: stateURL)
+            request.httpMethod = "GET"
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                #if DEBUG
+                print("⚠️ State sync failed: invalid response")
+                #endif
+                return
+            }
+
+            guard httpResponse.statusCode == 200 else {
+                #if DEBUG
+                print("⚠️ State sync failed: HTTP \(httpResponse.statusCode)")
+                #endif
+                return
+            }
+
+            // Parse state response
+            let decoder = JSONDecoder()
+            let jobState = try decoder.decode(JobState.self, from: data)
+
+            #if DEBUG
+            print("✅ State synced: \(jobState.status) - \(jobState.processedCount)/\(jobState.totalCount)")
+            #endif
+
+            // If we have a progress handler, synthesize a progress update
+            if let handler = progressHandler {
+                let progress = JobProgress(
+                    totalItems: jobState.totalCount,
+                    processedItems: jobState.processedCount,
+                    currentStatus: "Reconnected - resuming at \(jobState.processedCount)/\(jobState.totalCount)",
+                    keepAlive: false,
+                    scanResult: nil
+                )
+                handler(progress)
+            }
+
+        } catch {
+            #if DEBUG
+            print("⚠️ State sync error: \(error)")
+            #endif
+        }
+    }
+
     /// Disconnect WebSocket
     public func disconnect() {
+        // Cancel any ongoing reconnection attempts
+        reconnectionTask?.cancel()
+        reconnectionTask = nil
+        isReconnecting = false
+
         receiveTask?.cancel()
         receiveTask = nil
 
@@ -178,6 +382,8 @@ public final class WebSocketProgressManager {
         progressHandler = nil
         disconnectionHandler = nil
         boundJobId = nil
+        authToken = nil
+        reconnectionAttempt = 0
 
         #if DEBUG
         print("🔌 WebSocket disconnected")
@@ -233,10 +439,27 @@ public final class WebSocketProgressManager {
                     #endif
                     self.lastError = error
 
-                    // Notify continuation before disconnecting
-                    disconnectionHandler?(error)
+                    // Mark as disconnected
+                    self.isConnected = false
 
-                    self.disconnect()
+                    // Attempt automatic reconnection if we have jobId and token
+                    if boundJobId != nil && authToken != nil {
+                        #if DEBUG
+                        print("🔄 Connection lost - attempting reconnection...")
+                        #endif
+
+                        // Spawn reconnection task (don't await to avoid blocking)
+                        reconnectionTask = Task {
+                            await self.attemptReconnection()
+                        }
+
+                        return  // Exit receive loop - reconnection will start a new one
+                    } else {
+                        // No reconnection info - notify and disconnect
+                        disconnectionHandler?(error)
+                        self.disconnect()
+                    }
+
                     break
                 }
             }
