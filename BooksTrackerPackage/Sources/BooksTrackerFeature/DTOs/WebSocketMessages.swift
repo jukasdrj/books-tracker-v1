@@ -237,10 +237,10 @@ public struct AIScanCompletePayload: Codable, Sendable {
     public let totalDetected: Int
     public let approved: Int
     public let needsReview: Int
-    public let books: [DetectedBook]
+    public let books: [DetectedBookPayload]
 }
 
-public struct DetectedBook: Codable, Sendable {
+public struct DetectedBookPayload: Codable, Sendable {
     public let title: String?
     public let author: String?
     public let isbn: String?
@@ -267,6 +267,13 @@ public struct ErrorPayload: Codable, Sendable {
     public let message: String
     public let details: AnyCodable?         // Optional: Additional context
     public let retryable: Bool?
+
+    public init(code: String, message: String, details: AnyCodable? = nil, retryable: Bool? = nil) {
+        self.code = code
+        self.message = message
+        self.details = details
+        self.retryable = retryable
+    }
 }
 
 // MARK: - Ping/Pong Payloads
@@ -285,7 +292,7 @@ public struct PongPayload: Codable, Sendable {
 // MARK: - AnyCodable Helper
 
 /// Helper for encoding/decoding arbitrary JSON
-public struct AnyCodable: Codable, Sendable {
+public struct AnyCodable: Codable, @unchecked Sendable {
     public let value: Any
 
     public init(_ value: Any) {
