@@ -198,15 +198,16 @@ Extract all visible book information now.`
     }
 
     // Trust schema for normalization - no validation needed
-    // Schema enforces: confidence (0-1), boundingBox coords (0-1), format enum
+    // RELAXED SCHEMA: Only title is required, all other fields are optional/nullable
+    // BoundingBox removed temporarily to debug Gemini 0-token output issue
     const normalizedBooks = books.map(book => ({
         title: book.title,
         author: book.author || '',
         isbn: book.isbn || null,
-        format: book.format,         // Enum enforced by schema
-        confidence: book.confidence,  // Range enforced by schema (0.0-1.0)
-        boundingBox: book.boundingBox // Coordinates enforced by schema (0.0-1.0)
-    })).filter(book => book.title.length > 0);
+        format: book.format || 'unknown',         // Default to unknown if not provided
+        confidence: book.confidence || 0.7,        // Default confidence if not provided
+        boundingBox: null                          // Removed from schema (debugging)
+    })).filter(book => book.title && book.title.length > 0);
 
     return {
         books: normalizedBooks,
