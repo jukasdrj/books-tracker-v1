@@ -1,9 +1,18 @@
 // src/handlers/csv-import.js
+/**
+ * CSV Import Handler
+ *
+ * Phase 2: Canonical API Contract Implementation
+ * - Uses CSVImportInitResponse for initialization response
+ * - Returns typed canonical response format
+ */
+
 import { validateCSV } from '../utils/csv-validator.js';
 import { buildCSVParserPrompt, PROMPT_VERSION } from '../prompts/csv-parser-prompt.js';
 import { generateCSVCacheKey } from '../utils/cache-keys.js';
 import { parseCSVWithGemini } from '../providers/gemini-csv-provider.js';
 import { createSuccessResponseObject, createErrorResponseObject } from '../types/responses.js';
+import type { CSVImportInitResponse } from '../types/responses.js';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
@@ -58,8 +67,14 @@ export async function handleCSVImport(request, env, ctx) {
     const csvText = await csvFile.text();
     await doStub.scheduleCSVProcessing(csvText, jobId);
 
+    // Return typed CSVImportInitResponse
+    const initResponse: CSVImportInitResponse = {
+      jobId,
+      token: authToken // WebSocket authentication token
+    };
+
     return Response.json(
-      createSuccessResponseObject({ jobId, token: authToken }, {}),
+      createSuccessResponseObject(initResponse, {}),
       { status: 202 }
     );
 

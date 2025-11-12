@@ -1,21 +1,27 @@
 /**
  * Batch Bookshelf Scan Handler
  * Handles multiple photos in one job with sequential processing
+ *
+ * Phase 2: Canonical API Contract Implementation
+ * - Uses DetectedBookDTO for flattened book structure
+ * - Uses BookshelfScanInitResponse for initialization
  */
 
 import { scanImageWithGemini } from '../providers/gemini-provider.js';
 import { createSuccessResponse, createErrorResponse } from '../utils/api-responses.js';
 import { enrichBooksParallel } from '../services/parallel-enrichment.js';
 import { handleSearchAdvanced } from './v1/search-advanced.js';
+import type { DetectedBookDTO, BookshelfScanInitResponse } from '../types/responses.js';
 
 const MAX_PHOTOS_PER_BATCH = 5;
 const MAX_IMAGE_SIZE = 10_000_000; // 10MB per image
 
 /**
- * Helper function to map book objects to DetectedBook format
+ * Helper function to map book objects to DetectedBookDTO format
  * Centralizes transformation logic to ensure consistency across all code paths
+ * @returns {DetectedBookDTO} Flattened book structure for iOS Codable parsing
  */
-function mapToDetectedBook(book) {
+function mapToDetectedBook(book): DetectedBookDTO {
   return {
     title: book?.title,
     author: book?.author,
@@ -81,13 +87,15 @@ export async function handleBatchScan(request, env, ctx) {
     // Process batch asynchronously (don't await)
     ctx.waitUntil(processBatchPhotos(jobId, images, env, doStub));
 
-    // Return accepted response immediately with auth token
-    return createSuccessResponse({
+    // Return accepted response immediately with auth token (BookshelfScanInitResponse)
+    const initResponse: BookshelfScanInitResponse = {
       jobId,
-      token: authToken, // NEW: Token for WebSocket authentication
+      token: authToken, // WebSocket authentication token
       totalPhotos: images.length,
       status: 'processing'
-    }, {}, 202);
+    };
+
+    return createSuccessResponse(initResponse, {}, 202);
 
   } catch (error) {
     console.error('Batch scan error:', error);
