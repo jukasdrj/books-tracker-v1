@@ -428,24 +428,38 @@ extension DTOMapper {
         let decoder = JSONDecoder()
 
         // Attempt 1: Unified envelope format (Phase 3)
-        if let envelope = try? decoder.decode(ResponseEnvelope<BookSearchResponse>.self, from: data) {
+        do {
+            let envelope = try decoder.decode(ResponseEnvelope<BookSearchResponse>.self, from: data)
             if let responseData = envelope.data {
+                logger.debug("✅ Successfully parsed unified envelope format")
                 return responseData
             } else if let error = envelope.error {
                 throw ParsingError.apiError(message: error.message, code: error.code ?? "UNKNOWN")
             } else {
                 throw ParsingError.apiError(message: "Missing data and error in response", code: "INVALID_RESPONSE")
             }
+        } catch let decodingError as DecodingError {
+            logger.debug("⚠️ Unified envelope parsing failed: \(decodingError.localizedDescription). Trying legacy format...")
+        } catch {
+            // Re-throw non-decoding errors (e.g., ParsingError.apiError)
+            throw error
         }
 
         // Attempt 2: Legacy discriminated union format
-        if let legacy = try? decoder.decode(ApiResponse<BookSearchResponse>.self, from: data) {
+        do {
+            let legacy = try decoder.decode(ApiResponse<BookSearchResponse>.self, from: data)
             switch legacy {
             case .success(let data, _):
+                logger.debug("✅ Successfully parsed legacy discriminated union format")
                 return data
             case .failure(let error, _):
                 throw ParsingError.apiError(message: error.message, code: error.code?.rawValue ?? "UNKNOWN")
             }
+        } catch let decodingError as DecodingError {
+            logger.error("❌ Both envelope formats failed. Unified error: DecodingError, Legacy error: \(decodingError.localizedDescription)")
+        } catch {
+            // Re-throw non-decoding errors
+            throw error
         }
 
         // Both parsing attempts failed
