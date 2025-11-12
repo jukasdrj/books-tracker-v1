@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import os.log
 
 // Import GeminiCSVImportJob for ParsedBook type
 // Note: File is in same package, so no additional import needed beyond internal visibility
@@ -80,6 +81,7 @@ public struct ImportServiceError: Sendable, Identifiable {
 /// - Background import: UI remains responsive throughout
 public actor ImportService {
     private let modelContainer: ModelContainer
+    private let logger = Logger(subsystem: "com.oooefam.booksV3", category: "ImportService")
 
     public init(modelContainer: ModelContainer) {
         self.modelContainer = modelContainer
@@ -112,56 +114,65 @@ public actor ImportService {
         let allWorks = try context.fetch(descriptor)
 
         for book in books {
-            // Check for duplicate by title + author (case-insensitive, exact match)
-            let titleLower = book.title.lowercased()
-            let authorLower = book.author.lowercased()
+            do {
+                // Check for duplicate by title + author (case-insensitive, exact match)
+                let titleLower = book.title.lowercased()
+                let authorLower = book.author.lowercased()
 
-            let isDuplicate = allWorks.contains { work in
-                let workTitleLower = work.title.lowercased()
-                let workAuthorLower = work.authorNames.lowercased()
-                return workTitleLower == titleLower && workAuthorLower == authorLower
-            }
+                let isDuplicate = allWorks.contains { work in
+                    let workTitleLower = work.title.lowercased()
+                    let workAuthorLower = work.authorNames.lowercased()
+                    return workTitleLower == titleLower && workAuthorLower == authorLower
+                }
 
-            if isDuplicate {
-                skippedCount += 1
-                continue
-            }
+                if isDuplicate {
+                    skippedCount += 1
+                    continue
+                }
 
-            // Create Author FIRST and insert
-            let author = Author(name: book.author)
-            context.insert(author)
+                // Create Author FIRST and insert
+                let author = Author(name: book.author)
+                context.insert(author)
 
-            // Create Work, insert, then set relationship
-            let work = Work(
-                title: book.title,
-                originalLanguage: "Unknown",
-                firstPublicationYear: book.publicationYear
-            )
-            context.insert(work)
-            work.authors = [author]
-
-            // Create UserLibraryEntry so book appears in library
-            let libraryEntry = UserLibraryEntry(readingStatus: .toRead)
-            context.insert(libraryEntry)
-            libraryEntry.work = work
-
-            // Create Edition if ISBN provided
-            if let isbn = book.isbn {
-                let edition = Edition(
-                    isbn: isbn,
-                    publisher: book.publisher,
-                    publicationDate: book.publicationYear.map { "\($0)" },
-                    pageCount: nil,
-                    format: .paperback,
-                    coverImageURL: book.coverUrl
+                // Create Work, insert, then set relationship
+                let work = Work(
+                    title: book.title,
+                    originalLanguage: "Unknown",
+                    firstPublicationYear: book.publicationYear
                 )
-                context.insert(edition)
-                edition.work = work
-            }
+                context.insert(work)
+                work.authors = [author]
 
-            // Collect work for batch save
-            newWorks.append(work)
-            successCount += 1
+                // Create UserLibraryEntry so book appears in library
+                let libraryEntry = UserLibraryEntry(readingStatus: .toRead)
+                context.insert(libraryEntry)
+                libraryEntry.work = work
+
+                // Create Edition if ISBN provided
+                if let isbn = book.isbn {
+                    let edition = Edition(
+                        isbn: isbn,
+                        publisher: book.publisher,
+                        publicationDate: book.publicationYear.map { "\($0)" },
+                        pageCount: nil,
+                        format: .paperback,
+                        coverImageURL: book.coverUrl
+                    )
+                    context.insert(edition)
+                    edition.work = work
+                }
+
+                // Collect work for batch save
+                newWorks.append(work)
+                successCount += 1
+            } catch {
+                // Per-book error handling - track failure without stopping entire import
+                importErrors.append(ImportServiceError(
+                    title: book.title,
+                    message: "Failed to process: \(error.localizedDescription)"
+                ))
+                logger.error("Failed to import '\(book.title)': \(error.localizedDescription)")
+            }
         }
 
         // Single batch save (much faster than saving in loop)
@@ -170,16 +181,14 @@ public actor ImportService {
         // Extract permanent IDs after save
         let newWorkIDs = newWorks.map { $0.persistentModelID }
 
-        #if DEBUG
-        print("📚 [IMPORT] Saved \(newWorks.count) works, extracted \(newWorkIDs.count) permanent IDs")
-        print("📚 [IMPORT] Context: Main actor isolation")
+        logger.debug("📚 [IMPORT] Saved \(newWorks.count) works, extracted \(newWorkIDs.count) permanent IDs")
+        logger.debug("📚 [IMPORT] Context: Actor isolation")
         newWorks.prefix(3).enumerated().forEach { index, work in
-            print("  [\(index)] \(work.title) → ID: \(work.persistentModelID)")
+            logger.debug("  [\(index)] \(work.title) → ID: \(work.persistentModelID)")
         }
         if newWorks.count > 3 {
-            print("  ... and \(newWorks.count - 3) more")
+            logger.debug("  ... and \(newWorks.count - 3) more")
         }
-        #endif
 
         let duration = startTime.duration(to: ContinuousClock.now)
         return ImportResult(

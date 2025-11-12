@@ -575,7 +575,11 @@ struct ThemePreviewCard: View {
     
     /// High contrast mode detection for WCAG AAA compliance
     private var adjustedTextColor: Color {
-        contrast == .increased ? .white : .white.opacity(0.95)
+        #if os(iOS)
+        return contrast == .increased ? .white : .white.opacity(0.95)
+        #else
+        return .white
+        #endif
     }
 }
 
