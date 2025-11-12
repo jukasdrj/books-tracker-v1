@@ -472,6 +472,12 @@ public struct GeminiCSVImportView: View {
                     self.webSocketTask?.cancel()
                     return  // Exit message loop - job failed
 
+                case .readyAck:
+                    #if DEBUG
+                    print("[CSV WebSocket] ✅ Backend acknowledged ready signal, processing will start")
+                    #endif
+                    // No UI update needed, progress messages will follow
+
                 case .jobStarted:
                     #if DEBUG
                     print("[CSV WebSocket] Job started (informational)")

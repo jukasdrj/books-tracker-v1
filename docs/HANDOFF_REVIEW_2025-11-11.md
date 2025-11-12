@@ -424,3 +424,241 @@ Bookshelf AI scan WebSocket connection fails with `invalidResponse` error immedi
 2. Hand off all 6 issues to review team
 3. Prioritize WebSocket issues (#378, #347, #379) as they may share root cause
 
+
+---
+
+# ⚠️ ADDENDUM: AI Bookshelf Scanner Root Cause Analysis
+
+**Updated:** November 11, 2025 (Evening Session)
+**Status:** Backend ✅ FIXED | iOS ❌ NEEDS FIX
+**Priority:** CRITICAL - Blocks all bookshelf scanning functionality
+
+---
+
+## Current Status
+
+### Backend: ✅ FULLY OPERATIONAL
+
+The backend successfully:
+1. Detects 17 books via Gemini 2.5 Flash
+2. Enriches all 17 books with Google Books metadata
+3. Sends complete WebSocket message with full enrichment data
+
+**Proof from logs:**
+```
+[AI Scanner] Enrichment summary: 17 success, 0 not_found, 0 error
+[AI Scanner] Sample book 0: {
+  "enrichmentStatus": "success",
+  "coverUrl": "https://books.google.com/books/content?id=...",
+  "publisher": "Random House Trade Paperbacks",
+  "publicationYear": 2011
+}
+[AI Scanner] 📤 Sending completeV2 with payload: {"totalDetected":17,"approved":17,"needsReview":0,"booksCount":17}
+[1EFB8E7E] Job complete message sent (v2 schema)
+```
+
+### iOS: ❌ DISCARDING ENRICHMENT DATA
+
+iOS error:
+```
+❌ Scan complete but no result in WebSocket message (backend error)
+❌ WebSocket scan failed: serverError(500, "Scan completed without result data")
+```
+
+---
+
+## Root Cause: Schema Adapter Dropping Enrichment Data
+
+**File:** `BooksTrackerPackage/Sources/BooksTrackerFeature/Common/WebSocketProgressManager.swift`
+**Lines:** 635-661
+
+The adapter converts unified v2 WebSocket schema to legacy schema, but **throws away enrichment data**:
+
+```swift
+case .jobComplete(let completePayload):
+    guard case .aiScan(let aiPayload) = completePayload else { return }
+
+    let scanResult = ScanResultPayload(
+        books: aiPayload.books.map { book in
+            ScanResultPayload.BookPayload(
+                title: book.title ?? "",
+                author: book.author ?? "",
+                isbn: book.isbn,
+                format: nil,  // ❌ WRONG! book.format exists in DetectedBookPayload
+                confidence: book.confidence ?? 0.0,
+                boundingBox: ...,
+                enrichment: nil  // ❌ WRONG! Discards coverUrl, publisher, publicationYear
+            )
+        },
+        metadata: ...
+    )
+```
+
+### What the Backend Sends (Unified Schema):
+
+```typescript
+// From DetectedBookPayload (WebSocketMessages.swift lines 243-253)
+{
+  title: "THE SEVEN MOONS OF MAALI ALMEIDA",
+  author: "SHEHAN KARUNATILAKA",
+  isbn: "9781324064015",
+  confidence: 0.95,
+  boundingBox: { x1: 0.1, y1: 0.2, x2: 0.3, y2: 0.4 },
+  enrichmentStatus: "success",  // ✅ Available
+  coverUrl: "https://books.google.com/...",  // ✅ Available
+  publisher: "Random House",  // ✅ Available
+  publicationYear: 2011  // ✅ Available
+}
+```
+
+### What iOS Does With It:
+
+```swift
+enrichment: nil  // ❌ Throws away ALL enrichment data!
+```
+
+---
+
+## Required Fix
+
+**Option 1: Quick Fix (Recommended Today)**
+
+Map the enrichment fields from `DetectedBookPayload` to reconstruct the legacy `EnrichmentPayload`:
+
+```swift
+case .jobComplete(let completePayload):
+    guard case .aiScan(let aiPayload) = completePayload else { return }
+
+    let scanResult = ScanResultPayload(
+        books: aiPayload.books.map { book in
+            // ✅ Reconstruct enrichment from DetectedBookPayload fields
+            let enrichment: ScanResultPayload.BookPayload.EnrichmentPayload? = {
+                guard let status = book.enrichmentStatus else { return nil }
+
+                // Build minimal WorkDTO
+                let work: WorkDTO? = if let coverUrl = book.coverUrl {
+                    WorkDTO(
+                        id: "",
+                        title: book.title ?? "",
+                        coverImageURL: coverUrl,
+                        originalLanguage: nil,
+                        publicationYear: book.publicationYear,
+                        genres: [],
+                        subjects: [],
+                        primaryProvider: "google-books",
+                        contributors: [],
+                        synthetic: false
+                    )
+                } else { nil }
+
+                // Build minimal EditionDTO
+                let edition: EditionDTO? = if book.publisher != nil || book.publicationYear != nil {
+                    EditionDTO(
+                        id: "",
+                        isbn10: nil,
+                        isbn13: book.isbn,
+                        title: book.title ?? "",
+                        coverImageURL: book.coverUrl,
+                        publisher: book.publisher,
+                        publicationYear: book.publicationYear,
+                        pageCount: nil,
+                        format: nil,
+                        language: nil,
+                        primaryProvider: "google-books",
+                        contributors: []
+                    )
+                } else { nil }
+
+                return ScanResultPayload.BookPayload.EnrichmentPayload(
+                    status: status,
+                    work: work,
+                    editions: edition.map { [$0] } ?? [],
+                    authors: [],  // Not available in DetectedBookPayload
+                    provider: "google-books",
+                    cachedResult: false
+                )
+            }()
+
+            return ScanResultPayload.BookPayload(
+                title: book.title ?? "",
+                author: book.author ?? "",
+                isbn: book.isbn,
+                format: book.format,  // ✅ Map format field
+                confidence: book.confidence ?? 0.0,
+                boundingBox: ...,
+                enrichment: enrichment  // ✅ Reconstructed!
+            )
+        },
+        metadata: ...
+    )
+```
+
+**Option 2: Better Fix (Next Sprint)**
+
+Have backend send full nested enrichment object in WebSocket message instead of flattened fields.
+
+**Backend change** (`ai-scanner.js` lines 169-179):
+```javascript
+// Instead of flattening:
+const books = enrichedBooks.map(b => ({
+  title: b.title,
+  enrichmentStatus: b.enrichment?.status,
+  coverUrl: b.enrichment?.work?.coverImageURL,
+  publisher: b.enrichment?.editions?.[0]?.publisher,
+  ...
+}));
+
+// Send nested structure:
+const books = enrichedBooks.map(b => ({
+  title: b.title,
+  enrichment: b.enrichment  // ✅ Full object with work, editions, authors
+}));
+```
+
+Then update `DetectedBookPayload` to match:
+```swift
+public struct DetectedBookPayload: Codable, Sendable {
+    public let title: String?
+    public let enrichment: EnrichmentData?  // ✅ Nested
+
+    public struct EnrichmentData: Codable, Sendable {
+        public let status: String
+        public let work: WorkDTO?
+        public let editions: [EditionDTO]?
+        public let authors: [AuthorDTO]?
+    }
+}
+```
+
+---
+
+## Verification Steps
+
+After applying fix:
+
+1. ✅ iOS receives all 17 books
+2. ✅ Books have enrichment data (coverUrl populated)
+3. ✅ Books display in library with cover images
+4. ✅ No "backend error" message
+
+---
+
+## Backend Fixes History (All Complete)
+
+1. `bad12bc` - Fixed Gemini nullable schema syntax
+2. `ae5c569` - Simplified schema (removed complex requirements)
+3. `f98d33c` - Increased maxOutputTokens to 8192
+4. `343fb780` - **FINAL** Added ExecutionContext for enrichment
+
+**Deployment:** 343fb780-5dac-431e-879b-8f5c23c9ecc2 ✅ Verified
+
+---
+
+## Priority
+
+**CRITICAL** - Core feature completely broken. Backend is working perfectly but iOS discards all enrichment data.
+
+**Action:** Apply Option 1 (Quick Fix) immediately to unblock bookshelf scanning.
+
+**Follow-up:** Plan Option 2 (Better Fix) for next sprint to align schemas properly.
+

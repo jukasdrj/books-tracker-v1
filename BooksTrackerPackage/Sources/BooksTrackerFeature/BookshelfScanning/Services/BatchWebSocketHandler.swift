@@ -141,8 +141,10 @@ actor BatchWebSocketHandler {
                 #endif
                 // Notify error via callback if needed
 
-            case .ping, .pong:
-                // Heartbeat messages, no action needed
+            case .readyAck, .ping, .pong:
+                // Infrastructure messages, no action needed
+                // readyAck: Backend acknowledgment of client ready signal
+                // ping/pong: Heartbeat messages
                 break
             }
 

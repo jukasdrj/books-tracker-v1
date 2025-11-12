@@ -18,6 +18,7 @@ import Foundation
 // MARK: - Message Type Enum
 
 public enum MessageType: String, Codable, Sendable {
+    case readyAck = "ready_ack"       // Backend acknowledgment of client ready signal
     case jobStarted = "job_started"
     case jobProgress = "job_progress"
     case jobComplete = "job_complete"
@@ -53,6 +54,7 @@ public struct TypedWebSocketMessage: Codable, Sendable {
 // MARK: - Message Payload (Discriminated Union)
 
 public enum MessagePayload: Codable, Sendable {
+    case readyAck(ReadyAckPayload)
     case jobStarted(JobStartedPayload)
     case jobProgress(JobProgressPayload)
     case jobComplete(JobCompletePayload)
@@ -66,6 +68,8 @@ public enum MessagePayload: Codable, Sendable {
         let type = try container.decode(String.self, forKey: .type)
 
         switch type {
+        case "ready_ack":
+            self = .readyAck(try ReadyAckPayload(from: decoder))
         case "job_started":
             self = .jobStarted(try JobStartedPayload(from: decoder))
         case "job_progress":
@@ -89,6 +93,8 @@ public enum MessagePayload: Codable, Sendable {
 
     public func encode(to encoder: Encoder) throws {
         switch self {
+        case .readyAck(let payload):
+            try payload.encode(to: encoder)
         case .jobStarted(let payload):
             try payload.encode(to: encoder)
         case .jobProgress(let payload):
@@ -107,6 +113,13 @@ public enum MessagePayload: Codable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case type
     }
+}
+
+// MARK: - Ready Acknowledgment Payload
+
+public struct ReadyAckPayload: Codable, Sendable {
+    public let type: String
+    public let timestamp: Int64             // Milliseconds since epoch
 }
 
 // MARK: - Job Started Payload

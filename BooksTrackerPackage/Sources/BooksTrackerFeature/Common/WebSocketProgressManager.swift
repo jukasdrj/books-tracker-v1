@@ -748,8 +748,11 @@ public final class WebSocketProgressManager {
                 print("❌ WebSocket error: \(errorPayload.message)")
                 #endif
 
-            case .jobStarted, .ping, .pong:
-                // No action needed
+            case .readyAck, .jobStarted, .ping, .pong:
+                // No action needed for infrastructure messages
+                // readyAck: Backend acknowledgment of client ready signal
+                // jobStarted: Optional pre-processing notification
+                // ping/pong: Keep-alive messages
                 break
             }
 
