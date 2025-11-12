@@ -119,6 +119,8 @@ public final class GenericWebSocketHandler {
                     }
 
                     // Actual error - report it
+                    // Stop listening before handling transport error (prevents race condition)
+                    shouldContinueListening = false
                     self.logger.error("❌ WebSocket error (\(self.pipeline.rawValue)): \(error.localizedDescription)")
                     let errorPayload = ErrorPayload(
                         code: "WEBSOCKET_TRANSPORT_ERROR",
