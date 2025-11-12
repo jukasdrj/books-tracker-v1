@@ -11,10 +11,27 @@ import { scanImageWithGemini } from '../providers/gemini-provider.js';
 import { createSuccessResponse, createErrorResponse } from '../utils/api-responses.js';
 import { enrichBooksParallel } from '../services/parallel-enrichment.js';
 import { handleSearchAdvanced } from './v1/search-advanced.js';
-import type { DetectedBookDTO, BookshelfScanInitResponse } from '../types/responses.js';
+import type { DetectedBookDTO, BookshelfScanInitResponse, BoundingBox } from '../types/responses.js';
 
 const MAX_PHOTOS_PER_BATCH = 5;
 const MAX_IMAGE_SIZE = 10_000_000; // 10MB per image
+
+/**
+ * Clamp BoundingBox coordinates to valid range [0, 1]
+ * Prevents invalid values from AI provider (e.g., negative or >1)
+ */
+function clampBoundingBox(bbox?: any): BoundingBox | undefined {
+  if (!bbox || typeof bbox !== 'object') return undefined;
+
+  const clamp = (val: number) => Math.max(0, Math.min(1, val));
+
+  return {
+    x: clamp(Number(bbox.x) || 0),
+    y: clamp(Number(bbox.y) || 0),
+    width: clamp(Number(bbox.width) || 0),
+    height: clamp(Number(bbox.height) || 0)
+  };
+}
 
 /**
  * Helper function to map book objects to DetectedBookDTO format
@@ -27,7 +44,7 @@ function mapToDetectedBook(book): DetectedBookDTO {
     author: book?.author,
     isbn: book?.isbn,
     confidence: book?.confidence,
-    boundingBox: book?.boundingBox,
+    boundingBox: clampBoundingBox(book?.boundingBox), // Validate and clamp to [0,1]
     enrichmentStatus: book?.enrichment?.status || book?.enrichmentStatus || 'pending',
     coverUrl: book?.enrichment?.work?.coverImageURL || book?.coverUrl || null,
     publisher: book?.enrichment?.editions?.[0]?.publisher || book?.publisher || null,

@@ -167,11 +167,21 @@ export async function processCSVImportCore(csvText, jobId, doStub, env) {
       processedCount: parsedBooks.length
     });
 
+    // Validate and shape parsed books to ParsedBookDTO structure
+    // Strip extraneous fields from Gemini output to prevent schema drift
+    const validatedBooks = parsedBooks
+      .filter(book => book.title && book.author) // Ensure required fields present
+      .map(book => ({
+        title: String(book.title).trim(),
+        author: String(book.author).trim(),
+        isbn: book.isbn ? String(book.isbn).trim() : undefined
+      }));
+
     // Complete immediately (no enrichment, no manual validation)
     await doStub.completeV2('csv_import', {
-      books: parsedBooks,
+      books: validatedBooks,
       errors: [],
-      successRate: `${parsedBooks.length}/${parsedBooks.length}`
+      successRate: `${validatedBooks.length}/${parsedBooks.length}`
     });
 
   } catch (error) {
