@@ -638,7 +638,79 @@ public final class WebSocketProgressManager {
                     approved: aiPayload.approved,
                     needsReview: aiPayload.needsReview,
                     books: aiPayload.books.map { book in
-                        ScanResultPayload.BookPayload(
+                        // Reconstruct EnrichmentPayload from flattened DetectedBookPayload fields
+                        let enrichment: ScanResultPayload.BookPayload.EnrichmentPayload? = {
+                            guard let status = book.enrichmentStatus else { return nil }
+
+                            // Build minimal WorkDTO from flattened enrichment fields
+                            let work: WorkDTO? = if let coverUrl = book.coverUrl {
+                                WorkDTO(
+                                    title: book.title ?? "",
+                                    subjectTags: [],
+                                    originalLanguage: nil,
+                                    firstPublicationYear: book.publicationYear,
+                                    description: nil,
+                                    coverImageURL: coverUrl,
+                                    synthetic: false,
+                                    primaryProvider: "google-books",
+                                    contributors: [],
+                                    openLibraryID: nil,
+                                    openLibraryWorkID: nil,
+                                    isbndbID: nil,
+                                    googleBooksVolumeID: nil,
+                                    goodreadsID: nil,
+                                    goodreadsWorkIDs: [],
+                                    amazonASINs: [],
+                                    librarythingIDs: [],
+                                    googleBooksVolumeIDs: [],
+                                    lastISBNDBSync: nil,
+                                    isbndbQuality: 0,
+                                    reviewStatus: .verified,
+                                    originalImagePath: nil,
+                                    boundingBox: nil
+                                )
+                            } else { nil }
+
+                            // Build minimal EditionDTO from flattened enrichment fields
+                            let edition: EditionDTO? = if book.publisher != nil || book.publicationYear != nil {
+                                EditionDTO(
+                                    isbn: book.isbn,
+                                    isbns: book.isbn.map { [$0] } ?? [],
+                                    title: book.title,
+                                    publisher: book.publisher,
+                                    publicationDate: book.publicationYear.map { String($0) },
+                                    pageCount: nil,
+                                    format: .paperback,
+                                    coverImageURL: book.coverUrl,
+                                    editionTitle: nil,
+                                    editionDescription: nil,
+                                    language: nil,
+                                    primaryProvider: "google-books",
+                                    contributors: [],
+                                    openLibraryID: nil,
+                                    openLibraryEditionID: nil,
+                                    isbndbID: nil,
+                                    googleBooksVolumeID: nil,
+                                    goodreadsID: nil,
+                                    amazonASINs: [],
+                                    googleBooksVolumeIDs: [],
+                                    librarythingIDs: [],
+                                    lastISBNDBSync: nil,
+                                    isbndbQuality: 0
+                                )
+                            } else { nil }
+
+                            return ScanResultPayload.BookPayload.EnrichmentPayload(
+                                status: status,
+                                work: work,
+                                editions: edition.map { [$0] } ?? [],
+                                authors: [],  // Not available in flattened DetectedBookPayload
+                                provider: "google-books",
+                                cachedResult: false
+                            )
+                        }()
+
+                        return ScanResultPayload.BookPayload(
                             title: book.title ?? "",
                             author: book.author ?? "",
                             isbn: book.isbn,
@@ -649,7 +721,7 @@ public final class WebSocketProgressManager {
                                     x1: bbox.x1, y1: bbox.y1, x2: bbox.x2, y2: bbox.y2
                                 )
                             } ?? ScanResultPayload.BookPayload.BoundingBoxPayload(x1: 0, y1: 0, x2: 0, y2: 0),
-                            enrichment: nil  // Enrichment not in unified schema
+                            enrichment: enrichment  // ✅ Reconstructed from DetectedBookPayload fields!
                         )
                     },
                     metadata: ScanResultPayload.ScanMetadataPayload(
