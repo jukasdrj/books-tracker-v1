@@ -98,7 +98,8 @@ public actor ImportService {
     ) async throws -> ImportResult {
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
-        context.automaticallyMergesChangesFromParent = true // CloudKit sync integrity
+        // Note: SwiftData ModelContext doesn't have automaticallyMergesChangesFromParent
+        // Background context changes are handled differently in SwiftData
 
         var successCount = 0
         var skippedCount = 0
@@ -111,64 +112,56 @@ public actor ImportService {
         let allWorks = try context.fetch(descriptor)
 
         for book in books {
-            do {
-                // Check for duplicate by title + author (case-insensitive, exact match)
-                let titleLower = book.title.lowercased()
-                let authorLower = book.author.lowercased()
+            // Check for duplicate by title + author (case-insensitive, exact match)
+            let titleLower = book.title.lowercased()
+            let authorLower = book.author.lowercased()
 
-                let isDuplicate = allWorks.contains { work in
-                    let workTitleLower = work.title.lowercased()
-                    let workAuthorLower = work.authorNames.lowercased()
-                    return workTitleLower == titleLower && workAuthorLower == authorLower
-                }
-
-                if isDuplicate {
-                    skippedCount += 1
-                    continue
-                }
-
-                // Create Author FIRST and insert
-                let author = Author(name: book.author)
-                context.insert(author)
-
-                // Create Work, insert, then set relationship
-                let work = Work(
-                    title: book.title,
-                    originalLanguage: "Unknown",
-                    firstPublicationYear: book.publicationYear
-                )
-                context.insert(work)
-                work.authors = [author]
-
-                // Create UserLibraryEntry so book appears in library
-                let libraryEntry = UserLibraryEntry(readingStatus: .toRead)
-                context.insert(libraryEntry)
-                libraryEntry.work = work
-
-                // Create Edition if ISBN provided
-                if let isbn = book.isbn {
-                    let edition = Edition(
-                        isbn: isbn,
-                        publisher: book.publisher,
-                        publicationDate: book.publicationYear.map { "\($0)" },
-                        pageCount: nil,
-                        format: .paperback,
-                        coverImageURL: book.coverUrl
-                    )
-                    context.insert(edition)
-                    edition.work = work
-                }
-
-                // Collect work for batch save
-                newWorks.append(work)
-                successCount += 1
-            } catch {
-                // Per-book error handling: one bad book doesn't crash entire import
-                importErrors.append(ImportServiceError(
-                    title: book.title,
-                    message: "Failed to process: \(error.localizedDescription)"
-                ))
+            let isDuplicate = allWorks.contains { work in
+                let workTitleLower = work.title.lowercased()
+                let workAuthorLower = work.authorNames.lowercased()
+                return workTitleLower == titleLower && workAuthorLower == authorLower
             }
+
+            if isDuplicate {
+                skippedCount += 1
+                continue
+            }
+
+            // Create Author FIRST and insert
+            let author = Author(name: book.author)
+            context.insert(author)
+
+            // Create Work, insert, then set relationship
+            let work = Work(
+                title: book.title,
+                originalLanguage: "Unknown",
+                firstPublicationYear: book.publicationYear
+            )
+            context.insert(work)
+            work.authors = [author]
+
+            // Create UserLibraryEntry so book appears in library
+            let libraryEntry = UserLibraryEntry(readingStatus: .toRead)
+            context.insert(libraryEntry)
+            libraryEntry.work = work
+
+            // Create Edition if ISBN provided
+            if let isbn = book.isbn {
+                let edition = Edition(
+                    isbn: isbn,
+                    publisher: book.publisher,
+                    publicationDate: book.publicationYear.map { "\($0)" },
+                    pageCount: nil,
+                    format: .paperback,
+                    coverImageURL: book.coverUrl
+                )
+                context.insert(edition)
+                edition.work = work
+            }
+
+            // Collect work for batch save
+            newWorks.append(work)
+            successCount += 1
         }
 
         // Single batch save (much faster than saving in loop)
@@ -176,6 +169,17 @@ public actor ImportService {
 
         // Extract permanent IDs after save
         let newWorkIDs = newWorks.map { $0.persistentModelID }
+
+        #if DEBUG
+        print("📚 [IMPORT] Saved \(newWorks.count) works, extracted \(newWorkIDs.count) permanent IDs")
+        print("📚 [IMPORT] Context: Main actor isolation")
+        newWorks.prefix(3).enumerated().forEach { index, work in
+            print("  [\(index)] \(work.title) → ID: \(work.persistentModelID)")
+        }
+        if newWorks.count > 3 {
+            print("  ... and \(newWorks.count - 3) more")
+        }
+        #endif
 
         let duration = startTime.duration(to: ContinuousClock.now)
         return ImportResult(

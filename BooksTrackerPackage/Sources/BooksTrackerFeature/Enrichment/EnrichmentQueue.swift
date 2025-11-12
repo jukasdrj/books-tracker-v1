@@ -88,9 +88,24 @@ public final class EnrichmentQueue {
 
     /// Add multiple works to the queue
     public func enqueueBatch(_ workIDs: [PersistentIdentifier]) {
+        #if DEBUG
+        print("📚 [ENRICHMENT] enqueueBatch() called with \(workIDs.count) IDs")
+        print("📚 [ENRICHMENT] Context: @MainActor isolation")
+        workIDs.prefix(3).enumerated().forEach { index, id in
+            print("  [\(index)] ID: \(id)")
+        }
+        if workIDs.count > 3 {
+            print("  ... and \(workIDs.count - 3) more")
+        }
+        #endif
+
         for workID in workIDs {
             enqueue(workID: workID)
         }
+
+        #if DEBUG
+        print("📚 [ENRICHMENT] Queue now has \(queue.count) items total")
+        #endif
     }
 
     /// Move a specific work to the front of the queue (e.g., user viewed it)
@@ -713,6 +728,14 @@ public final class EnrichmentQueue {
 
             // Fallback: If no edition exists OR edition has no cover, use Work-level cover image (PR #290 + Issue #346)
             // This handles books enriched without ISBNs (e.g., from CSV imports) OR edition creation failures
+            #if DEBUG
+            print("📚 [APPLY] Checking Work-level cover fallback for '\(work.title)'")
+            print("  - Edition exists: \(edition != nil)")
+            print("  - Edition has cover: \(edition?.coverImageURL != nil)")
+            print("  - Work has cover: \(work.coverImageURL != nil)")
+            print("  - Enriched data has work cover: \(enrichedData.work.coverImageURL != nil)")
+            #endif
+
             if edition == nil || (edition != nil && edition!.coverImageURL == nil) {
                 if work.coverImageURL == nil {
                     if let workCoverURL = enrichedData.work.coverImageURL {

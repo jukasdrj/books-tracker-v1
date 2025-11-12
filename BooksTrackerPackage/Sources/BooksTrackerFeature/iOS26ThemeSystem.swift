@@ -609,11 +609,19 @@ struct ThemeCardButtonStyle: ButtonStyle {
                             .font(.headline)
 
                         HStack(spacing: 16) {
+                            #if os(iOS)
                             Button("Primary Action") {}
                                 .buttonStyle(.glass)
 
                             Button("Secondary") {}
                                 .buttonStyle(.glass)
+                            #else
+                            Button("Primary Action") {}
+                                .buttonStyle(.borderedProminent)
+
+                            Button("Secondary") {}
+                                .buttonStyle(.bordered)
+                            #endif
                         }
 
                         Text("This content uses themed glass effects")
