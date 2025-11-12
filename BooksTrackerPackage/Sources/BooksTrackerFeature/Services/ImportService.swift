@@ -98,12 +98,12 @@ public actor ImportService {
     ) async throws -> ImportResult {
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
-        // Note: SwiftData automatically handles context merging via modelContainer
+        context.automaticallyMergesChangesFromParent = true // CloudKit sync integrity
 
         var successCount = 0
         var skippedCount = 0
         var importErrors: [ImportServiceError] = []
-        var newWorkIDs: [PersistentIdentifier] = []
+        var newWorks: [Work] = []
         let startTime = ContinuousClock.now
 
         // Fetch existing works for deduplication (in background context)
@@ -112,15 +112,14 @@ public actor ImportService {
 
         for book in books {
             do {
-                // Check for duplicate by title + author (case-insensitive)
+                // Check for duplicate by title + author (case-insensitive, exact match)
                 let titleLower = book.title.lowercased()
                 let authorLower = book.author.lowercased()
 
                 let isDuplicate = allWorks.contains { work in
                     let workTitleLower = work.title.lowercased()
                     let workAuthorLower = work.authorNames.lowercased()
-                    return workTitleLower == titleLower &&
-                           (workAuthorLower.contains(authorLower) || authorLower.contains(workAuthorLower))
+                    return workTitleLower == titleLower && workAuthorLower == authorLower
                 }
 
                 if isDuplicate {
@@ -160,11 +159,8 @@ public actor ImportService {
                     edition.work = work
                 }
 
-                // Save work before capturing ID (ensures permanent ID)
-                try context.save()
-
-                // Collect ID for enrichment queue
-                newWorkIDs.append(work.persistentModelID)
+                // Collect work for batch save
+                newWorks.append(work)
                 successCount += 1
             } catch {
                 // Per-book error handling: one bad book doesn't crash entire import
@@ -174,6 +170,12 @@ public actor ImportService {
                 ))
             }
         }
+
+        // Single batch save (much faster than saving in loop)
+        try context.save()
+
+        // Extract permanent IDs after save
+        let newWorkIDs = newWorks.map { $0.persistentModelID }
 
         let duration = startTime.duration(to: ContinuousClock.now)
         return ImportResult(
@@ -192,9 +194,12 @@ public actor ImportService {
 
 // Extension to convert Duration to TimeInterval
 private extension ContinuousClock.Duration {
+    /// Number of attoseconds in one second (1e18).
+    private static let attosecondsPerSecond: Double = 1e18
+
     var timeInterval: TimeInterval {
         let seconds = self.components.seconds
         let attoseconds = self.components.attoseconds
-        return Double(seconds) + (Double(attoseconds) / 1_000_000_000_000_000_000)
+        return Double(seconds) + (Double(attoseconds) / Self.attosecondsPerSecond)
     }
 }

@@ -151,7 +151,10 @@ public class LibraryRepository {
         descriptor.fetchOffset = offset
         // CRITICAL: Sort by OWN property (not relationship property) to enable efficient pagination
         // Sorting by work?.lastModified would load ALL entries into memory (defeats pagination!)
-        // Use dateAdded as tie-breaker for stable, deterministic sort order (persistentModelID not supported at store level)
+        // Use dateAdded as tie-breaker for stable, deterministic sort order.
+        // NOTE: Although persistentModelID was proposed as a tiebreaker, SwiftData does not support
+        // persistentModelID for store-level sorting. Therefore, dateAdded is used instead to ensure
+        // pagination is efficient and deterministic.
         descriptor.sortBy = [SortDescriptor(\.lastModified, order: .reverse), SortDescriptor(\.dateAdded, order: .reverse)]
 
         let entries = try modelContext.fetch(descriptor)
@@ -162,7 +165,7 @@ public class LibraryRepository {
         var page: [Work] = []
 
         for entry in entries {
-            // DEFENSIVE: Validate entry is still in context (protects against concurrent deletion)
+            // SwiftData faulting handles stale objects automatically
             guard modelContext.model(for: entry.persistentModelID) is UserLibraryEntry else { continue }
 
             guard let work = entry.work else { continue }

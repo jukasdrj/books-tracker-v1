@@ -169,7 +169,8 @@ struct ImportServiceTests {
         ]
         let result2 = try await service.importCSVBooks(books2)
         #expect(result2.successCount == 0)
-        #expect(result2.failedCount == 1)  // Skipped
+        #expect(result2.skippedCount == 1)  // Duplicate skipped
+        #expect(result2.failedCount == 0)
 
         // 3. Verify only one book exists
         let descriptor = FetchDescriptor<Work>()

@@ -40,8 +40,8 @@ import SwiftUI
 /// # Performance Optimization (Phase 1)
 ///
 /// **Database Index:** Title searches optimized with database-level indexing.
-/// - Accelerates title prefix searches (e.g., "Harry Potter")
-/// - Reduces query time by 2-3x for large libraries (1000+ books)
+/// - Accelerates title prefix and equality searches (e.g., "Harry Potter", exact matches)
+/// - **Note:** Substring searches using `localizedStandardContains()` may not benefit from indexing
 /// - First app launch after update will rebuild indexes (~1-2s for 1000 books)
 ///
 /// **Migration:** SwiftData automatically triggers lightweight migration on first launch.
