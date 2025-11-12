@@ -643,33 +643,32 @@ public final class WebSocketProgressManager {
                             guard let status = book.enrichmentStatus else { return nil }
 
                             // Build minimal WorkDTO from flattened enrichment fields
-                            let work: WorkDTO? = if let coverUrl = book.coverUrl {
-                                WorkDTO(
-                                    title: book.title ?? "",
-                                    subjectTags: [],
-                                    originalLanguage: nil,
-                                    firstPublicationYear: book.publicationYear,
-                                    description: nil,
-                                    coverImageURL: coverUrl,
-                                    synthetic: false,
-                                    primaryProvider: "google-books",
-                                    contributors: [],
-                                    openLibraryID: nil,
-                                    openLibraryWorkID: nil,
-                                    isbndbID: nil,
-                                    googleBooksVolumeID: nil,
-                                    goodreadsID: nil,
-                                    goodreadsWorkIDs: [],
-                                    amazonASINs: [],
-                                    librarythingIDs: [],
-                                    googleBooksVolumeIDs: [],
-                                    lastISBNDBSync: nil,
-                                    isbndbQuality: 0,
-                                    reviewStatus: .verified,
-                                    originalImagePath: nil,
-                                    boundingBox: nil
-                                )
-                            } else { nil }
+                            // CRITICAL: Always create WorkDTO if we have enrichment data, even if coverUrl is nil
+                            let work: WorkDTO? = WorkDTO(
+                                title: book.title ?? "",
+                                subjectTags: [],
+                                originalLanguage: nil,
+                                firstPublicationYear: book.publicationYear,
+                                description: nil,
+                                coverImageURL: book.coverUrl,  // May be nil - that's OK!
+                                synthetic: false,
+                                primaryProvider: "google-books",
+                                contributors: [],
+                                openLibraryID: nil,
+                                openLibraryWorkID: nil,
+                                isbndbID: nil,
+                                googleBooksVolumeID: nil,
+                                goodreadsID: nil,
+                                goodreadsWorkIDs: [],
+                                amazonASINs: [],
+                                librarythingIDs: [],
+                                googleBooksVolumeIDs: [],
+                                lastISBNDBSync: nil,
+                                isbndbQuality: 0,
+                                reviewStatus: .verified,
+                                originalImagePath: nil,
+                                boundingBox: nil
+                            )
 
                             // Build minimal EditionDTO from flattened enrichment fields
                             let edition: EditionDTO? = if book.publisher != nil || book.publicationYear != nil {
