@@ -412,3 +412,58 @@ public final class DTOMapper {
         }
     }
 }
+
+// MARK: - Response Envelope Parsing (Phase 3)
+
+extension DTOMapper {
+    /// Parse search response with dual-format support
+    ///
+    /// Tries unified envelope first (Phase 3), falls back to legacy format.
+    /// Transparent to callers - returns BookSearchResponse regardless of format.
+    ///
+    /// - Parameter data: Raw JSON data from API
+    /// - Returns: Parsed BookSearchResponse
+    /// - Throws: ParsingError if both formats fail
+    public func parseSearchResponse(_ data: Data) throws -> BookSearchResponse {
+        let decoder = JSONDecoder()
+
+        // Attempt 1: Unified envelope format (Phase 3)
+        if let envelope = try? decoder.decode(ResponseEnvelope<BookSearchResponse>.self, from: data) {
+            if let responseData = envelope.data {
+                return responseData
+            } else if let error = envelope.error {
+                throw ParsingError.apiError(message: error.message, code: error.code ?? "UNKNOWN")
+            } else {
+                throw ParsingError.apiError(message: "Missing data and error in response", code: "INVALID_RESPONSE")
+            }
+        }
+
+        // Attempt 2: Legacy discriminated union format
+        if let legacy = try? decoder.decode(ApiResponse<BookSearchResponse>.self, from: data) {
+            switch legacy {
+            case .success(let data, _):
+                return data
+            case .failure(let error, _):
+                throw ParsingError.apiError(message: error.message, code: error.code?.rawValue ?? "UNKNOWN")
+            }
+        }
+
+        // Both parsing attempts failed
+        throw ParsingError.unknownFormat
+    }
+}
+
+/// Parsing errors for response envelope handling
+public enum ParsingError: Error, LocalizedError {
+    case apiError(message: String, code: String)
+    case unknownFormat
+
+    public var errorDescription: String? {
+        switch self {
+        case .apiError(let message, let code):
+            return "API error [\(code)]: \(message)"
+        case .unknownFormat:
+            return "Unknown response format (neither legacy nor unified envelope)"
+        }
+    }
+}
