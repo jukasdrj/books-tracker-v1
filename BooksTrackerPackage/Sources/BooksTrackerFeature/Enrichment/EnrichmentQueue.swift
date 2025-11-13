@@ -721,27 +721,26 @@ public final class EnrichmentQueue {
                 edition.touch()
             }
 
-            // Fallback: If no edition exists OR edition has no cover, use Work-level cover image (PR #290 + Issue #346)
-            // This handles books enriched without ISBNs (e.g., from CSV imports) OR edition creation failures
-            logger.debug("📚 [APPLY] Checking Work-level cover fallback for '\(work.title)'")
+            // Always populate Work-level cover for CoverImageService fallback (Issue #346 + CLAUDE.md)
+            // CoverImageService uses Work.coverImageURL as fallback when Edition is missing/has no cover
+            // This ensures covers display consistently even when Edition selection changes
+            logger.debug("📚 [APPLY] Checking Work-level cover for '\(work.title)'")
             logger.debug("  - Edition exists: \(edition != nil)")
             logger.debug("  - Edition has cover: \(edition?.coverImageURL != nil)")
             logger.debug("  - Work has cover: \(work.coverImageURL != nil)")
             logger.debug("  - Enriched data has work cover: \(enrichedData.work.coverImageURL != nil)")
 
-            if edition == nil || (edition != nil && edition!.coverImageURL == nil) {
-                if work.coverImageURL == nil {
-                    if let workCoverURL = enrichedData.work.coverImageURL {
-                        work.coverImageURL = workCoverURL
-                        logger.debug("✅ Updated Work-level cover for '\(work.title)' (no edition): \(workCoverURL)")
-                    } else if let editionCoverURL = enrichedData.edition?.coverImageURL {
-                        work.coverImageURL = editionCoverURL
-                        logger.debug("✅ Updated Work-level cover for '\(work.title)' (from edition data): \(editionCoverURL)")
-                    } else {
-                        logger.warning("⚠️ No cover image available for '\(work.title)' in enriched data (Issue #346)")
-                        logger.debug("   - enrichedData.work.coverImageURL: \(String(describing: enrichedData.work.coverImageURL))")
-                        logger.debug("   - enrichedData.edition?.coverImageURL: \(String(describing: enrichedData.edition?.coverImageURL))")
-                    }
+            if work.coverImageURL == nil {
+                if let workCoverURL = enrichedData.work.coverImageURL {
+                    work.coverImageURL = workCoverURL
+                    logger.debug("✅ Updated Work-level cover for '\(work.title)': \(workCoverURL)")
+                } else if let editionCoverURL = enrichedData.edition?.coverImageURL {
+                    work.coverImageURL = editionCoverURL
+                    logger.debug("✅ Updated Work-level cover for '\(work.title)' (from edition data): \(editionCoverURL)")
+                } else {
+                    logger.warning("⚠️ No cover image available for '\(work.title)' in enriched data (Issue #346)")
+                    logger.debug("   - enrichedData.work.coverImageURL: \(String(describing: enrichedData.work.coverImageURL))")
+                    logger.debug("   - enrichedData.edition?.coverImageURL: \(String(describing: enrichedData.edition?.coverImageURL))")
                 }
             }
 
