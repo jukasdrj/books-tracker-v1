@@ -547,7 +547,8 @@ public final class EnrichmentQueue {
             guard enrichedBook.success,
                   let enrichedData = enrichedBook.enriched else {
                 #if DEBUG
-                print("⏭️ Skipping \(enrichedBook.title) - no enriched data")
+                let reason = enrichedBook.error ?? "no enriched data available"
+                print("⏭️ Skipping \(enrichedBook.title) - \(reason)")
                 #endif
                 continue
             }
