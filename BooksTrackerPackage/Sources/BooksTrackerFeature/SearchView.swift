@@ -418,7 +418,7 @@ public struct SearchView: View {
                 }
             }
             .padding(.horizontal, 20)
-            .padding(.bottom, 20)
+            .padding(.bottom, 88) // ✅ HIG ALIGNMENT: Increased bottom padding for better tab bar clearance
             .scrollTargetLayout()
         }
         .scrollPosition($scrollPosition)
