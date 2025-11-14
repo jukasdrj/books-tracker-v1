@@ -33,6 +33,7 @@ public struct ScanResultsView: View {
     @State private var resultsModel: ScanResultsModel
     @State private var dismissedSuggestionTypes: Set<String> = []
     @State private var photoOverlayInfo: PhotoOverlayInfo?
+    @State private var showOnlyLowConfidence = false
 
     public init(
         scanResult: ScanResult?,
@@ -271,12 +272,18 @@ public struct ScanResultsView: View {
 
                 Spacer()
 
-                Text("\(resultsModel.detectedBooks.count)")
+                Text("\(resultsModel.filteredBooks.count)")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
 
-            ForEach(resultsModel.detectedBooks) { book in
+            Toggle("Show only low confidence", isOn: $showOnlyLowConfidence)
+                .padding(.bottom, 8)
+                .onChange(of: showOnlyLowConfidence) { _, newValue in
+                    resultsModel.showOnlyLowConfidence = newValue
+                }
+
+            ForEach(resultsModel.filteredBooks) { book in
                 DetectedBookRow(
                     detectedBook: book,
                     onSearch: {
@@ -347,6 +354,16 @@ struct DetectedBookRow: View {
 
     @Environment(\.iOS26ThemeStore) private var themeStore
     @State private var isSearching = false
+    @State private var showConfidenceExplanation: Bool = false
+    @AppStorage("aiConfidenceThreshold") private var threshold: Double = 0.6
+
+    var confidenceColor: Color {
+        switch detectedBook.confidence {
+        case 0.8...1.0: return .green // High
+        case threshold..<0.8: return .orange // Medium
+        default: return .red // Low (review queue)
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -382,18 +399,11 @@ struct DetectedBookRow: View {
                         }
                         .foregroundStyle(.secondary)
                     }
-
-                    // Confidence
-                    HStack(spacing: 4) {
-                        Text("Confidence:")
-                        Text("\(Int(detectedBook.confidence * 100))%")
-                            .fontWeight(.medium)
-                    }
-                    .font(.caption2)
-                    .foregroundStyle(detectedBook.confidence >= ConfidenceThreshold.high ? .green : .orange)
                 }
 
                 Spacer()
+
+                ConfidenceBadgeView(confidence: detectedBook.confidence)
 
                 // Selection toggle
                 Button {
@@ -404,6 +414,21 @@ struct DetectedBookRow: View {
                         .foregroundStyle(detectedBook.status == .confirmed ? .green : .secondary)
                 }
                 .buttonStyle(.plain)
+                .padding(.leading, 8)
+            }
+
+            if detectedBook.confidence < threshold {
+                HStack {
+                    Image(systemName: "info.circle")
+                        .foregroundColor(.secondary)
+                    Text("Sent to review queue for verification")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Button("Why?") {
+                        showConfidenceExplanation = true
+                    }
+                    .font(.caption)
+                }
             }
 
             // Action buttons
@@ -455,12 +480,13 @@ struct DetectedBookRow: View {
                 .overlay {
                     RoundedRectangle(cornerRadius: 12)
                         .strokeBorder(
-                            detectedBook.status == .alreadyInLibrary ? Color.orange.opacity(0.5) :
-                            detectedBook.status == .confirmed ? Color.green.opacity(0.3) :
-                            Color.clear,
+                            confidenceColor.opacity(0.5),
                             lineWidth: 2
                         )
                 }
+        }
+        .sheet(isPresented: $showConfidenceExplanation) {
+            ConfidenceExplanationSheet(confidence: detectedBook.confidence)
         }
     }
 }
@@ -472,12 +498,23 @@ struct DetectedBookRow: View {
 class ScanResultsModel {
     var detectedBooks: [DetectedBook]
     var isAdding = false
+    var showOnlyLowConfidence = false
+    @AppStorage("aiConfidenceThreshold") private var threshold: Double = 0.6
+
+    var filteredBooks: [DetectedBook] {
+        if showOnlyLowConfidence {
+            return detectedBooks.filter { $0.confidence < threshold }
+        } else {
+            return detectedBooks
+        }
+    }
+
     var selectedCount: Int {
-        detectedBooks.filter { $0.status == .confirmed }.count
+        filteredBooks.filter { $0.status == .confirmed }.count
     }
 
     init(scanResult: ScanResult?) {
-        self.detectedBooks = scanResult?.detectedBooks ?? []
+        self.detectedBooks = scanResult?.detectedBooks.sorted(by: { $0.confidence > $1.confidence }) ?? []
     }
 
     // MARK: - Duplicate Detection

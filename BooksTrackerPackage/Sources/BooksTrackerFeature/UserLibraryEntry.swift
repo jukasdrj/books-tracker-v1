@@ -53,6 +53,13 @@ public final class UserLibraryEntry {
     @Relationship(deleteRule: .nullify)
     var preferredEdition: Edition?
 
+    /// AI confidence score (0.0-1.0) if added via AI scanning
+    /// nil for manually added books
+    public var aiConfidence: Double?
+
+    /// Timestamp when confidence was recorded
+    public var aiConfidenceDate: Date?
+
     public init(
         readingStatus: ReadingStatus = ReadingStatus.toRead
     ) {

@@ -212,6 +212,25 @@ public struct SettingsView: View {
                     }
                 }
                 .tint(themeStore.primaryColor)
+
+                NavigationLink {
+                    AIConfidenceSettingsView()
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "wand.and.stars")
+                            .foregroundStyle(themeStore.primaryColor)
+                            .frame(width: 28)
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("AI Confidence")
+                                .font(.body)
+
+                            Text("Adjust sensitivity for AI-powered features")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
             } header: {
                 Text("AI Features")
             } footer: {

@@ -214,18 +214,22 @@ struct ReviewQueueRowView: View {
                 }
 
                 // Review status badge
-                HStack(spacing: 4) {
-                    Image(systemName: "exclamationmark.circle.fill")
-                        .font(.caption2)
-                    Text("Needs Review")
-                        .font(.caption2.weight(.medium))
-                }
-                .foregroundStyle(.orange)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background {
-                    Capsule()
-                        .fill(.orange.opacity(0.15))
+                if let confidence = work.userLibraryEntries?.first?.aiConfidence {
+                    ConfidenceBadgeView(confidence: confidence)
+                } else {
+                    HStack(spacing: 4) {
+                        Image(systemName: "exclamationmark.circle.fill")
+                            .font(.caption2)
+                        Text("Needs Review")
+                            .font(.caption2.weight(.medium))
+                    }
+                    .foregroundStyle(.orange)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background {
+                        Capsule()
+                            .fill(.orange.opacity(0.15))
+                    }
                 }
             }
 
