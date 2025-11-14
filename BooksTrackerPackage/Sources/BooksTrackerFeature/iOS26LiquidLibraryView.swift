@@ -53,6 +53,13 @@ public struct iOS26LiquidLibraryView: View {
     @State private var reviewQueueCount = 0
     @State private var isEnriching = false
     @State private var isReadingStatsExpanded = false  // NEW: Collapsible reading stats
+    @State private var showingFilters = false
+    @State private var selectedAuthor: Author?
+    @State private var selectedRegion: CulturalRegion?
+    @State private var yearRange: ClosedRange<Int>?
+    @State private var selectedStatus: ReadingStatus?
+    @State private var quickFilter: QuickFilterType?
+
 
     // ✅ FIX 3: Performance optimizations
     @State private var cachedFilteredWorks: [Work] = []
@@ -127,6 +134,30 @@ public struct iOS26LiquidLibraryView: View {
 
                 // Informational/Settings - Trailing placement for secondary actions
                 ToolbarItemGroup(placement: .navigationBarTrailing) {
+                    Menu {
+                        Button("Recently Added") {
+                            quickFilter = .recentlyAdded
+                            updateFilteredWorks()
+                        }
+                        Button("Recently Read") {
+                            quickFilter = .recentlyRead
+                            updateFilteredWorks()
+                        }
+                    } label: {
+                        Image(systemName: "line.3.horizontal.decrease.circle")
+                    }
+                    .buttonStyle(.glass)
+                    .foregroundStyle(.primary)
+
+                    Button {
+                        showingFilters.toggle()
+                    } label: {
+                        Image(systemName: "slider.horizontal.3")
+                    }
+                    .buttonStyle(.glass)
+                    .foregroundStyle(.primary)
+                    .accessibilityLabel("Filters")
+
                     Button {
                         showingDiversityInsights.toggle()
                     } label: {
@@ -191,6 +222,13 @@ public struct iOS26LiquidLibraryView: View {
                         }
                 }
             }
+            .sheet(isPresented: $showingFilters) {
+                LibraryFiltersView(
+                    selectedAuthor: $selectedAuthor,
+                    selectedRegion: $selectedRegion,
+                    yearRange: $yearRange
+                )
+            }
     }
 
     // MARK: - Main Content View
@@ -210,36 +248,44 @@ public struct iOS26LiquidLibraryView: View {
             if isLoading {
                 skeletonLoadingView
             } else {
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        if pendingEnrichmentCount > 0 {
-                            enrichmentStatusView
-                                .padding(.horizontal)
-                                .padding(.bottom, 20)
-                        }
-                        // Cultural insights header
-                        if !cachedFilteredWorks.isEmpty {
-                            culturalInsightsHeader
-                                .padding(.horizontal)
-                                .padding(.bottom, 20)
-                        }
-    
-                        // Library content based on selected layout
-                        Group {
-                            switch selectedLayout {
-                            case .floatingGrid:
-                                optimizedFloatingGridLayout
-                            case .adaptiveCards:
-                                optimizedAdaptiveCardsLayout
-                            case .liquidList:
-                                optimizedLiquidListLayout
+                ScrollViewReader { scrollProxy in
+                    ScrollView {
+                        LazyVStack(spacing: 0) {
+                            if pendingEnrichmentCount > 0 {
+                                enrichmentStatusView
+                                    .padding(.horizontal)
+                                    .padding(.bottom, 20)
                             }
+                            // Cultural insights header
+                            if !cachedFilteredWorks.isEmpty {
+                                culturalInsightsHeader
+                                    .padding(.horizontal)
+                                    .padding(.bottom, 20)
+                            }
+
+                            // Library content based on selected layout
+                            Group {
+                                switch selectedLayout {
+                                case .floatingGrid:
+                                    optimizedFloatingGridLayout
+                                case .adaptiveCards:
+                                    optimizedAdaptiveCardsLayout
+                                case .liquidList:
+                                    optimizedLiquidListLayout
+                                }
+                            }
+                            .padding(.horizontal)
                         }
-                        .padding(.horizontal)
+                    }
+                    .scrollEdgeEffectStyle(.soft, for: .top)  // iOS 26: Soft fade under nav bar for Liquid Glass depth
+                    .scrollPosition($scrollPosition)
+                    .overlay(alignment: .trailing) {
+                        if cachedFilteredWorks.count > 50 {
+                            AlphabeticalIndexView(works: cachedFilteredWorks, scrollProxy: scrollProxy)
+                                .padding(.trailing, 4)
+                        }
                     }
                 }
-                .scrollEdgeEffectStyle(.soft, for: .top)  // iOS 26: Soft fade under nav bar for Liquid Glass depth
-                .scrollPosition($scrollPosition)
             }
         }
     }
@@ -547,15 +593,29 @@ public struct iOS26LiquidLibraryView: View {
         // ✅ FIX 5: Cached filtering and diversity calculation using LibraryFilterService
         let filtered: [Work]
 
-        if searchText.isEmpty {
+        if searchText.isEmpty && selectedAuthor == nil && selectedRegion == nil && yearRange == nil && selectedStatus == nil {
             filtered = Array(libraryWorks)
         } else {
-            filtered = filterService.searchWorks(libraryWorks, searchText: searchText, modelContext: modelContext)
+            // Use the new fetchWorks method from LibraryRepository
+            let repository = LibraryRepository(modelContext: modelContext, dtoMapper: nil, featureFlags: nil)
+            do {
+                filtered = try repository.fetchWorks(
+                    searchText: searchText,
+                    author: selectedAuthor,
+                    region: selectedRegion,
+                    yearRange: yearRange,
+                    status: selectedStatus,
+                    quickFilter: quickFilter
+                )
+            } catch {
+                print("Error fetching filtered works: \(error)")
+                filtered = []
+            }
         }
 
         // Only update if actually changed
         if filtered.map(\.id) != cachedFilteredWorks.map(\.id) {
-            cachedFilteredWorks = filtered
+            cachedFilteredWorks = filtered.sorted { $0.title < $1.title }
 
             // Async diversity calculation to avoid blocking main thread
             Task {
