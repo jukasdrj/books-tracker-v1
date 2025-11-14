@@ -32,14 +32,6 @@ enum BookshelfAIError: Error, LocalizedError {
             return "Image quality issue: \(reason)"
         }
     }
-    
-    /// Extract retry-after seconds for rate limit errors
-    var retryAfter: Int? {
-        if case .rateLimitExceeded(let seconds) = self {
-            return seconds
-        }
-        return nil
-    }
 }
 
 // MARK: - AI Response Models
@@ -338,9 +330,11 @@ actor BookshelfAIService {
             return nil
         }
         
-        // Try to extract retryAfter from details (can be Int or String)
+        // Try to extract retryAfter from details (can be Int, Double, or String)
         if let retryAfter = details["retryAfter"] as? Int {
             return retryAfter
+        } else if let retryAfterDouble = details["retryAfter"] as? Double {
+            return Int(round(retryAfterDouble))
         } else if let retryAfter = details["retryAfter"] as? String,
                   let seconds = Int(retryAfter) {
             return seconds

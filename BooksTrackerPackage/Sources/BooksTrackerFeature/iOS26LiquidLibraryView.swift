@@ -255,8 +255,11 @@ public struct iOS26LiquidLibraryView: View {
         case .regular:
             // iPad or iPhone landscape - always 4 columns
             return Array(repeating: GridItem(.flexible()), count: 4)
-        default:
+        case .none:
             // Fallback: Tighter adaptive range (20pt vs 50pt) for stability
+            return [GridItem(.adaptive(minimum: 160, maximum: 180), spacing: 16)]
+        @unknown default:
+            // Future size classes: use adaptive as safe default
             return [GridItem(.adaptive(minimum: 160, maximum: 180), spacing: 16)]
         }
     }
@@ -400,7 +403,7 @@ public struct iOS26LiquidLibraryView: View {
                         let toReadCount = safeCountEntries(for: .toRead)
                         let inProgressCount = readingCount + toReadCount
                         
-                        Text("\(inProgressCount) books in progress")
+                        Text(inProgressCount == 1 ? "1 book in progress" : "\(inProgressCount) books in progress")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                         

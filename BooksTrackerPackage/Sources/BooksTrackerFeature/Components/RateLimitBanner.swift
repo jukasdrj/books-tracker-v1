@@ -116,7 +116,18 @@ public struct RateLimitBanner: View {
         countdownTask = Task { @MainActor in
             while remainingSeconds > 0 {
                 // Wait 1 second (Swift 6 pattern, no Combine!)
-                try? await Task.sleep(for: .seconds(1))
+                do {
+                    try await Task.sleep(for: .seconds(1))
+                } catch is CancellationError {
+                    // Task was cancelled, exit gracefully
+                    return
+                } catch {
+                    // Unexpected error during sleep (e.g., clock changes)
+                    #if DEBUG
+                    print("⚠️ RateLimitBanner: Unexpected error in countdown - \(error)")
+                    #endif
+                    return
+                }
 
                 // Check if task was cancelled
                 guard !Task.isCancelled else { return }
@@ -157,12 +168,7 @@ public struct RateLimitBanner: View {
     /// Post accessibility announcement for VoiceOver
     /// - Parameter seconds: Remaining seconds to announce
     private func announceCountdown(_ seconds: Int) {
-        let message: String
-        if seconds == 0 {
-            message = "Rate limit expired. You can try again now."
-        } else {
-            message = "\(seconds) seconds remaining"
-        }
+        let message = "\(seconds) seconds remaining"
 
         UIAccessibility.post(
             notification: .announcement,
