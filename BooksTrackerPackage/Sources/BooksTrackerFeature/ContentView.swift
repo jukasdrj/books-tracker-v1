@@ -120,10 +120,11 @@ public struct ContentView: View {
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)) { _ in
-                // Issue #431: Clear image cache on memory pressure to prevent crashes on memory-constrained devices
+                // Issue #431: Clear all caches on memory pressure to prevent crashes on memory-constrained devices
                 URLCache.shared.removeAllCachedResponses()
+                ImageCacheManager.shared.clearCache()
                 #if DEBUG
-                print("🧹 [Memory Pressure] Cleared image cache due to memory warning")
+                print("🧹 [Memory Pressure] Cleared URLCache and ImageCacheManager due to memory warning")
                 #endif
             }
             .task {

@@ -143,11 +143,16 @@ struct SelectiveFetchingValidationTests {
         // Validate that selective fetch doesn't load relationships
         let hasLoadedRelationships = selectiveWorks.first?.authors != nil || selectiveWorks.first?.editions != nil
 
+        // Use #expect to fail test if relationships are loaded despite selective fetching
+        #expect(
+            !hasLoadedRelationships,
+            "Relationships should not be loaded when using propertiesToFetch. This may indicate a SwiftData or CloudKit sync limitation that needs investigation."
+        )
+
         if hasLoadedRelationships {
             print("⚠️  WARNING: propertiesToFetch may not be working correctly")
             print("⚠️  Relationships are loaded despite selective fetching")
             print("⚠️  This may indicate CloudKit sync limitations")
-            // Don't fail test - document behavior for Phase 4.3 profiling
         } else {
             print("✅ Selective fetch: Relationships not loaded (expected)")
         }
