@@ -42,13 +42,17 @@ final class DuplicateDetectionService {
             return nil
         }
 
+        // CloudKit does not support filtering on to-many relationships in predicates.
+        // So, filter by title in predicate, then filter by author in-memory.
         let predicate = #Predicate<UserLibraryEntry> { entry in
-            entry.work?.title?.lowercased() == title &&
-            entry.work?.authors.contains { author in
-                author.name.lowercased() == firstAuthor
-            } ?? false
+            entry.work?.title?.lowercased() == title
         }
-        let descriptor = FetchDescriptor(predicate: predicate, fetchLimit: 1)
-        return try? modelContext.fetch(descriptor).first
+        let descriptor = FetchDescriptor(predicate: predicate)
+        let candidates = (try? modelContext.fetch(descriptor)) ?? []
+        return candidates.first(where: { entry in
+            entry.work?.authors.contains(where: { author in
+                author.name.lowercased() == firstAuthor
+            }) ?? false
+        })
     }
 }

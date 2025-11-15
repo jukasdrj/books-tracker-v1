@@ -27,13 +27,17 @@ struct EnrichmentCompletionToast: View {
         .shadow(radius: 8)
         .padding(.horizontal)
         .transition(.move(edge: .top).combined(with: .opacity))
-        .onAppear {
-            // Auto-dismiss after 3 seconds
-            Task {
-                try? await Task.sleep(for: .seconds(3))
+        .task(id: isPresented) {
+            // This task is automatically cancelled if the toast is dismissed manually
+            // or if the view disappears for any other reason.
+            guard isPresented else { return }
+            do {
+                try await Task.sleep(for: .seconds(3))
                 withAnimation {
                     isPresented = false
                 }
+            } catch {
+                // The task was cancelled, which is expected if the user dismisses the toast.
             }
         }
         .onTapGesture {

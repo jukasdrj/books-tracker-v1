@@ -435,12 +435,12 @@ public final class EnrichmentQueue {
     }
 
     /// Stop background processing
-    public func pause() async {
+    public func stop() async {
         await cancelBackendJob() // Best-effort cancellation
         currentTask?.cancel()
         currentTask = nil
         processing = false
-        activeEnrichments.removeAll() // Clear active on pause
+        activeEnrichments.removeAll() // Clear active on stop
     }
 
     /// Cancel the backend enrichment job

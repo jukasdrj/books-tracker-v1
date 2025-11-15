@@ -43,14 +43,26 @@ struct EditionComparisonSheet: View {
     private func navigateToLibraryEntry() {
         if let work = ownedEdition.work {
             tabCoordinator.selectedTab = .library
-            tabCoordinator.navigateToWorkInLibrary(work)
+            tabCoordinator.switchToLibrary()
         }
     }
 
     private func addDifferentEdition() {
-        if let work = searchResult.work {
-            let newEntry = UserLibraryEntry(work: work, edition: searchResult)
-            modelContext.insert(newEntry)
+        guard let work = searchResult.work else { return }
+        // Ensure both work and searchResult are inserted into modelContext
+        if modelContext.model(for: work.persistentModelID) == nil {
+            modelContext.insert(work)
+        }
+        if modelContext.model(for: searchResult.persistentModelID) == nil {
+            modelContext.insert(searchResult)
+        }
+        // Now safe to create UserLibraryEntry using factory method
+        _ = UserLibraryEntry.createOwnedEntry(for: work, edition: searchResult, context: modelContext)
+        do {
+            try modelContext.save()
+        } catch {
+            // Handle error - log silently for now
+            print("Error saving UserLibraryEntry: \(error)")
         }
     }
 }
@@ -68,7 +80,7 @@ struct EditionDetailCard: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Format: \(edition.format.displayName)")
                 Text("Publisher: \(edition.publisher ?? "N/A")")
-                Text("Year: \(edition.publicationYear ?? 0)")
+                Text("Year: \((edition.publicationDate?.prefix(4)).map(String.init) ?? "N/A")")
                 Text("ISBN: \(edition.isbn13 ?? "N/A")")
             }
             .font(.subheadline)

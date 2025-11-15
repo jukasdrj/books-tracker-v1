@@ -24,8 +24,8 @@ struct EnrichmentQueueDetailsView: View {
             }
 
             Section {
-                Button("Pause Enrichment") {
-                    Task { await enrichmentQueue.pause() }
+                Button("Stop Enrichment") {
+                    Task { await enrichmentQueue.stop() }
                 }
                 .disabled(enrichmentQueue.activeEnrichments.isEmpty)
 

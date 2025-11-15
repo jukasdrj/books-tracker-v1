@@ -72,7 +72,7 @@ public struct SearchView: View {
     @State private var searchModel: SearchModel?
     @State private var selectedBook: SearchResult?
     @State private var tappedBook: SearchResult?
-    @State private var showEditionComparison = false
+    @State private var editionComparisonData: EditionComparisonData?
     @State private var searchScope: SearchScope = .all
     @Namespace private var searchTransition
 
@@ -341,10 +341,8 @@ public struct SearchView: View {
         .safeAreaInset(edge: .bottom) {
             Color.clear.frame(height: 16)
         }
-        .sheet(isPresented: $showEditionComparison) {
-            if let tappedBook = tappedBook, let ownedEntry = tappedBook.work.userLibraryEntries?.first, let ownedEdition = ownedEntry.edition, let searchEdition = tappedBook.primaryEdition {
-                EditionComparisonSheet(searchResult: searchEdition, ownedEdition: ownedEdition)
-            }
+        .sheet(item: $editionComparisonData) { data in
+            EditionComparisonSheet(searchResult: data.searchEdition, ownedEdition: data.ownedEdition)
         }
     }
 
@@ -682,8 +680,16 @@ public struct SearchView: View {
                     ForEach(Array(items.enumerated()), id: \.element.id) { index, result in
                         Button {
                             if result.isInLibrary {
-                                tappedBook = result
-                                showEditionComparison = true
+                                // Prepare edition comparison data
+                                if let ownedEntry = result.work.userLibraryEntries?.first,
+                                   let ownedEdition = ownedEntry.edition,
+                                   let searchEdition = result.primaryEdition {
+                                    tappedBook = result
+                                    editionComparisonData = EditionComparisonData(
+                                        searchEdition: searchEdition,
+                                        ownedEdition: ownedEdition
+                                    )
+                                }
                             } else {
                                 selectedBook = result
                             }
@@ -1077,4 +1083,13 @@ struct iOS26ScrollEdgeEffectModifier: ViewModifier {
     .modelContainer(container)
     .environment(\.dtoMapper, dtoMapper)
     .preferredColorScheme(.dark)
+}
+
+// MARK: - Supporting Types
+
+/// Data needed for edition comparison sheet
+struct EditionComparisonData: Identifiable {
+    let id = UUID()
+    let searchEdition: Edition
+    let ownedEdition: Edition
 }
