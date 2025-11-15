@@ -29,15 +29,21 @@ struct iOS26LiquidListRow: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: rowSpacing) {
-            // Book cover thumbnail
-            coverThumbnail
+        ZStack(alignment: .topTrailing) {
+            HStack(alignment: .top, spacing: rowSpacing) {
+                // Book cover thumbnail
+                coverThumbnail
 
-            // Main content area
-            mainContent
+                // Main content area
+                mainContent
 
-            // Trailing accessories
-            trailingAccessories
+                // Trailing accessories
+                trailingAccessories
+            }
+
+            // Enrichment indicator overlay
+            EnrichmentIndicator(workId: work.persistentModelID)
+                .padding(8)
         }
         .padding(.horizontal, horizontalPadding)
         .padding(.vertical, verticalPadding)
