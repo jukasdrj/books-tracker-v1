@@ -1,5 +1,6 @@
 import SwiftUI
 
+@MainActor
 @available(iOS 26.0, *)
 struct AlphabeticalIndexView: View {
     let works: [Work]
@@ -12,7 +13,7 @@ struct AlphabeticalIndexView: View {
     }
 
     var body: some View {
-        VStack {
+        VStack(spacing: 2) {
             ForEach(indexLetters, id: \.self) { letter in
                 Button(action: {
                     if let work = works.first(where: { $0.title.uppercased().starts(with: letter) }) {
@@ -22,14 +23,15 @@ struct AlphabeticalIndexView: View {
                     }
                 }) {
                     Text(letter)
-                        .font(.system(size: 12, weight: .bold))
-                        .padding(.vertical, 2)
-                        .padding(.horizontal, 4)
+                        .font(.caption2.bold())
+                        .foregroundStyle(.secondary)
+                        .frame(minWidth: 20, minHeight: 16)
                 }
+                .accessibilityLabel("Jump to section \(letter)")
             }
         }
         .padding(4)
-        .background(Color.gray.opacity(0.2))
-        .cornerRadius(10)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 }

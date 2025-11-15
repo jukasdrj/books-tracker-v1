@@ -267,81 +267,12 @@ public class LibraryRepository {
         return try modelContext.fetch(descriptor)
     }
 
-public enum QuickFilterType {
-    case recentlyAdded
-    case recentlyRead
-}
-
-    public func fetchWorks(
-        searchText: String = "",
-        author: Author? = nil,
-        region: CulturalRegion? = nil,
-        yearRange: ClosedRange<Int>? = nil,
-    status: ReadingStatus? = nil,
-    quickFilter: QuickFilterType? = nil
-    ) throws -> [Work] {
-        var predicate: Predicate<Work> = #Predicate { work in
-            work.userLibraryEntries?.isEmpty == false
-        }
-
-        if !searchText.isEmpty {
-            let currentSearchText = searchText
-            predicate = predicate && #Predicate<Work> { work in
-                work.title.localizedStandardContains(currentSearchText) ||
-                (work.authors?.contains(where: { author in
-                    author.name.localizedStandardContains(currentSearchText)
-                }) ?? false)
-            }
-        }
-
-        if let author {
-            predicate = predicate && #Predicate<Work> { work in
-                work.authors?.contains(author) ?? false
-            }
-        }
-
-        if let region {
-            predicate = predicate && #Predicate<Work> { work in
-                work.authors?.contains(where: { $0.culturalRegion == region }) ?? false
-            }
-        }
-
-        if let yearRange {
-            let lowerBound = yearRange.lowerBound
-            let upperBound = yearRange.upperBound
-            predicate = predicate && #Predicate<Work> { work in
-                work.editions?.contains(where: { edition in
-                    guard let year = edition.publicationYear else { return false }
-                    return year >= lowerBound && year <= upperBound
-                }) ?? false
-            }
-        }
-
-        if let status {
-            predicate = predicate && #Predicate<Work> { work in
-                work.userLibraryEntries?.contains(where: { $0.readingStatus == status }) ?? false
-            }
-        }
-
-    if let quickFilter {
-        let thirtyDaysAgo = Calendar.current.date(byAdding: .day, value: -30, to: Date())!
-        switch quickFilter {
-        case .recentlyAdded:
-            predicate = predicate && #Predicate<Work> { work in
-                work.userLibraryEntries?.contains { $0.dateAdded >= thirtyDaysAgo } ?? false
-            }
-        case .recentlyRead:
-            predicate = predicate && #Predicate<Work> { work in
-                work.userLibraryEntries?.contains { entry in
-                    guard let completionDate = entry.completionDate else { return false }
-                    return completionDate >= thirtyDaysAgo
-                } ?? false
-            }
-        }
-    }
-
-        let descriptor = FetchDescriptor<Work>(predicate: predicate, sortBy: [SortDescriptor(\.title)])
-        return try modelContext.fetch(descriptor)
+    // MARK: - Quick Filters
+    
+    /// Quick filter types for common library views
+    public enum QuickFilterType: Sendable {
+        case recentlyAdded
+        case recentlyRead
     }
 
     // MARK: - Phase 4.2: Selective Fetching (Issue #396)
