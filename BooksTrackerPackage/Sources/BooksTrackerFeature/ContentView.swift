@@ -68,6 +68,7 @@ public struct ContentView: View {
                         NavigationStack {
                             SearchView()
                                 .environment(searchCoordinator)
+                                .environment(tabCoordinator)
                         }
                         .tabItem {
                             Label("Search", systemImage: selectedTab == .search ? "magnifyingglass.circle.fill" : "magnifyingglass")

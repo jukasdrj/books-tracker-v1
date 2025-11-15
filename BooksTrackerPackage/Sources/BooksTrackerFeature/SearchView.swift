@@ -71,6 +71,8 @@ public struct SearchView: View {
 
     @State private var searchModel: SearchModel?
     @State private var selectedBook: SearchResult?
+    @State private var tappedBook: SearchResult?
+    @State private var showEditionComparison = false
     @State private var searchScope: SearchScope = .all
     @Namespace private var searchTransition
 
@@ -338,6 +340,11 @@ public struct SearchView: View {
         // across different devices, orientations, and accessibility settings
         .safeAreaInset(edge: .bottom) {
             Color.clear.frame(height: 16)
+        }
+        .sheet(isPresented: $showEditionComparison) {
+            if let tappedBook = tappedBook, let ownedEntry = tappedBook.work.userLibraryEntries?.first, let ownedEdition = ownedEntry.edition, let searchEdition = tappedBook.primaryEdition {
+                EditionComparisonSheet(searchResult: searchEdition, ownedEdition: ownedEdition)
+            }
         }
     }
 
@@ -674,7 +681,12 @@ public struct SearchView: View {
                     // Results list with accessibility
                     ForEach(Array(items.enumerated()), id: \.element.id) { index, result in
                         Button {
-                            selectedBook = result
+                            if result.isInLibrary {
+                                tappedBook = result
+                                showEditionComparison = true
+                            } else {
+                                selectedBook = result
+                            }
                         } label: {
                             iOS26LiquidListRow(
                                 work: result.work,
