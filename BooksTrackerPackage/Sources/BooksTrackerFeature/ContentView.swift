@@ -88,8 +88,8 @@ public struct ContentView: View {
                         }
                         .tabItem {
                             Label("Shelf", systemImage: selectedTab == .shelf ? "viewfinder.circle.fill" : "viewfinder")
-                                .badge(reviewQueueStatus.reviewQueueCount > 0 ? min(reviewQueueStatus.reviewQueueCount, 99) : nil)
                         }
+                        .badge(reviewQueueStatus.reviewQueueCount > 0 ? reviewQueueStatus.reviewQueueCount : 0)
                         .tag(MainTab.shelf)
 
                         // Insights Tab

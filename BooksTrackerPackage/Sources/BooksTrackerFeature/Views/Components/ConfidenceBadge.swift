@@ -20,13 +20,13 @@ public struct ConfidenceBadge: View {
     
     private var confidenceLevel: ConfidenceLevel {
         switch confidence {
-        case 0.8...1.0: return .high
-        case 0.6..<0.8: return .medium
+        case ConfidenceThresholds.high...1.0: return .high
+        case ConfidenceThresholds.medium..<ConfidenceThresholds.high: return .medium
         default: return .low
         }
     }
     
-    private var body: some View {
+    public var body: some View {
         switch style {
         case .compact:
             compactView
@@ -122,7 +122,7 @@ public struct ConfidenceExplanationSheet: View {
         }
     }
     
-    var body: some View {
+    public var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
@@ -144,13 +144,13 @@ public struct ConfidenceExplanationSheet: View {
                         Text("What This Means")
                             .font(.headline)
                         
-                        if confidence >= 0.8 {
+                        if confidence >= ConfidenceThresholds.high {
                             confidenceRow(
                                 icon: "checkmark.circle.fill",
                                 color: .green,
                                 text: "High confidence - Book automatically added to library"
                             )
-                        } else if confidence >= 0.6 {
+                        } else if confidence >= ConfidenceThresholds.medium {
                             confidenceRow(
                                 icon: "exclamationmark.circle.fill",
                                 color: .orange,

@@ -3,14 +3,6 @@ import SwiftData
 
 #if canImport(UIKit)
 
-// MARK: - Confidence Thresholds
-
-/// Shared confidence thresholds for scan result categorization
-private enum ConfidenceThreshold {
-    static let high: Double = 0.7
-    static let medium: Double = 0.1
-}
-
 // MARK: - Photo Overlay Info
 
 /// Data structure for photo overlay sheet presentation
@@ -21,7 +13,7 @@ private struct PhotoOverlayInfo: Identifiable {
 }
 
 /// Wrapper for confidence explanation sheet
-private struct ConfidenceExplanationInfo: Identifiable {
+fileprivate struct ConfidenceExplanationInfo: Identifiable {
     let id = UUID()
     let confidence: Double
 }
@@ -355,7 +347,7 @@ struct DetectedBookRow: View {
     let detectedBook: DetectedBook
     let onSearch: () async -> Void
     let onToggle: () -> Void
-    @Binding var confidenceExplanationFor: ConfidenceExplanationInfo?
+    @Binding fileprivate var confidenceExplanationFor: ConfidenceExplanationInfo?
 
     @Environment(\.iOS26ThemeStore) private var themeStore
     @State private var isSearching = false
@@ -399,7 +391,7 @@ struct DetectedBookRow: View {
                     HStack(spacing: 8) {
                         ConfidenceBadge(confidence: detectedBook.confidence, style: .detailed)
                         
-                        if detectedBook.confidence < 0.6 {
+                        if detectedBook.confidence < ConfidenceThresholds.medium {
                             Button("Why?") {
                                 confidenceExplanationFor = ConfidenceExplanationInfo(confidence: detectedBook.confidence)
                             }
@@ -505,7 +497,7 @@ class ScanResultsModel {
             // Check if already in library
             if await isDuplicate(book, in: modelContext) {
                 detectedBooks[index].status = .alreadyInLibrary
-            } else if book.confidence >= ConfidenceThreshold.high && (book.isbn != nil || (book.title != nil && book.author != nil)) {
+            } else if book.confidence >= ConfidenceThresholds.high && (book.isbn != nil || (book.title != nil && book.author != nil)) {
                 // Auto-select high-confidence books
                 detectedBooks[index].status = .confirmed
             }

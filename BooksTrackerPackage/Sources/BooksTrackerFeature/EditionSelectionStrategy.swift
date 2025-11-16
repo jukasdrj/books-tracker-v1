@@ -162,8 +162,8 @@ public struct RecentStrategy: EditionSelectionStrategy {
         let regex = try? NSRegularExpression(pattern: "\\b(19|20)\\d{2}\\b")
         let range = NSRange(location: 0, length: dateString.utf16.count)
         if let match = regex?.firstMatch(in: dateString, options: [], range: range),
-           let yearString = Range(match.range, in: dateString),
-           let year = Int(yearString) {
+           let yearRange = Range(match.range, in: dateString),
+           let year = Int(dateString[yearRange]) {
             return year
         }
         

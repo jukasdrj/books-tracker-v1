@@ -56,7 +56,7 @@ public class ReviewQueueStatusService {
             // Fetch works needing review
             let descriptor = FetchDescriptor<Work>(
                 predicate: #Predicate<Work> { work in
-                    work.reviewStatus == ReviewStatus.needsReview
+                    work.reviewStatus.rawValue == "needsReview"
                 }
             )
             let worksNeedingReview = try modelContext.fetch(descriptor)
