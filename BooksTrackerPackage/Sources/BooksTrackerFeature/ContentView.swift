@@ -35,6 +35,7 @@ public struct ContentView: View {
     @State private var tabCoordinator = TabCoordinator()
     @State private var notificationCoordinator = NotificationCoordinator()
     @State private var libraryRepository: LibraryRepository?
+    @State private var reviewQueueStatus = ReviewQueueStatusService()
 
 
     // Enrichment progress tracking (no Live Activity required!)
@@ -87,6 +88,7 @@ public struct ContentView: View {
                         }
                         .tabItem {
                             Label("Shelf", systemImage: selectedTab == .shelf ? "viewfinder.circle.fill" : "viewfinder")
+                                .badge(reviewQueueStatus.reviewQueueCount > 0 ? min(reviewQueueStatus.reviewQueueCount, 99) : nil)
                         }
                         .tag(MainTab.shelf)
 
@@ -117,6 +119,8 @@ public struct ContentView: View {
                 if libraryRepository == nil {
                     libraryRepository = LibraryRepository(modelContext: modelContext, dtoMapper: dtoMapper, featureFlags: featureFlags)
                 }
+                // Start monitoring review queue status
+                reviewQueueStatus.startMonitoring(modelContext: modelContext)
                 LaunchMetrics.shared.recordMilestone("UI fully interactive")
 
                 // Print full launch report after a short delay (let everything settle)

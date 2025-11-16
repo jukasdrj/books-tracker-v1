@@ -294,7 +294,8 @@ public struct ScanResultsView: View {
                     },
                     onToggle: {
                         resultsModel.toggleBookSelection(book)
-                    }
+                    },
+                    confidenceExplanationFor: $confidenceExplanationFor
                 )
             }
         }
@@ -354,6 +355,7 @@ struct DetectedBookRow: View {
     let detectedBook: DetectedBook
     let onSearch: () async -> Void
     let onToggle: () -> Void
+    @Binding var confidenceExplanationFor: ConfidenceExplanationInfo?
 
     @Environment(\.iOS26ThemeStore) private var themeStore
     @State private var isSearching = false
@@ -523,18 +525,35 @@ class ScanResultsModel {
             }
         }
 
-        // Title + Author fallback
+        // Title + Author fallback with localized comparison for international names
         if let title = detectedBook.title, let author = detectedBook.author {
-            let titleLower = title.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-            let authorLower = author.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-
             let descriptor = FetchDescriptor<Work>()
             if let allWorks = try? modelContext.fetch(descriptor) {
                 return allWorks.contains { work in
                     guard work.userLibraryEntries?.isEmpty == false else { return false }
-                    let workTitle = work.title.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-                    let workAuthor = work.authorNames.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-                    return workTitle == titleLower && workAuthor == authorLower
+                    
+                    // Use localized comparison for better international name matching
+                    let workTitle = work.title
+                        .folding(options: .diacriticInsensitive, locale: Locale.current)
+                        .lowercased()
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                    
+                    let workAuthor = work.authorNames
+                        .folding(options: .diacriticInsensitive, locale: Locale.current)
+                        .lowercased()
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                    
+                    let detectedTitle = title
+                        .folding(options: .diacriticInsensitive, locale: Locale.current)
+                        .lowercased()
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                    
+                    let detectedAuthor = author
+                        .folding(options: .diacriticInsensitive, locale: Locale.current)
+                        .lowercased()
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                    
+                    return workTitle == detectedTitle && workAuthor == detectedAuthor
                 }
             }
         }
