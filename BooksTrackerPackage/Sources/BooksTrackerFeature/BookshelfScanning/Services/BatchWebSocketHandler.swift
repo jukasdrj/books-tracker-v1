@@ -125,6 +125,17 @@ actor BatchWebSocketHandler {
             case .jobProgress(let progressPayload):
                 await processProgressUpdate(progressPayload)
 
+            case .reconnected(let reconnectedPayload):
+                let syntheticProgress = JobProgressPayload(
+                    type: reconnectedPayload.type,
+                    progress: reconnectedPayload.progress,
+                    status: reconnectedPayload.status,
+                    processedCount: reconnectedPayload.processedCount,
+                    currentItem: nil,
+                    keepAlive: true
+                )
+                await processProgressUpdate(syntheticProgress)
+
             case .jobComplete(let completePayload):
                 // Extract AI scan-specific completion data
                 guard case .aiScan(let aiPayload) = completePayload else {

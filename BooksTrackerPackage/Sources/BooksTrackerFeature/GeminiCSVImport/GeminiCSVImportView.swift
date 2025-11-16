@@ -427,6 +427,20 @@ public struct GeminiCSVImportView: View {
                     #endif
                     importStatus = .processing(progress: progressPayload.progress, message: progressPayload.status)
 
+                case .reconnected(let payload):
+                    let syntheticProgress = JobProgressPayload(
+                        type: payload.type,
+                        progress: payload.progress,
+                        status: payload.status,
+                        processedCount: payload.processedCount,
+                        currentItem: nil,
+                        keepAlive: true
+                    )
+                    #if DEBUG
+                    print("[CSV WebSocket] Reconnected: \(Int(syntheticProgress.progress * 100))% - \(syntheticProgress.status)")
+                    #endif
+                    importStatus = .processing(progress: syntheticProgress.progress, message: syntheticProgress.status)
+
                 case .jobComplete(let completePayload):
                     // Extract CSV-specific completion data
                     guard case .csvImport(let csvPayload) = completePayload else {
