@@ -20,6 +20,12 @@ private struct PhotoOverlayInfo: Identifiable {
     let books: [DetectedBook]
 }
 
+/// Wrapper for confidence explanation sheet
+private struct ConfidenceExplanationInfo: Identifiable {
+    let id = UUID()
+    let confidence: Double
+}
+
 // MARK: - Scan Results View
 
 /// Review and confirm detected books before adding to library
@@ -33,6 +39,7 @@ public struct ScanResultsView: View {
     @State private var resultsModel: ScanResultsModel
     @State private var dismissedSuggestionTypes: Set<String> = []
     @State private var photoOverlayInfo: PhotoOverlayInfo?
+    @State private var confidenceExplanationFor: ConfidenceExplanationInfo?
 
     public init(
         scanResult: ScanResult?,
@@ -104,6 +111,9 @@ public struct ScanResultsView: View {
             }
             .sheet(item: $photoOverlayInfo) { info in
                 BoundingBoxOverlayView(image: info.image, detectedBooks: info.books)
+            }
+            .sheet(item: $confidenceExplanationFor) { info in
+                ConfidenceExplanationSheet(confidence: info.confidence)
             }
             .task {
                 await resultsModel.performDuplicateCheck(modelContext: modelContext)
@@ -383,14 +393,18 @@ struct DetectedBookRow: View {
                         .foregroundStyle(.secondary)
                     }
 
-                    // Confidence
-                    HStack(spacing: 4) {
-                        Text("Confidence:")
-                        Text("\(Int(detectedBook.confidence * 100))%")
-                            .fontWeight(.medium)
+                    // Confidence with enhanced badge
+                    HStack(spacing: 8) {
+                        ConfidenceBadge(confidence: detectedBook.confidence, style: .detailed)
+                        
+                        if detectedBook.confidence < 0.6 {
+                            Button("Why?") {
+                                confidenceExplanationFor = ConfidenceExplanationInfo(confidence: detectedBook.confidence)
+                            }
+                            .font(.caption2)
+                            .foregroundColor(.blue)
+                        }
                     }
-                    .font(.caption2)
-                    .foregroundStyle(detectedBook.confidence >= ConfidenceThreshold.high ? .green : .orange)
                 }
 
                 Spacer()
@@ -608,6 +622,10 @@ class ScanResultsModel {
                     if let primaryEdition = editions.first {
                         entry.edition = primaryEdition
                     }
+                    
+                    // Store AI confidence score for transparency
+                    entry.aiConfidence = detectedBook.confidence
+                    entry.aiConfidenceDate = Date()
 
                     try modelContext.save()
 
@@ -667,6 +685,10 @@ class ScanResultsModel {
 
                     // Create library entry
                     let entry = UserLibraryEntry.createWishlistEntry(for: work, context: modelContext)
+
+                    // Store AI confidence score for transparency
+                    entry.aiConfidence = detectedBook.confidence
+                    entry.aiConfidenceDate = Date()
 
                     // If ISBN available, create minimal edition
                     if let isbn = detectedBook.isbn {
