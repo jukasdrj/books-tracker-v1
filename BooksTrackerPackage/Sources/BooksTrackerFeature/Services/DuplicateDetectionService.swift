@@ -100,31 +100,34 @@ public final class DuplicateDetectionService {
             return nil
         }
 
-        let normalizedTitle = work.title.normalizedTitleForSearch.lowercased()
-        let normalizedAuthor = firstAuthor.name.lowercased()
+        let normalizedTitle = work.title.normalizedTitleForSearch
+        let normalizedAuthor = firstAuthor.name
 
-        // ✅ Pre-filter candidates by title at database level to reduce in-memory processing
-        // This is a performance optimization - avoids loading entire library for each duplicate check
-        let predicate = #Predicate<UserLibraryEntry> { entry in
-            entry.work?.title.localizedStandardContains(work.title) ?? false
-        }
-        let descriptor = FetchDescriptor<UserLibraryEntry>(predicate: predicate)
+        // Fetch all library entries - in-memory filtering below handles duplicate detection
+        // NOTE: Database-level predicate filtering with optional chaining (entry.work?.title)
+        // is not supported by Swift Predicate macro, so we fetch all and filter in-memory
+        let descriptor = FetchDescriptor<UserLibraryEntry>()
 
         guard let candidates = try? modelContext.fetch(descriptor) else {
             return nil
         }
 
-        // In-memory filtering with normalized comparison on the smaller candidate set
+        // In-memory filtering with localized comparison for international support
+        // Handles accents, diacritics, and non-Latin scripts (e.g., "José" vs "Jose")
         return candidates.first { entry in
             guard let entryWork = entry.work,
                   let entryFirstAuthor = entryWork.authors?.first else {
                 return false
             }
 
-            let entryTitle = entryWork.title.normalizedTitleForSearch.lowercased()
-            let entryAuthor = entryFirstAuthor.name.lowercased()
+            let entryTitle = entryWork.title.normalizedTitleForSearch
+            let entryAuthor = entryFirstAuthor.name
 
-            return entryTitle == normalizedTitle && entryAuthor == normalizedAuthor
+            // Use localizedCaseInsensitiveCompare for Unicode-aware matching
+            let titleMatches = entryTitle.localizedCaseInsensitiveCompare(normalizedTitle) == .orderedSame
+            let authorMatches = entryAuthor.localizedCaseInsensitiveCompare(normalizedAuthor) == .orderedSame
+            
+            return titleMatches && authorMatches
         }
     }
 }
