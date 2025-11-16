@@ -505,7 +505,7 @@ class ScanResultsModel {
     }
 
     private func isDuplicate(_ detectedBook: DetectedBook, in modelContext: ModelContext) async -> Bool {
-        // ISBN-first strategy
+        // ISBN-first strategy (efficient predicate-based lookup)
         if let isbn = detectedBook.isbn, !isbn.isEmpty {
             let descriptor = FetchDescriptor<Edition>(
                 predicate: #Predicate<Edition> { edition in
@@ -517,40 +517,47 @@ class ScanResultsModel {
             }
         }
 
-        // Title + Author fallback with localized comparison for international names
-        if let title = detectedBook.title, let author = detectedBook.author {
-            let descriptor = FetchDescriptor<Work>()
-            if let allWorks = try? modelContext.fetch(descriptor) {
-                return allWorks.contains { work in
-                    guard work.userLibraryEntries?.isEmpty == false else { return false }
-                    
-                    // Use localized comparison for better international name matching
-                    let workTitle = work.title
-                        .folding(options: .diacriticInsensitive, locale: Locale.current)
-                        .lowercased()
-                        .trimmingCharacters(in: .whitespacesAndNewlines)
-                    
-                    let workAuthor = work.authorNames
-                        .folding(options: .diacriticInsensitive, locale: Locale.current)
-                        .lowercased()
-                        .trimmingCharacters(in: .whitespacesAndNewlines)
-                    
-                    let detectedTitle = title
-                        .folding(options: .diacriticInsensitive, locale: Locale.current)
-                        .lowercased()
-                        .trimmingCharacters(in: .whitespacesAndNewlines)
-                    
-                    let detectedAuthor = author
-                        .folding(options: .diacriticInsensitive, locale: Locale.current)
-                        .lowercased()
-                        .trimmingCharacters(in: .whitespacesAndNewlines)
-                    
-                    return workTitle == detectedTitle && workAuthor == detectedAuthor
-                }
-            }
+        // Title + Author fallback with database-level predicate filtering
+        guard let title = detectedBook.title, let author = detectedBook.author else {
+            return false
         }
-
-        return false
+        
+        // Normalize for predicate search
+        let normalizedTitle = title
+            .folding(options: .diacriticInsensitive, locale: Locale.current)
+            .lowercased()
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Pre-filter Works by title at database level (performance optimization)
+        let predicate = #Predicate<Work> { work in
+            work.title.localizedStandardContains(title) && 
+            (work.userLibraryEntries?.isEmpty == false)
+        }
+        let descriptor = FetchDescriptor<Work>(predicate: predicate)
+        
+        guard let candidates = try? modelContext.fetch(descriptor) else {
+            return false
+        }
+        
+        // Perform precise in-memory matching on reduced candidate set
+        let detectedAuthor = author
+            .folding(options: .diacriticInsensitive, locale: Locale.current)
+            .lowercased()
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        return candidates.contains { work in
+            let workTitle = work.title
+                .folding(options: .diacriticInsensitive, locale: Locale.current)
+                .lowercased()
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            
+            let workAuthor = work.authorNames
+                .folding(options: .diacriticInsensitive, locale: Locale.current)
+                .lowercased()
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            
+            return workTitle == normalizedTitle && workAuthor == detectedAuthor
+        }
     }
 
     // MARK: - Book Search Integration
@@ -745,22 +752,43 @@ class ScanResultsModel {
             print("📚 Queued \(workIDs.count) books from scan for background enrichment")
             #endif
 
-            // [DEBUGGER:ScanResultsView:addAllToLibrary:707] Starting context merge wait
-            // Delay enrichment to allow SwiftData to fully persist newly created works
+            // Wait for SwiftData to fully persist newly created works with polling
             Task {
-                #if DEBUG
-                print("[DEBUGGER:ScanResultsView:713] Before 500ms delay - workIDs.count=\(workIDs.count)")
-                #endif
-                try? await Task.sleep(for: .milliseconds(500))
+                var attempts = 0
+                let maxAttempts = 5
                 
                 #if DEBUG
-                print("[DEBUGGER:ScanResultsView:718] After 500ms delay - checking context availability")
-                let availableCount = workIDs.compactMap { modelContext.model(for: $0) as? Work }.count
-                print("[DEBUGGER:ScanResultsView:720] Works available in context: \(availableCount)/\(workIDs.count)")
+                print("[DEBUGGER:ScanResultsView] Waiting for SwiftData persistence - workIDs.count=\(workIDs.count)")
                 #endif
                 
-                EnrichmentQueue.shared.startProcessing(in: modelContext) { _, _, _ in
-                    // Silent background processing - progress shown via EnrichmentProgressBanner
+                // Poll until all works are available or max attempts reached
+                while attempts < maxAttempts {
+                    let availableCount = workIDs.compactMap { modelContext.model(for: $0) as? Work }.count
+                    
+                    #if DEBUG
+                    print("[DEBUGGER:ScanResultsView] Attempt \(attempts + 1)/\(maxAttempts): \(availableCount)/\(workIDs.count) works available")
+                    #endif
+                    
+                    if availableCount == workIDs.count {
+                        break  // All works persisted successfully
+                    }
+                    
+                    try? await Task.sleep(for: .milliseconds(100))
+                    attempts += 1
+                }
+                
+                if attempts < maxAttempts {
+                    #if DEBUG
+                    print("[DEBUGGER:ScanResultsView] All works persisted, starting enrichment")
+                    #endif
+                    
+                    EnrichmentQueue.shared.startProcessing(in: modelContext) { _, _, _ in
+                        // Silent background processing - progress shown via EnrichmentProgressBanner
+                    }
+                } else {
+                    #if DEBUG
+                    print("⚠️ [DEBUGGER:ScanResultsView] Timeout waiting for persistence after \(maxAttempts * 100)ms")
+                    #endif
                 }
             }
         }

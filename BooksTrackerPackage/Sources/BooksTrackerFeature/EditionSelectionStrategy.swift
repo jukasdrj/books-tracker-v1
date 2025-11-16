@@ -159,13 +159,22 @@ public struct RecentStrategy: EditionSelectionStrategy {
         }
         
         // Fallback: Try to extract year directly from string (for backwards compatibility)
-        let regex = try? NSRegularExpression(pattern: "\\b(19|20)\\d{2}\\b")
-        let range = NSRange(location: 0, length: dateString.utf16.count)
-        if let match = regex?.firstMatch(in: dateString, options: [], range: range),
-           let yearRange = Range(match.range, in: dateString),
-           let year = Int(dateString[yearRange]) {
+        let normalizedString = dateString.applyingTransform(.stripDiacritics, reverse: false) ?? dateString
+        
+        // Broader regex for years 1000-2999 (handles historical and future dates)
+        let regex = try? NSRegularExpression(pattern: "\\b(1[0-9]{3}|2[0-9]{3})\\b")
+        let range = NSRange(location: 0, length: normalizedString.utf16.count)
+        if let match = regex?.firstMatch(in: normalizedString, options: [], range: range),
+           let yearRange = Range(match.range, in: normalizedString),
+           let year = Int(normalizedString[yearRange]) {
             return year
         }
+        
+        #if DEBUG
+        if dateString.count > 0 {
+            print("⚠️ EditionSelectionStrategy: Unparseable date '\(dateString)' - defaulting to 0")
+        }
+        #endif
         
         return 0  // Default for unparseable dates
     }
