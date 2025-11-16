@@ -54,7 +54,6 @@ extension SearchView {
         let scope: SearchScope
         let previousResults: [SearchResult]
         @Environment(\.iOS26ThemeStore) private var themeStore
-        let onBookSelected: (SearchResult) -> Void
         
         var body: some View {
             ZStack {
@@ -63,15 +62,10 @@ extension SearchView {
                     ScrollView {
                         LazyVStack(spacing: 12) {
                             ForEach(previousResults) { result in
-                                Button {
-                                    onBookSelected(result)
-                                } label: {
-                                    iOS26LiquidListRow(
-                                        work: result.work,
-                                        displayStyle: .standard
-                                    )
-                                }
-                                .buttonStyle(.plain)
+                                iOS26LiquidListRow(
+                                    work: result.work,
+                                    displayStyle: .standard
+                                )
                                 .padding(.horizontal, 16)
                                 .opacity(0.5)  // Dim to indicate stale
                                 .accessibilityElement(children: .combine)

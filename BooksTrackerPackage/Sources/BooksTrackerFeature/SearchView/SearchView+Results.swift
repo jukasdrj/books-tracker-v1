@@ -10,6 +10,7 @@ extension SearchView {
         let hasMorePages: Bool
         let cacheHitRate: Double
         @Bindable var searchModel: SearchModel
+        let imagePrefetcher: ImagePrefetcher
         @Environment(\.iOS26ThemeStore) private var themeStore
         
         let onBookSelected: (SearchResult) -> Void
@@ -189,8 +190,7 @@ extension SearchView {
             let urlsToPrefetch = items[startIndex..<endIndex].compactMap { CoverImageService.coverURL(for: $0.work) }
 
             if !urlsToPrefetch.isEmpty {
-                // ImagePrefetching would need to be implemented
-                // imagePrefetcher.startPrefetching(urls: urlsToPrefetch)
+                imagePrefetcher.startPrefetching(urls: urlsToPrefetch)
             }
         }
     }

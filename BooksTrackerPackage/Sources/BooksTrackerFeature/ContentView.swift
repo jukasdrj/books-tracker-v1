@@ -241,7 +241,6 @@ public struct ContentView: View {
                             // Note: Could implement retry logic here in a future enhancement
                         }
                         .padding(.top, 8)
-                        transition(.move(edge: .top).combined(with: .opacity))
                     }
                     
                     if showingCompletionToast, let event = latestCompletionEvent {
@@ -249,6 +248,7 @@ public struct ContentView: View {
                             event: event,
                             isPresented: $showingCompletionToast
                         )
+                        .padding(.top, 8)
                         .transition(.move(edge: .top).combined(with: .opacity))
                     }
                 }

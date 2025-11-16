@@ -326,10 +326,7 @@ public struct SearchView: View {
                 SearchingView(
                     query: query,
                     scope: scope,
-                    previousResults: previousResults,
-                    onBookSelected: { book in
-                        selectedBook = book
-                    }
+                    previousResults: previousResults
                 )
 
             case .results(_, _, let items, let hasMorePages, let cacheHitRate):
@@ -338,6 +335,7 @@ public struct SearchView: View {
                     hasMorePages: hasMorePages,
                     cacheHitRate: cacheHitRate,
                     searchModel: searchModel,
+                    imagePrefetcher: imagePrefetcher,
                     onBookSelected: { book in
                         selectedBook = book
                     },

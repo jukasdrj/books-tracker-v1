@@ -9,7 +9,7 @@ import SwiftUI
 /// - Actionable retry option
 /// - Dismiss gesture support
 ///
-@available(iOS 16.0, *)
+@available(iOS 26.0, *)
 public struct EnrichmentErrorToast: View {
     let errorMessage: String
     @Binding var isPresented: Bool
@@ -82,14 +82,17 @@ public struct EnrichmentErrorToast: View {
         .accessibilityLabel("Enrichment error: \(errorMessage)")
         .accessibilityHint("Tap to retry error processing or dismiss this message")
         .transition(.move(edge: .top).combined(with: .opacity))
-        .onAppear {
-            // Auto-dismiss after 8 seconds
-            DispatchQueue.main.asyncAfter(deadline: .now() + 8) {
-                if isPresented {
-                    withAnimation {
-                        isPresented = false
-                    }
+        .task(id: isPresented) {
+            // Auto-dismiss after 8 seconds. This task is automatically cancelled
+            // if the toast is dismissed manually or if the view disappears.
+            guard isPresented else { return }
+            do {
+                try await Task.sleep(for: .seconds(8))
+                withAnimation {
+                    isPresented = false
                 }
+            } catch {
+                // Task was cancelled, which is expected.
             }
         }
     }
@@ -97,7 +100,7 @@ public struct EnrichmentErrorToast: View {
 
 // MARK: - Preview
 
-@available(iOS 16.0, *)
+@available(iOS 26.0, *)
 #Preview("Enrichment Error Toast") {
     struct PreviewWrapper: View {
         @State private var isShowing = true
