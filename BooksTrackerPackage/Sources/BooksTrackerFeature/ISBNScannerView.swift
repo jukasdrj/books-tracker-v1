@@ -113,9 +113,7 @@ private struct DataScannerRepresentable: UIViewControllerRepresentable {
             uiViewController.stopScanning()
             do {
                 try uiViewController.startScanning()
-                DispatchQueue.main.async {
-                    shouldResetScanner = false
-                }
+                shouldResetScanner = false
             } catch {
                 logger.error("Failed to restart scanning: \(error.localizedDescription)")
                 context.coordinator.handleError("Unable to restart scanner: \(error.localizedDescription)")
@@ -143,7 +141,7 @@ private struct DataScannerRepresentable: UIViewControllerRepresentable {
         )
     }
 
-    static func dismantleUIViewController(_ uiViewController: DataScannerViewController, coordinator: Coordinator) {
+    static func dismantleUIViewController(_ uiViewController: DataScannerViewController, coordinator _: Coordinator) {
         uiViewController.stopScanning()
         uiViewController.delegate = nil
     }
@@ -216,9 +214,7 @@ private struct DataScannerRepresentable: UIViewControllerRepresentable {
                 let feedbackGenerator = UINotificationFeedbackGenerator()
                 feedbackGenerator.notificationOccurred(.error)
 
-                Task { @MainActor in
-                    onInvalidBarcode()
-                }
+                onInvalidBarcode()
                 return
             }
         }
@@ -334,6 +330,7 @@ public struct ISBNScannerView: View {
 
         invalidFeedbackTask = Task { @MainActor in
             try? await Task.sleep(for: .seconds(1.2))
+            guard !Task.isCancelled else { return }
             withAnimation(.easeOut(duration: 0.3)) {
                 invalidFeedbackVisible = false
             }
