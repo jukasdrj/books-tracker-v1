@@ -155,7 +155,7 @@ struct EditionDetailCard: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Format: \(edition.format.displayName)")
                 Text("Publisher: \(edition.publisher ?? "N/A")")
-                Text("Year: \(edition.publicationYear ?? "N/A")")
+                Text("Year: \((edition.publicationDate?.prefix(4)).map(String.init) ?? "N/A")")
                 Text("ISBN: \(edition.primaryISBN ?? "N/A")")
             }
             .font(.caption)
