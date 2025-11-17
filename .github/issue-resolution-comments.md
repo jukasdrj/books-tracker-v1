@@ -352,9 +352,12 @@ GridItem(.adaptive(minimum: 160, maximum: 180), spacing: 16)
            guard let url = CoverImageService.coverURL(for: work) else { continue }
 
            let task = Task.detached(priority: .utility) {
-               // Prefetch using URLSession
+               // Prefetch and populate CachedAsyncImage's NSCache
                let request = URLRequest(url: url)
-               _ = try? await URLSession.shared.data(for: request)
+               if let (data, _) = try? await URLSession.shared.data(for: request) {
+                   // Store in shared ImageCache (used by CachedAsyncImage)
+                   ImageCache.shared.setCache(data, for: url.absoluteString)
+               }
            }
 
            activePrefetchTasks[i] = task
@@ -430,15 +433,16 @@ struct iOS26AdaptiveBookCard: View {
     @Environment(\.modelContext) private var modelContext  // ADD THIS
 
     private func addToLibrary() {
-        let primaryEdition = work.availableEditions.first
-
-        // If no edition exists, create one
-        let edition = primaryEdition ?? {
+        // If no edition exists, create one first
+        let edition: Edition
+        if let primaryEdition = work.availableEditions.first {
+            edition = primaryEdition
+        } else {
             let newEdition = Edition()
             modelContext.insert(newEdition)
             newEdition.work = work
-            return newEdition
-        }()
+            edition = newEdition
+        }
 
         let entry = UserLibraryEntry.createOwnedEntry(
             for: work,
