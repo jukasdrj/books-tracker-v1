@@ -11,7 +11,7 @@ BooksTracker is a modern iOS book tracking application with cultural diversity i
 
 **Key Features:**
 - Smart library management with Work/Edition architecture
-- AI-powered bookshelf scanner using Gemini 2.0 Flash
+- AI-powered bookshelf scanner using Gemini 2.5 Flash
 - ISBN barcode scanning with VisionKit
 - Cultural diversity analytics and reading statistics
 - CloudKit sync across Apple devices
@@ -22,7 +22,7 @@ BooksTracker is a modern iOS book tracking application with cultural diversity i
 **Prerequisites:**
 - Xcode 16.0+
 - iOS 26.0+ SDK
-- Swift 6.1+
+- Swift 6.2+
 - Apple Developer Account (for device testing)
 
 **To set up the project:**
@@ -61,6 +61,8 @@ BooksTracker is a modern iOS book tracking application with cultural diversity i
   - `/agents/` - GitHub agent configurations
   - `ISSUE_TEMPLATE.md` - Issue template
   - `copilot-instructions.md` - GitHub Copilot setup
+- `/.claude/` - Claude Code-specific configurations and commands
+- `/.ai/` - Shared AI context files
 
 **Key Files:**
 - `CLAUDE.md` - Claude Code-specific developer quick reference
@@ -78,13 +80,13 @@ BooksTracker is a modern iOS book tracking application with cultural diversity i
 - Use `@MainActor` for UI, `nonisolated` for pure functions
 - Insert SwiftData models before setting relationships
 
-**Backend:** Maintained in separate repository (bookstrack-backend) using Cloudflare Workers, Durable Objects, and Gemini 2.0 Flash AI.
+**Backend:** Maintained in separate repository (bookstrack-backend) using Cloudflare Workers, Durable Objects, KV Storage, R2 Object Storage, and Gemini 2.5 Flash AI.
 
 **Build Workflow:** The repository has a disabled GitHub Actions workflow (`build.yml.disabled`) that includes build validation, Swift testing, and zero-warnings enforcement for iOS development.
 
 **Development Tools:**
 - XcodeBuildMCP for iOS development workflows
 - AST-grep for Swift code searches (not ripgrep)
-- Swift 6.1+ with strict concurrency
+- Swift 6.2+ with strict concurrency
 - VisionKit for barcode scanning
 - AVFoundation for camera integration
