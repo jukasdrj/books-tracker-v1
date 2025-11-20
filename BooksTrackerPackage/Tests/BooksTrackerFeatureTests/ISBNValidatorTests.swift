@@ -81,15 +81,15 @@ struct ISBNValidatorTests {
     
     @Test("Valid ISBN-13 with 979 prefix")
     func testValidISBN13With979Prefix() {
-        let result = ISBNValidator.validate("9791234567890")
-        
+        let result = ISBNValidator.validate("9791234567896")
+
         guard case .valid(let isbn) = result else {
             Issue.record("Expected valid ISBN-13 but got invalid result")
             return
         }
-        
-        #expect(isbn.normalizedValue == "9791234567890")
-        #expect(isbn.displayValue == "979-1-23456-789-0")
+
+        #expect(isbn.normalizedValue == "9791234567896")
+        #expect(isbn.displayValue == "979-1-23456-789-6")
         #expect(isbn.type == .isbn13)
     }
     

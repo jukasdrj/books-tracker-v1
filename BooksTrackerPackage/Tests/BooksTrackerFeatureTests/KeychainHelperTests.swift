@@ -3,40 +3,23 @@ import Foundation
 import Security
 @testable import BooksTrackerFeature
 
-@Suite("KeychainHelper Tests")
+@Suite("KeychainHelper Tests", .serialized)
 struct KeychainHelperTests {
-    
+
     // MARK: - Test Constants
-    
-    private static let testAccount = "test-account-\(UUID().uuidString)"
+
     private static let testToken = "test-token-12345"
     private static let testService = "com.oooefam.booksV3.websocket"
-    
-    // MARK: - Setup and Teardown
-    
-    init() {
-        // Clean up any existing test data
-        cleanupTestData()
-    }
-    
-    deinit {
-        // Clean up test data after tests
-        cleanupTestData()
-    }
-    
-    private func cleanupTestData() {
-        // Delete any test tokens that might exist
-        KeychainHelper.deleteToken(for: Self.testAccount)
-        KeychainHelper.deleteToken(for: "another-test-account")
-        KeychainHelper.deleteToken(for: "")
-    }
+
+    // Generate unique account for each test
+    private var testAccount: String { "test-account-\(UUID().uuidString)" }
     
     // MARK: - Save Token Tests
     
     @Test("Save token successfully stores token in keychain")
     func testSaveTokenSuccess() throws {
         // Given
-        let account = Self.testAccount
+        let account = testAccount
         let token = Self.testToken
         
         // When
@@ -53,7 +36,7 @@ struct KeychainHelperTests {
     @Test("Save token overwrites existing token")
     func testSaveTokenOverwrite() throws {
         // Given
-        let account = Self.testAccount
+        let account = testAccount
         let originalToken = "original-token"
         let newToken = "new-token"
         
@@ -79,7 +62,7 @@ struct KeychainHelperTests {
     @Test("Save empty token stores empty string")
     func testSaveEmptyToken() throws {
         // Given
-        let account = Self.testAccount
+        let account = testAccount
         let emptyToken = ""
         
         // When
@@ -96,7 +79,7 @@ struct KeychainHelperTests {
     @Test("Save token with special characters")
     func testSaveTokenWithSpecialCharacters() throws {
         // Given
-        let account = Self.testAccount
+        let account = testAccount
         let specialToken = "token-with-special-chars!@#$%^&*()_+-=[]{}|;':\",./<>?"
         
         // When
@@ -113,7 +96,7 @@ struct KeychainHelperTests {
     @Test("Save token with unicode characters")
     func testSaveTokenWithUnicode() throws {
         // Given
-        let account = Self.testAccount
+        let account = testAccount
         let unicodeToken = "token-with-unicode-🔐🔑🛡️-测试-🎯"
         
         // When
@@ -161,7 +144,7 @@ struct KeychainHelperTests {
     @Test("Get token returns correct token for existing account")
     func testGetTokenExisting() throws {
         // Given
-        let account = Self.testAccount
+        let account = testAccount
         let token = Self.testToken
         
         // Setup - Save token first
@@ -201,7 +184,7 @@ struct KeychainHelperTests {
     @Test("Delete token removes token from keychain")
     func testDeleteToken() throws {
         // Given
-        let account = Self.testAccount
+        let account = testAccount
         let token = Self.testToken
         
         // Setup - Save token first
@@ -220,18 +203,16 @@ struct KeychainHelperTests {
     }
     
     @Test("Delete non-existent token does not throw error")
-    func testDeleteNonExistentToken() {
+    func testDeleteNonExistentToken() throws {
         // Given
         let nonExistentAccount = "non-existent-account-\(UUID().uuidString)"
         
         // When/Then - Should not throw
         KeychainHelper.deleteToken(for: nonExistentAccount)
-        
+
         // Verify still no token
-        #expect(throws: Never.self) {
-            let token = try KeychainHelper.getToken(for: nonExistentAccount)
-            #expect(token == nil)
-        }
+        let token = try KeychainHelper.getToken(for: nonExistentAccount)
+        #expect(token == nil)
     }
     
     @Test("Delete token with empty account identifier")
@@ -378,7 +359,7 @@ struct KeychainHelperTests {
     @Test("Very long token can be stored and retrieved")
     func testVeryLongToken() throws {
         // Given
-        let account = Self.testAccount
+        let account = testAccount
         let longToken = String(repeating: "a", count: 10000) // 10KB token
         
         // When
@@ -396,7 +377,7 @@ struct KeychainHelperTests {
     @Test("Token with newlines and tabs can be stored")
     func testTokenWithWhitespace() throws {
         // Given
-        let account = Self.testAccount
+        let account = testAccount
         let tokenWithWhitespace = "token\nwith\nnewlines\tand\ttabs\r\nand\rcarriage\rreturns"
         
         // When
@@ -432,7 +413,7 @@ struct KeychainHelperTests {
     @Test("Complete workflow: save, retrieve, update, delete")
     func testCompleteWorkflow() throws {
         // Given
-        let account = Self.testAccount
+        let account = testAccount
         let originalToken = "original-token"
         let updatedToken = "updated-token"
         
