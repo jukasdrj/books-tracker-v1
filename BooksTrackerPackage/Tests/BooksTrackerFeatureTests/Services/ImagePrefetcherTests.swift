@@ -3,20 +3,20 @@ import Foundation
 @testable import BooksTrackerFeature
 
 @Suite("ImagePrefetcher")
+@MainActor
 struct ImagePrefetcherTests {
     @Test("cancelPrefetching clears task and is idempotent")
-    func cancelPrefetching_isIdempotent() async throws {
-        let prefetcher = await ImagePrefetcher()
+    func cancelPrefetching_isIdempotent() {
+        let prefetcher = ImagePrefetcher()
 
         // Starting without URLs should still create/cancel safely
-        await prefetcher.startPrefetching(urls: [])
-        await prefetcher.cancelPrefetching()
+        prefetcher.startPrefetching(urls: [])
+        prefetcher.cancelPrefetching()
         // Second cancel should not crash
-        await prefetcher.cancelPrefetching()
+        prefetcher.cancelPrefetching()
 
-        // Start again with a fake URL that will fail fast but spawn a task
-        let url = URL(string: "https://invalid.localhost/does-not-exist.jpg")!
-        await prefetcher.startPrefetching(urls: [url])
-        await prefetcher.cancelPrefetching()
+        // Start again with empty URLs to avoid network dependency
+        prefetcher.startPrefetching(urls: [])
+        prefetcher.cancelPrefetching()
     }
 }
