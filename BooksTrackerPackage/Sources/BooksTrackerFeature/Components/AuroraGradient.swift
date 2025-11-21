@@ -1,11 +1,41 @@
 import SwiftUI
 
-@available(iOS 16.0, *)
+/// A vibrant gradient component for the v2 aesthetic using Indigo → Cyan → Teal brand colors.
+///
+/// `AuroraGradient` provides a reusable accent gradient for AI-forward visuals, data charts, and
+/// background sweeps. Supports horizontal, vertical, and radial directions with adjustable intensity.
+///
+/// ## Usage
+/// ```swift
+/// Rectangle()
+///     .fill(AuroraGradient(direction: .horizontal, intensity: 0.8))
+///     .frame(height: 100)
+/// ```
+///
+/// ## Accessibility
+/// - Brand-mandated RGB colors are fixed to maintain visual identity
+/// - When overlaying text, ensure WCAG AA contrast (4.5:1+) by adjusting intensity or background
+/// - Test in both light and dark modes to verify readability
+///
+/// ## Related
+/// - `GlassCard` for liquid glass container components
+@available(iOS 26.0, *)
 public struct AuroraGradient: View {
-    public enum Direction { case horizontal, vertical, radial }
+    /// The direction of the gradient sweep.
+    public enum Direction {
+        case horizontal
+        case vertical
+        case radial
+    }
+
     let direction: Direction
     let intensity: Double
 
+    /// Creates an aurora gradient with the specified direction and intensity.
+    ///
+    /// - Parameters:
+    ///   - direction: The gradient direction (horizontal, vertical, or radial). Default is `.horizontal`.
+    ///   - intensity: The opacity multiplier for gradient colors (0.0 to 1.0). Default is `1.0`.
     public init(direction: Direction = .horizontal, intensity: Double = 1.0) {
         self.direction = direction
         self.intensity = intensity
@@ -47,7 +77,7 @@ public struct AuroraGradient: View {
     }
 }
 
-@available(iOS 16.0, *)
+@available(iOS 26.0, *)
 #Preview("AuroraGradient") {
     VStack(spacing: 20) {
         Rectangle().fill(AuroraGradient(direction: .horizontal)).frame(height: 80)
