@@ -20,7 +20,7 @@ struct ConfidenceThresholdsTests {
     @Test("Categorization boundaries behave as documented")
     func categorizationBoundaries() {
         // High confidence: >= high
-        let highSamples: [Double] = [ConfidenceThresholds.high, min(1.0, ConfidenceThresholds.high + 0.1)]
+        let highSamples: [Double] = [ConfidenceThresholds.high, 1.0]
         for v in highSamples {
             #expect(v >= ConfidenceThresholds.high)
         }
