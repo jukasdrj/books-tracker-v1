@@ -123,15 +123,16 @@ struct CSVValidatorTests {
         }
     }
 
-    @Test("Invalid CSV with inconsistent column count")
-    func testInvalidCSVInconsistentColumns() {
+    @Test("Valid CSV with varying column counts (Gemini can parse)")
+    func testValidCSVVaryingColumns() throws {
         let csv = """
         Title,Author,ISBN
         1984,George Orwell,9780451524935
         The Great Gatsby,F. Scott Fitzgerald
         """
 
-        #expect(throws: CSVValidationError.mismatchedColumnCount(expected: 3, actual: 2, lineNumber: 3)) {
+        // This is now VALID - Gemini's parser handles varying column counts
+        #expect(throws: Never.self) {
             try CSVValidator.validate(csvText: csv)
         }
     }
@@ -160,14 +161,15 @@ struct CSVValidatorTests {
         }
     }
 
-    @Test("Invalid CSV with too many columns in data row")
-    func testInvalidCSVTooManyColumns() {
+    @Test("Valid CSV with extra columns (Gemini extracts relevant data)")
+    func testValidCSVExtraColumns() throws {
         let csv = """
         Title,Author
         1984,George Orwell,9780451524935,Extra
         """
 
-        #expect(throws: CSVValidationError.mismatchedColumnCount(expected: 2, actual: 4, lineNumber: 2)) {
+        // This is now VALID - Gemini's parser extracts title/author and ignores extra columns
+        #expect(throws: Never.self) {
             try CSVValidator.validate(csvText: csv)
         }
     }
@@ -265,15 +267,6 @@ The Great Gatsby,"F. Scott Fitzgerald
         #expect(message?.contains("1 line") == true)
     }
 
-    @Test("Error message for mismatched columns includes line number")
-    func testErrorMessageMismatchedColumns() {
-        let error = CSVValidationError.mismatchedColumnCount(expected: 3, actual: 2, lineNumber: 5)
-        let message = error.errorDescription
-
-        #expect(message?.contains("line 5") == true)
-        #expect(message?.contains("3 columns") == true)
-        #expect(message?.contains("found 2") == true)
-    }
 
     @Test("Error message for unclosed quote includes line number")
     func testErrorMessageUnclosedQuote() {

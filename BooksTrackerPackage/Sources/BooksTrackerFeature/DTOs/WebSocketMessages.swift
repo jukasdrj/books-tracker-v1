@@ -188,6 +188,63 @@ public struct JobStartedPayload: Codable, Sendable {
     public let estimatedDuration: Int?      // Seconds
 }
 
+// MARK: - Current Item Payload
+
+/// Represents the current item being processed - can be either a string or a detailed object
+/// depending on the pipeline (batch enrichment uses string, bookshelf scanning uses object)
+public enum CurrentItem: Codable, Sendable {
+    case string(String)
+    case object(BookDetails)
+
+    public struct BookDetails: Codable, Sendable {
+        public let title: String
+        public let author: String?
+        public let isbn: String?
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+
+        // Try to decode as object first
+        if let details = try? container.decode(BookDetails.self) {
+            self = .object(details)
+        }
+        // Fall back to string
+        else if let stringValue = try? container.decode(String.self) {
+            self = .string(stringValue)
+        }
+        else {
+            throw DecodingError.typeMismatch(
+                CurrentItem.self,
+                DecodingError.Context(
+                    codingPath: decoder.codingPath,
+                    debugDescription: "Expected String or BookDetails object"
+                )
+            )
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case .string(let value):
+            try container.encode(value)
+        case .object(let details):
+            try container.encode(details)
+        }
+    }
+
+    /// Extract title regardless of format
+    public var title: String {
+        switch self {
+        case .string(let value):
+            return value
+        case .object(let details):
+            return details.title
+        }
+    }
+}
+
 // MARK: - Job Progress Payload
 
 public struct JobProgressPayload: Codable, Sendable {
@@ -195,7 +252,7 @@ public struct JobProgressPayload: Codable, Sendable {
     public let progress: Double             // 0.0 - 1.0
     public let status: String
     public let processedCount: Int?
-    public let currentItem: String?
+    public let currentItem: CurrentItem?
     public let keepAlive: Bool?
 }
 
@@ -209,22 +266,37 @@ public enum JobCompletePayload: Codable, Sendable {
     public init(from decoder: Decoder) throws {
         // Try decoding each pipeline-specific payload type
         // The payload discriminator (pipeline) is at the MESSAGE level, not in the payload itself
-        // So we use the payload structure to determine which type it is
+        // So we check the pipeline field to determine which type to decode
 
-        if let aiPayload = try? AIScanCompletePayload(from: decoder) {
-            self = .aiScan(aiPayload)
-        } else if let batchPayload = try? BatchEnrichmentCompletePayload(from: decoder) {
-            self = .batchEnrichment(batchPayload)
-        } else if let csvPayload = try? CSVImportCompletePayload(from: decoder) {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let pipeline = try container.decode(String.self, forKey: .pipeline)
+
+        #if DEBUG
+        print("[JobCompletePayload] Decoding completion for pipeline: \(pipeline)")
+        #endif
+
+        switch pipeline {
+        case "csv_import":
+            let csvPayload = try CSVImportCompletePayload(from: decoder)
             self = .csvImport(csvPayload)
-        } else {
+        case "ai_scan":
+            let aiPayload = try AIScanCompletePayload(from: decoder)
+            self = .aiScan(aiPayload)
+        case "batch_enrichment":
+            let batchPayload = try BatchEnrichmentCompletePayload(from: decoder)
+            self = .batchEnrichment(batchPayload)
+        default:
             throw DecodingError.dataCorrupted(
                 DecodingError.Context(
                     codingPath: decoder.codingPath,
-                    debugDescription: "Could not decode any known JobCompletePayload type"
+                    debugDescription: "Unknown pipeline type: \(pipeline)"
                 )
             )
         }
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case pipeline
     }
 
     public func encode(to encoder: Encoder) throws {

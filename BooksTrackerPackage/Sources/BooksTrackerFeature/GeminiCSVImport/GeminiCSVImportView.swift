@@ -679,57 +679,86 @@ public struct GeminiCSVImportView: View {
         }
     }
 
-    /// Fetch full job results from KV cache via HTTP GET
+    /// Fetch full job results from KV cache via HTTP GET with retry logic
     /// v2.0 Migration: WebSocket sends lightweight summary, full results fetched on demand
     /// Results are cached for 24 hours after job completion
+    ///
+    /// Retry logic: KV cache writes may lag behind WebSocket job_complete event.
+    /// We retry up to 3 times with exponential backoff (500ms, 1s, 2s).
     private func fetchJobResults(jobId: String) async throws -> CSVImportJobResults {
         let baseURL = "https://api.oooefam.net"
-        let url = URL(string: "\(baseURL)/v1/jobs/\(jobId)/results")!
+        let url = URL(string: "\(baseURL)/v1/csv/results/\(jobId)")!
 
-        #if DEBUG
-        print("[CSV Import] 🌐 Fetching results from: \(url)")
-        #endif
+        let maxRetries = 3
+        let baseDelay: UInt64 = 500_000_000 // 500ms in nanoseconds
 
-        let (data, response) = try await URLSession.shared.data(from: url)
+        for attempt in 1...maxRetries {
+            #if DEBUG
+            print("[CSV Import] 🌐 Fetching results (attempt \(attempt)/\(maxRetries)): \(url)")
+            #endif
 
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw CSVImportError.invalidResponse
-        }
+            let (data, response) = try await URLSession.shared.data(from: url)
 
-        #if DEBUG
-        print("[CSV Import] 📡 HTTP Response: \(httpResponse.statusCode)")
-        #endif
-
-        switch httpResponse.statusCode {
-        case 200:
-            // Success - decode results using ResponseEnvelope
-            let envelope = try JSONDecoder().decode(
-                ResponseEnvelope<CSVImportJobResults>.self,
-                from: data
-            )
-
-            // Check for API error in envelope
-            if envelope.error != nil {
-                throw CSVImportError.emptyResults
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw CSVImportError.invalidResponse
             }
 
-            guard let results = envelope.data else {
-                throw CSVImportError.emptyResults
+            #if DEBUG
+            print("[CSV Import] 📡 HTTP Response: \(httpResponse.statusCode)")
+            #endif
+
+            switch httpResponse.statusCode {
+            case 200:
+                // Success - decode results using ResponseEnvelope
+                let envelope = try JSONDecoder().decode(
+                    ResponseEnvelope<CSVImportJobResults>.self,
+                    from: data
+                )
+
+                // Check for API error in envelope
+                if envelope.error != nil {
+                    throw CSVImportError.emptyResults
+                }
+
+                guard let results = envelope.data else {
+                    throw CSVImportError.emptyResults
+                }
+
+                #if DEBUG
+                print("[CSV Import] ✅ Results fetched successfully on attempt \(attempt)")
+                #endif
+
+                return results
+
+            case 404:
+                // Results not ready yet (KV write lag) OR truly expired
+                if attempt < maxRetries {
+                    // Retry with exponential backoff
+                    let delay = baseDelay * UInt64(1 << (attempt - 1)) // 500ms, 1s, 2s
+                    #if DEBUG
+                    print("[CSV Import] ⏳ Results not ready, retrying in \(Double(delay) / 1_000_000_000)s...")
+                    #endif
+                    try await Task.sleep(nanoseconds: delay)
+                    continue
+                } else {
+                    // Final attempt failed - truly expired
+                    #if DEBUG
+                    print("[CSV Import] ❌ Results still unavailable after \(maxRetries) attempts")
+                    #endif
+                    throw CSVImportError.resultsExpired
+                }
+
+            case 429:
+                // Rate limited
+                throw CSVImportError.rateLimited
+
+            default:
+                throw CSVImportError.httpError(statusCode: httpResponse.statusCode)
             }
-
-            return results
-
-        case 404:
-            // Results expired (> 24 hours old)
-            throw CSVImportError.resultsExpired
-
-        case 429:
-            // Rate limited
-            throw CSVImportError.rateLimited
-
-        default:
-            throw CSVImportError.httpError(statusCode: httpResponse.statusCode)
         }
+
+        // Should never reach here due to throw/return in loop
+        throw CSVImportError.resultsExpired
     }
 
     private func cancelImport() {

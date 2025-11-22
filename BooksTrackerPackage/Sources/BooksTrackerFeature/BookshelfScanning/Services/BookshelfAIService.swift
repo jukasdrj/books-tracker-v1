@@ -84,7 +84,7 @@ public struct BookshelfAIResponse: Codable, Sendable {
 actor BookshelfAIService {
     // MARK: - Configuration
 
-    private let endpoint = EnrichmentConfig.scanBookshelfURL
+    private let endpoint = EnrichmentConfig.scanBookshelfBatchURL
     private let timeout: TimeInterval = EnrichmentConfig.webSocketTimeout
     private let maxImageSize: Int = 10_000_000 // 10MB max (matches worker limit)
 
@@ -576,35 +576,39 @@ actor BookshelfAIService {
     // MARK: - Progress Tracking Methods (Swift 6.2 Task Pattern)
 
     private func startScanJob(_ imageData: Data, provider: AIProvider, jobId: String) async throws -> ScanJobResponse {
-        // Construct URL with jobId query parameter (provider always Gemini)
-        var components = URLComponents(url: endpoint, resolvingAgainstBaseURL: false)!
-        components.queryItems = [
-            URLQueryItem(name: "jobId", value: jobId)
-            // Provider param removed - backend defaults to gemini-flash
-        ]
-
-        guard let urlWithParams = components.url else {
-            throw BookshelfAIError.invalidResponse
-        }
-
-        var request = URLRequest(url: urlWithParams)
+        // Create multipart/form-data request (same format as batch endpoint)
+        let boundary = UUID().uuidString
+        var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
-        request.setValue("image/jpeg", forHTTPHeaderField: "Content-Type")
-        request.httpBody = imageData
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = timeout // Use same timeout as uploadImage (70s for AI + enrichment)
+
+        var body = Data()
+
+        // Add single photo as 'photos[]' field (batch endpoint handles 1-N photos)
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"photos[]\"; filename=\"photo.jpg\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: image/jpeg\r\n\r\n".data(using: .utf8)!)
+        body.append(imageData)
+        body.append("\r\n".data(using: .utf8)!)
+
+        // Close boundary
+        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
+
+        request.httpBody = body
 
         // DIAGNOSTIC: Log outgoing request details
         #if DEBUG
-        print("[Diagnostic iOS Layer] === Outgoing Request for job \(jobId) ===")
+        print("[Diagnostic iOS Layer] === Outgoing Request ===")
         #endif
         #if DEBUG
         print("[Diagnostic iOS Layer] Provider: Gemini 2.0 Flash (optimized)")
         #endif
         #if DEBUG
-        print("[Diagnostic iOS Layer] Full URL: \(urlWithParams.absoluteString)")
+        print("[Diagnostic iOS Layer] Full URL: \(endpoint.absoluteString)")
         #endif
         #if DEBUG
-        print("[Diagnostic iOS Layer] Query items: \(components.queryItems ?? [])")
+        print("[Diagnostic iOS Layer] Content-Type: multipart/form-data (1 photo)")
         #endif
 
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -655,17 +659,38 @@ actor BookshelfAIService {
 
     /// Submit batch of photos for processing
     public func submitBatch(jobId: String, photos: [CapturedPhoto]) async throws -> BatchSubmissionResponse {
-        let batchRequest = try await createBatchRequest(jobId: jobId, photos: photos)
-
         let endpoint = EnrichmentConfig.scanBookshelfBatchURL
 
+        // Create multipart/form-data request
+        let boundary = UUID().uuidString
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = 120.0 // 2 minutes for upload
 
-        let encoder = JSONEncoder()
-        request.httpBody = try encoder.encode(batchRequest)
+        var body = Data()
+
+        // Add each photo as 'photos[]' field with binary data
+        for (index, photo) in photos.enumerated() {
+            // Compress image
+            let compressed = try await compressImage(photo.image, maxSizeKB: 500)
+
+            guard let jpegData = compressed.jpegData(compressionQuality: 0.9) else {
+                throw BookshelfAIError.imageCompressionFailed
+            }
+
+            // Add multipart boundary
+            body.append("--\(boundary)\r\n".data(using: .utf8)!)
+            body.append("Content-Disposition: form-data; name=\"photos[]\"; filename=\"photo\(index).jpg\"\r\n".data(using: .utf8)!)
+            body.append("Content-Type: image/jpeg\r\n\r\n".data(using: .utf8)!)
+            body.append(jpegData)
+            body.append("\r\n".data(using: .utf8)!)
+        }
+
+        // Close boundary
+        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
+
+        request.httpBody = body
 
         let (data, response) = try await URLSession.shared.data(for: request)
 
@@ -753,25 +778,6 @@ actor BookshelfAIService {
         }
     }
 
-    /// Create batch request payload with compressed images
-    internal func createBatchRequest(jobId: String, photos: [CapturedPhoto]) async throws -> BatchScanRequest {
-        var images: [BatchScanRequest.ImageData] = []
-
-        for (index, photo) in photos.enumerated() {
-            // Compress image
-            let compressed = try await compressImage(photo.image, maxSizeKB: 500)
-
-            guard let jpegData = compressed.jpegData(compressionQuality: 0.9) else {
-                throw BookshelfAIError.imageCompressionFailed
-            }
-
-            let base64 = jpegData.base64EncodedString()
-
-            images.append(BatchScanRequest.ImageData(index: index, data: base64))
-        }
-
-        return BatchScanRequest(jobId: jobId, images: images)
-    }
 
     /// Compress image to target size (reuse existing logic)
     public func compressImage(_ image: UIImage, maxSizeKB: Int) async throws -> UIImage {

@@ -131,7 +131,11 @@ public final class BatchProgress {
 
 // MARK: - Batch Request
 
-/// Request payload for batch scan endpoint
+/// DEPRECATED: Legacy JSON-based batch scan request (v2.6.0 migration to multipart/form-data)
+/// The backend now expects multipart/form-data with binary images, not JSON with base64.
+/// This struct is kept for backward compatibility but should not be used in new code.
+/// See: API_CONTRACT.md Section 6.2.3 (Batch Photo Scanning) for current multipart format.
+@available(*, deprecated, message: "Use multipart/form-data with photos[] field instead of JSON. See BookshelfAIService.submitBatch() for correct implementation.")
 public struct BatchScanRequest: Codable, Sendable {
     public let jobId: String
     public let images: [ImageData]

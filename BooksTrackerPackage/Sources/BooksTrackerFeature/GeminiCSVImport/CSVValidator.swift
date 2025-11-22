@@ -7,13 +7,18 @@ import Foundation
 /// This validator checks for:
 /// 1. UTF-8 encoding compatibility
 /// 2. A minimum of two lines (header + one data row)
-/// 3. Consistent column count across all rows
-/// 4. Correctly quoted fields (handling commas, newlines, and escaped quotes)
+/// 3. Correctly quoted fields (handling commas, newlines, and escaped quotes)
 ///
 /// **Design Philosophy:**
-/// - **Strict about structure** (consistent columns, closed quotes)
-/// - **Permissive about style** (allows mix of quoted/unquoted fields)
+/// - **Strict about syntax** (closed quotes, parseable structure)
+/// - **Permissive about schema** (flexible column counts, Gemini handles varying formats)
 /// - **Fast validation** (line-by-line parsing, <500ms for typical CSVs)
+///
+/// **Why Flexible Column Counts?**
+/// Gemini's CSV parser is intelligent enough to extract book data from varying
+/// CSV formats (3-column, 5-column, exports from different sources). The backend
+/// prompting guides Gemini to identify title/author/ISBN regardless of extra columns.
+/// Strict column validation would reject valid CSVs that Gemini can parse successfully.
 ///
 /// **RFC 4180 Compliance:**
 /// Implements pragmatic subset of RFC 4180 focused on structural integrity.
@@ -35,7 +40,7 @@ public struct CSVValidator {
             throw CSVValidationError.insufficientRows(count: lines.count)
         }
 
-        var expectedColumnCount: Int?
+        var hasNonEmptyLine = false
 
         for (index, line) in lines.enumerated() {
             let lineNumber = index + 1
@@ -47,28 +52,23 @@ public struct CSVValidator {
 
             let columns = try parse(line: line, lineNumber: lineNumber)
 
-            if let count = expectedColumnCount {
-                // Rule: Consistent column count
-                if columns.count != count {
-                    throw CSVValidationError.mismatchedColumnCount(
-                        expected: count,
-                        actual: columns.count,
-                        lineNumber: lineNumber
-                    )
-                }
-            } else {
-                // Set the expected column count from the header row.
-                expectedColumnCount = columns.count
+            // First non-empty line is the header
+            if !hasNonEmptyLine {
+                hasNonEmptyLine = true
 
                 // Rule: Header must not be empty
                 if columns.isEmpty || columns.allSatisfy({ $0.trimmingCharacters(in: .whitespaces).isEmpty }) {
                     throw CSVValidationError.emptyHeader
                 }
             }
+
+            // NOTE: We do NOT enforce consistent column counts across rows.
+            // Gemini's CSV parser is intelligent enough to handle varying column counts
+            // and extract book data (title, author, ISBN) from different CSV formats.
         }
 
         // Additional check: Ensure we found at least a header
-        guard expectedColumnCount != nil else {
+        guard hasNonEmptyLine else {
             throw CSVValidationError.insufficientRows(count: 0)
         }
     }
@@ -157,7 +157,6 @@ public enum CSVValidationError: Error, LocalizedError, Equatable {
     case fileReadError(message: String)
     case insufficientRows(count: Int)
     case emptyHeader
-    case mismatchedColumnCount(expected: Int, actual: Int, lineNumber: Int)
     case unclosedQuote(lineNumber: Int)
     case strayQuote(lineNumber: Int)
 
@@ -169,8 +168,6 @@ public enum CSVValidationError: Error, LocalizedError, Equatable {
             return "Invalid CSV structure. The file must contain a header and at least one data row, but found only \(count) line(s)."
         case .emptyHeader:
             return "Invalid CSV structure. The header row cannot be empty."
-        case .mismatchedColumnCount(let expected, let actual, let lineNumber):
-            return "Formatting error on line \(lineNumber): Expected \(expected) columns, but found \(actual)."
         case .unclosedQuote(let lineNumber):
             return "Formatting error on line \(lineNumber): A quoted field is not properly closed."
         case .strayQuote(let lineNumber):

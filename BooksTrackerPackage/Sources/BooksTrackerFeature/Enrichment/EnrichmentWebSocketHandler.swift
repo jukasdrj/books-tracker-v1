@@ -88,7 +88,7 @@ final class EnrichmentWebSocketHandler {
             // Extract progress data
             let processedCount = progress.processedCount ?? 0
             let totalCount = Int(progress.progress * 100) // Approximate if needed
-            let currentTitle = progress.currentItem ?? progress.status
+            let currentTitle = progress.currentItem?.title ?? progress.status
             progressHandler(processedCount, totalCount, currentTitle)
 
         case .jobComplete(let complete):

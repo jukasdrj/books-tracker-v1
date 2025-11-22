@@ -32,117 +32,114 @@ public struct BookshelfScannerView: View {
     // MARK: - Body
 
     public var body: some View {
-        NavigationStack {
-            ZStack {
-                // Background gradient
-                themeStore.backgroundGradient
-                    .ignoresSafeArea()
+        ZStack {
+            // Background gradient
+            themeStore.backgroundGradient
+                .ignoresSafeArea()
 
-                // Main content
-                ScrollView {
-                    VStack(spacing: 24) {
-                        // Rate limit banner (GitHub Issue #426)
-                        if scanModel.showRateLimitBanner {
-                            RateLimitBanner(retryAfter: scanModel.rateLimitRetryAfter) {
-                                scanModel.showRateLimitBanner = false
-                                scanModel.rateLimitRetryAfter = 0  // Reset state when dismissed
-                            }
-                            .transition(.move(edge: .top).combined(with: .opacity))
+            // Main content
+            ScrollView {
+                VStack(spacing: 24) {
+                    // Rate limit banner (GitHub Issue #426)
+                    if scanModel.showRateLimitBanner {
+                        RateLimitBanner(retryAfter: scanModel.rateLimitRetryAfter) {
+                            scanModel.showRateLimitBanner = false
+                            scanModel.rateLimitRetryAfter = 0  // Reset state when dismissed
                         }
-                        
-                        // Privacy disclosure banner
-                        PrivacyDisclosureBanner()
-
-                        // Photo selection area
-                        cameraSection
-
-                        // Batch mode toggle
-                        batchModeToggle
-
-                        // Statistics (if scanning or completed)
-                        if scanModel.scanState != .idle {
-                            ScanStatisticsView(
-                                scanState: scanModel.scanState,
-                                currentProgress: scanModel.currentProgress,
-                                currentStage: scanModel.currentStage,
-                                detectedCount: scanModel.detectedCount,
-                                confirmedCount: scanModel.confirmedCount,
-                                uncertainCount: scanModel.uncertainCount
-                            )
-                        }
-
-                        // Action buttons
-                        actionButtonsSection
+                        .transition(.move(edge: .top).combined(with: .opacity))
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 24)
+
+                    // Privacy disclosure banner
+                    PrivacyDisclosureBanner()
+
+                    // Photo selection area
+                    cameraSection
+
+                    // Batch mode toggle
+                    batchModeToggle
+
+                    // Statistics (if scanning or completed)
+                    if scanModel.scanState != .idle {
+                        ScanStatisticsView(
+                            scanState: scanModel.scanState,
+                            currentProgress: scanModel.currentProgress,
+                            currentStage: scanModel.currentStage,
+                            detectedCount: scanModel.detectedCount,
+                            confirmedCount: scanModel.confirmedCount,
+                            uncertainCount: scanModel.uncertainCount
+                        )
+                    }
+
+                    // Action buttons
+                    actionButtonsSection
                 }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 24)
             }
-            .navigationTitle("Scan Bookshelf (Beta)")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
-                        Task {
-                            await scanModel.cleanupTempFiles(mode: .perSession)
-                        }
-                        dismiss()
-                    }
-                    .foregroundStyle(themeStore.primaryColor)
-                }
-
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    if scanModel.scanState == .processing {
-                        ProgressView()
-                            .tint(themeStore.primaryColor)
-                    }
-                }
-            }
-            .sheet(isPresented: $showingResults) {
-                ScanResultsView(
-                    scanResult: scanModel.scanResult,
-                    modelContext: modelContext,
-                    onDismiss: {
-                        // ✅ Fix #383: Reset scan state and redirect to Library after adding books
-                        showingResults = false
-                        // Reset scan model to initial state
-                        scanModel.resetToInitialState()
-                        // Switch to Library tab to see newly added books
-                        tabCoordinator.switchToLibrary()
-                        dismiss()
-                    }
-                )
-            }
-            .fullScreenCover(isPresented: $showCamera) {
-                if batchModeEnabled {
-                    NavigationStack {
-                        BatchCaptureView()
-                    }
-                } else {
-                    BookshelfCameraView { capturedImage in
-                        Task {
-                            await scanModel.processImage(capturedImage)
-                            if scanModel.scanState == .completed {
-                                showingResults = true
-                            }
-                        }
-                    }
-                }
-            }
-
-            .alert("Scan Failed", isPresented: $showingErrorAlert, presenting: scanModel.errorMessage) { _ in
-                Button("OK", role: .cancel) {
+        }
+        .navigationTitle("Scan Bookshelf (Beta)")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button("Cancel") {
                     Task {
                         await scanModel.cleanupTempFiles(mode: .perSession)
                     }
-                    scanModel.scanState = .idle
+                    dismiss()
                 }
-            } message: { errorMessage in
-                Text(errorMessage)
+                .foregroundStyle(themeStore.primaryColor)
             }
-            .onChange(of: scanModel.isError) { oldValue, newValue in
-                showingErrorAlert = newValue
+
+            ToolbarItem(placement: .navigationBarTrailing) {
+                if scanModel.scanState == .processing {
+                    ProgressView()
+                        .tint(themeStore.primaryColor)
+                }
             }
+        }
+        .sheet(isPresented: $showingResults) {
+            ScanResultsView(
+                scanResult: scanModel.scanResult,
+                modelContext: modelContext,
+                onDismiss: {
+                    // ✅ Fix #383: Reset scan state and redirect to Library after adding books
+                    showingResults = false
+                    // Reset scan model to initial state
+                    scanModel.resetToInitialState()
+                    // Switch to Library tab to see newly added books
+                    tabCoordinator.switchToLibrary()
+                    dismiss()
+                }
+            )
+        }
+        .fullScreenCover(isPresented: $showCamera) {
+            if batchModeEnabled {
+                NavigationStack {
+                    BatchCaptureView()
+                }
+            } else {
+                BookshelfCameraView { capturedImage in
+                    Task {
+                        await scanModel.processImage(capturedImage)
+                        if scanModel.scanState == .completed {
+                            showingResults = true
+                        }
+                    }
+                }
+            }
+        }
+        .alert("Scan Failed", isPresented: $showingErrorAlert, presenting: scanModel.errorMessage) { _ in
+            Button("OK", role: .cancel) {
+                Task {
+                    await scanModel.cleanupTempFiles(mode: .perSession)
+                }
+                scanModel.scanState = .idle
+            }
+        } message: { errorMessage in
+            Text(errorMessage)
+        }
+        .onChange(of: scanModel.isError) { oldValue, newValue in
+            showingErrorAlert = newValue
         }
         .onDisappear {
             Task {
