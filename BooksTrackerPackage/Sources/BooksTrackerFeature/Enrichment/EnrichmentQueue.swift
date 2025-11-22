@@ -355,43 +355,14 @@ public final class EnrichmentQueue {
 
                             #if DEBUG
                             print("🔌 Connecting WebSocket for batch \(index + 1)...")
-                            print("⚠️  WebSocket connection may fail due to HTTP/2 protocol mismatch")
-                            print("💡 Falling back to HTTP polling if WebSocket fails within 15 seconds...")
+                            print("✅ Using GenericWebSocketHandler with HTTP/1.1 enforcement")
                             #endif
-
-                            // Set up a fallback timer - if WebSocket doesn't connect in 15s, use polling
-                            let fallbackTask = Task { @MainActor in
-                                try await Task.sleep(for: .seconds(15))
-                                if !Task.isCancelled {
-                                    #if DEBUG
-                                    print("⏱️  WebSocket timeout - switching to HTTP polling fallback")
-                                    #endif
-                                    self.webSocketHandler?.disconnect()
-                                    self.webSocketHandler = nil
-
-                                    // Start polling for results
-                                    try await self.pollForEnrichmentResults(
-                                        jobId: jobId,
-                                        batchWorkIDs: batchWorkIDs,
-                                        totalBooks: works.count,
-                                        processedCount: processedCount,
-                                        batchIndex: index,
-                                        batchCount: batches.count,
-                                        modelContext: modelContext,
-                                        progressHandler: progressHandler,
-                                        continuation: continuation
-                                    )
-                                }
-                            }
 
                             self.webSocketHandler = GenericWebSocketHandler(
                                 url: wsURL,
                                 token: token,  // ✅ CRITICAL: Pass token for Sec-WebSocket-Protocol header
                                 pipeline: .batchEnrichment,
                                 progressHandler: { [weak self] progressPayload in
-                                    // Cancel fallback since WebSocket is working
-                                    fallbackTask.cancel()
-
                                     self?.resetActivityTimer()
                                     let batchProcessed = progressPayload.processedCount ?? 0
                                     let totalForUI = works.count
@@ -404,8 +375,6 @@ public final class EnrichmentQueue {
                                     NotificationCoordinator.postEnrichmentProgress(completed: overallProcessed, total: totalForUI, currentTitle: progressTitle)
                                 },
                                 completionHandler: { [weak self] completePayload in
-                                    // Cancel fallback since WebSocket completed successfully
-                                    fallbackTask.cancel()
                                     guard let self = self else { return }
                                     self.resetActivityTimer()
                                     guard case .batchEnrichment(let batchPayload) = completePayload else {
@@ -478,9 +447,6 @@ public final class EnrichmentQueue {
                                     }
                                 },
                                 errorHandler: { errorPayload in
-                                    // Cancel fallback - error handler will handle this
-                                    fallbackTask.cancel()
-
                                     // On error, ensure we clean up this batch from active enrichments
                                     self.activeEnrichments.subtract(batchWorkIDs)
 

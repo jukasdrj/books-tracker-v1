@@ -134,12 +134,20 @@ public final class WebSocketProgressManager: NSObject, @preconcurrency URLSessio
         }
 
         return try await withCheckedThrowingContinuation { continuation in
-            // Create connection endpoint with client-provided jobId (token goes in header for security)
-            // Add reconnect=true parameter for state sync on reconnection (v2.4 API contract)
+            // Create connection endpoint with client-provided jobId and token
+            // Authentication via query parameter (API Contract v2.4.1)
             var urlString = "\(EnrichmentConfig.webSocketBaseURL)/ws/progress?jobId=\(jobId)"
+
+            // Add token to query string for authentication
+            if let token = token {
+                urlString += "&token=\(token)"
+            }
+
+            // Add reconnect parameter if needed
             if reconnect {
                 urlString += "&reconnect=true"
             }
+
             let url = URL(string: urlString)!
 
             self.connectionContinuation = continuation
@@ -149,12 +157,6 @@ public final class WebSocketProgressManager: NSObject, @preconcurrency URLSessio
             request.assumesHTTP3Capable = false // Forces HTTP/1.1 negotiation (disables HTTP/2 and HTTP/3)
             request.setValue("websocket", forHTTPHeaderField: "Upgrade")
             request.setValue("Upgrade", forHTTPHeaderField: "Connection")
-
-            // SECURITY: Add token securely via Sec-WebSocket-Protocol header (matches GenericWebSocketHandler pattern)
-            // This prevents token leakage in server logs, proxies, or error reports
-            if let token = token {
-                request.setValue("bookstrack-auth.\(token)", forHTTPHeaderField: "Sec-WebSocket-Protocol")
-            }
 
             let task = self.session.webSocketTask(with: request)
             self.webSocketTask = task

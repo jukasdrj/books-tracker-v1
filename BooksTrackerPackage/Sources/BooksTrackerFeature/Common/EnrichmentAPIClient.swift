@@ -5,11 +5,15 @@ actor EnrichmentAPIClient {
 
     private let baseURL = EnrichmentConfig.baseURL
 
+    /// Response from POST /v1/enrichment/batch
+    /// Matches ACTUAL backend response (EnrichmentJobInitResponse)
+    /// Note: Backend returns different structure than OpenAPI spec
     struct EnrichmentResult: Codable, Sendable {
-        let success: Bool
-        let processedCount: Int
-        let totalCount: Int
-        let token: String  // Auth token for WebSocket connection
+        let jobId: String         // Job identifier (echoed back from request)
+        let token: String         // Auth token for WebSocket authentication
+        let success: Bool         // Job acceptance status (always true for 202)
+        let processedCount: Int   // Books processed so far (0 on init)
+        let totalCount: Int       // Total books queued for processing
     }
 
     /// Start enrichment job on backend
@@ -86,6 +90,9 @@ actor EnrichmentAPIClient {
         #if DEBUG
         let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
         print("[EnrichmentAPIClient] ✅ Received HTTP \(statusCode) response from \(endpoint)")
+        if let responseString = String(data: data, encoding: .utf8) {
+            print("[EnrichmentAPIClient] 📦 Response body: \(responseString)")
+        }
         #endif
 
         guard let httpResponse = response as? HTTPURLResponse,
@@ -169,7 +176,7 @@ actor EnrichmentAPIClient {
         }
 
         #if DEBUG
-        print("✅ Enrichment job accepted by backend: \(result.totalCount) books queued for async processing")
+        print("✅ Enrichment job accepted: jobId=\(result.jobId), queued=\(result.totalCount), token=\(result.token.prefix(8))...")
         #endif
 
         return result

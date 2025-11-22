@@ -71,12 +71,21 @@ public struct BookSearchResponse: Codable, Sendable {
 }
 
 /// Enrichment job response
-/// Used by: /v1/api/enrichment/start
+/// Used by: /v1/enrichment/batch (canonical endpoint)
+/// Matches ACTUAL backend response (EnrichmentJobInitResponse)
+/// Note: Backend structure differs from OpenAPI spec
 public struct EnrichmentJobResponse: Codable, Sendable {
-    public let jobId: String
-    public let queuedCount: Int
+    public let jobId: String          // Job identifier (echoed from request)
+    public let token: String          // Auth token for WebSocket authentication
+    public let success: Bool          // Job acceptance status (always true for 202)
+    public let processedCount: Int    // Books processed so far (0 on init)
+    public let totalCount: Int        // Total books queued for processing
+
+    // DEPRECATED: Legacy fields from old API versions
+    // Kept for backward compatibility but will be nil
+    public let queuedCount: Int?
     public let estimatedDuration: Int?
-    public let websocketUrl: String
+    public let websocketUrl: String?
 }
 
 /// Bookshelf scan response

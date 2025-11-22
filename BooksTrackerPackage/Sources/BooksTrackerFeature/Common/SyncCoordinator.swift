@@ -175,9 +175,9 @@ public final class SyncCoordinator {
             try? await Task.sleep(for: .seconds(1))
 
             let log = [
-                "✅ Enrichment completed successfully",
-                "📊 Total items: \(result.totalCount)",
-                "✅ Processed: \(result.processedCount)"
+                "✅ Enrichment job accepted successfully",
+                "🔑 Job ID: \(result.jobId)",
+                "🔐 WebSocket token received"
             ]
             jobStatus[jobId] = .completed(log: log)
 

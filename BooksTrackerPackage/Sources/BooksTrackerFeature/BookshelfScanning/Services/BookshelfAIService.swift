@@ -105,9 +105,12 @@ actor BookshelfAIService {
 
     // MARK: - Public API
 
+    /// DEPRECATED: Legacy single-image upload (replaced by batch WebSocket workflow)
     /// Process bookshelf image and return detected books with suggestions.
     /// - Parameter image: UIImage to process (will be compressed)
     /// - Returns: Tuple of (detected books, suggestions for improvement)
+    /// - Warning: This function uses a legacy endpoint that may not use ResponseEnvelope format
+    @available(*, deprecated, message: "Use submitBatch() with WebSocket progress tracking instead")
     func processBookshelfImage(_ image: UIImage) async throws -> ([DetectedBook], [SuggestionViewModel]) {
         // Step 1: Compress image to acceptable size
         guard let imageData = compressImage(image, maxSizeBytes: maxImageSize) else {
@@ -343,7 +346,9 @@ actor BookshelfAIService {
         return nil
     }
 
-    /// Upload compressed image data to Cloudflare Worker.
+    /// DEPRECATED: Upload compressed image data to Cloudflare Worker (legacy single-image endpoint).
+    /// - Warning: Does NOT use ResponseEnvelope format (legacy API)
+    @available(*, deprecated, message: "Use submitBatch() with WebSocket instead")
     private func uploadImage(_ imageData: Data) async throws -> BookshelfAIResponse {
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
@@ -613,12 +618,34 @@ actor BookshelfAIService {
 
         let (data, response) = try await URLSession.shared.data(for: request)
 
-        guard let httpResponse = response as? HTTPURLResponse,
-              httpResponse.statusCode == 202 else {
+        guard let httpResponse = response as? HTTPURLResponse else {
             throw BookshelfAIError.invalidResponse
         }
 
-        return try JSONDecoder().decode(ScanJobResponse.self, from: data)
+        guard httpResponse.statusCode == 202 else {
+            // Try to decode error response using ResponseEnvelope
+            if let errorResponse = try? JSONDecoder().decode(ResponseEnvelope<ScanJobResponse>.self, from: data),
+               let error = errorResponse.error {
+                throw BookshelfAIError.serverError(httpResponse.statusCode, error.message)
+            }
+            throw BookshelfAIError.invalidResponse
+        }
+
+        // Decode using ResponseEnvelope wrapper (consistent with API contract)
+        let decoder = JSONDecoder()
+        let envelope = try decoder.decode(ResponseEnvelope<ScanJobResponse>.self, from: data)
+
+        // Check for errors in response
+        if let error = envelope.error {
+            throw BookshelfAIError.serverError(httpResponse.statusCode, error.message)
+        }
+
+        // Extract data
+        guard let scanResponse = envelope.data else {
+            throw BookshelfAIError.serverError(httpResponse.statusCode, "No data in response")
+        }
+
+        return scanResponse
     }
 
     /// Calculate expected progress based on elapsed time and stages
@@ -699,12 +726,28 @@ actor BookshelfAIService {
         }
 
         guard httpResponse.statusCode == 202 else { // Accepted
+            // Try to decode error response using ResponseEnvelope
+            if let errorResponse = try? JSONDecoder().decode(ResponseEnvelope<BatchSubmissionResponse>.self, from: data),
+               let error = errorResponse.error {
+                throw BookshelfAIError.serverError(httpResponse.statusCode, error.message)
+            }
             let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
             throw BookshelfAIError.serverError(httpResponse.statusCode, errorMessage)
         }
 
+        // Decode using ResponseEnvelope wrapper (consistent with API contract)
         let decoder = JSONDecoder()
-        let submissionResponse = try decoder.decode(BatchSubmissionResponse.self, from: data)
+        let envelope = try decoder.decode(ResponseEnvelope<BatchSubmissionResponse>.self, from: data)
+
+        // Check for errors in response
+        if let error = envelope.error {
+            throw BookshelfAIError.serverError(httpResponse.statusCode, error.message)
+        }
+
+        // Extract data
+        guard let submissionResponse = envelope.data else {
+            throw BookshelfAIError.serverError(httpResponse.statusCode, "No data in response")
+        }
 
         return submissionResponse
     }
@@ -810,8 +853,10 @@ actor BookshelfAIService {
 // MARK: - Batch Response Models
 
 /// Response from batch submission endpoint
+/// Matches backend BookshelfScanInitResponse (API_CONTRACT.md Section 6.2.3)
 public struct BatchSubmissionResponse: Codable, Sendable {
     public let jobId: String
+    public let token: String      // Auth token for WebSocket authentication
     public let totalPhotos: Int
     public let status: String
 }

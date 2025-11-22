@@ -23,8 +23,22 @@ final class EnrichmentWebSocketHandler {
     /// Connect to WebSocket and start listening for messages.
     func connect() async {
         guard let url = URL(string: "\(EnrichmentConfig.webSocketBaseURL)/ws/progress?jobId=\(jobId)") else { return }
-        let session = URLSession(configuration: .default)
-        webSocket = session.webSocketTask(with: url)
+
+        // FIX (Issue #227): Enforce HTTP/1.1 for WebSocket handshake compatibility with iOS/backend.
+        // iOS defaults to HTTP/2 for HTTPS, which is incompatible with RFC 6455 WebSocket upgrade.
+        let config = URLSessionConfiguration.default
+        config.httpMaximumConnectionsPerHost = 1
+        config.timeoutIntervalForRequest = 10.0
+
+        let session = URLSession(configuration: config)
+
+        // Create WebSocket request with HTTP/1.1 enforcement
+        var request = URLRequest(url: url)
+        request.assumesHTTP3Capable = false // Forces HTTP/1.1 negotiation (disables HTTP/2 and HTTP/3)
+        request.setValue("websocket", forHTTPHeaderField: "Upgrade")
+        request.setValue("Upgrade", forHTTPHeaderField: "Connection")
+
+        webSocket = session.webSocketTask(with: request)
         webSocket?.resume()
 
         // ✅ CRITICAL: Wait for WebSocket handshake to complete
