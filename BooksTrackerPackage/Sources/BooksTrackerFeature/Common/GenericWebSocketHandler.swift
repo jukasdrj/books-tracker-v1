@@ -75,12 +75,24 @@ public final class GenericWebSocketHandler {
         var attempts = 0
         let maxRetries = 3
 
+        logger.debug("🔌 [WS] Starting connection to \(self.url.absoluteString)")
+        logger.debug("🔌 [WS] Pipeline: \(self.pipeline.rawValue)")
+        logger.debug("🔌 [WS] Max retries: \(maxRetries)")
+
         while attempts < maxRetries {
+            logger.debug("🔄 [WS] Connection attempt \(attempts + 1)/\(maxRetries)")
             // FIX (Issue #227): Enforce HTTP/1.1 for WebSocket handshake compatibility with iOS/backend.
             // iOS defaults to HTTP/2 for HTTPS, which is incompatible with RFC 6455 WebSocket upgrade.
             let config = URLSessionConfiguration.default
             config.httpMaximumConnectionsPerHost = 1
-            config.timeoutIntervalForRequest = 10.0 // Use default timeout
+            config.timeoutIntervalForRequest = 10.0
+
+            // CRITICAL: Disable HTTP/2 and HTTP/3 to force HTTP/1.1
+            // This is required for WebSocket Upgrade header to work
+            config.httpAdditionalHeaders = [
+                "Connection": "Upgrade",
+                "Upgrade": "websocket"
+            ]
 
             let session = URLSession(configuration: config)
 
@@ -88,11 +100,11 @@ public final class GenericWebSocketHandler {
             // instead of query parameters to prevent leakage in server logs
             var request = URLRequest(url: url)
 
-            // Enforce HTTP/1.1 and add required WebSocket headers
-            request.assumesHTTP3Capable = false // Forces HTTP/1.1 negotiation (disables HTTP/2 and HTTP/3)
-            request.setValue("websocket", forHTTPHeaderField: "Upgrade")
-            request.setValue("Upgrade", forHTTPHeaderField: "Connection")
+            // Force HTTP/1.1 - this is the KEY fix
+            // assumesHTTP3Capable only disables HTTP/3, not HTTP/2
+            request.assumesHTTP3Capable = false
 
+            // Add WebSocket protocol header for authentication
             if let token = token {
                 request.setValue("bookstrack-auth.\(token)", forHTTPHeaderField: "Sec-WebSocket-Protocol")
             }
@@ -103,11 +115,12 @@ public final class GenericWebSocketHandler {
             // ✅ CRITICAL: Wait for WebSocket handshake to complete
             // Prevents POSIX error 57 "Socket is not connected" when calling receive()
             if let webSocket = webSocket {
+                logger.debug("⏳ [WS] Waiting for connection handshake (10s timeout)...")
                 do {
                     try await WebSocketHelpers.waitForConnection(webSocket, timeout: 10.0)
                     isConnected = true
                     shouldContinueListening = true
-                    logger.debug("✅ GenericWebSocketHandler connected (\(self.pipeline.rawValue))")
+                    logger.debug("✅ [WS] Connection handshake completed (\(self.pipeline.rawValue))")
 
                     // CRITICAL FIX (Issue #378): Send ready signal to backend
                     // Backend waits for this signal before sending messages to prevent race condition
@@ -153,6 +166,10 @@ public final class GenericWebSocketHandler {
             return
         }
 
+        #if DEBUG
+        logger.debug("👂 [WS] Waiting for next message... (\(self.pipeline.rawValue))")
+        #endif
+
         webSocket?.receive { [weak self] result in
             Task { @MainActor [weak self] in
                 guard let self = self else { return }
@@ -162,6 +179,9 @@ public final class GenericWebSocketHandler {
 
                 switch result {
                 case .success(let message):
+                    #if DEBUG
+                    self.logger.debug("📨 [WS] Message received! (\(self.pipeline.rawValue))")
+                    #endif
                     self.handleMessage(message)
                     // Only continue listening if still connected
                     if self.shouldContinueListening && self.isConnected {
@@ -210,11 +230,27 @@ public final class GenericWebSocketHandler {
 
     /// Handles a received WebSocket message by decoding it into the unified message format.
     private func handleMessage(_ message: URLSessionWebSocketTask.Message) {
-        guard let data = message.data else { return }
+        guard let data = message.data else {
+            #if DEBUG
+            logger.warning("⚠️ [WS] Received message with no data")
+            #endif
+            return
+        }
+
+        #if DEBUG
+        if let jsonString = String(data: data, encoding: .utf8) {
+            logger.debug("📦 [WS] Raw message: \(jsonString)")
+        }
+        #endif
+
         let decoder = JSONDecoder()
 
         do {
             let typedMessage = try decoder.decode(TypedWebSocketMessage.self, from: data)
+
+            #if DEBUG
+            logger.debug("✅ [WS] Decoded message type: \(typedMessage.type.rawValue), pipeline: \(typedMessage.pipeline.rawValue)")
+            #endif
 
             // Verify pipeline matches (safety check)
             guard typedMessage.pipeline == pipeline else {
@@ -224,28 +260,44 @@ public final class GenericWebSocketHandler {
 
             switch typedMessage.payload {
             case .jobProgress(let payload):
+                #if DEBUG
+                logger.debug("📊 [WS] Progress update: \(payload.progress * 100)%, status: \(payload.status)")
+                #endif
                 progressHandler(payload)
             case .reconnected(let payload):
+                #if DEBUG
+                logger.debug("🔄 [WS] Reconnected payload received")
+                #endif
                 progressHandler(payload.toJobProgressPayload())
             case .jobComplete(let payload):
                 // CRITICAL: Stop listening BEFORE calling handler and disconnect
                 // This prevents "Socket is not connected" error (POSIX 57)
                 shouldContinueListening = false
-                logger.debug("✅ Job complete, stopping message loop (\(self.pipeline.rawValue))")
+                #if DEBUG
+                logger.debug("✅ [WS] Job complete message received, stopping message loop (\(self.pipeline.rawValue))")
+                #endif
                 completionHandler(payload)
                 disconnect()
             case .error(let payload):
                 // Stop listening before handling error
                 shouldContinueListening = false
-                logger.warning("⚠️ Job error, stopping message loop (\(self.pipeline.rawValue))")
+                #if DEBUG
+                logger.warning("⚠️ [WS] Error message received: \(payload.code) - \(payload.message)")
+                #endif
                 errorHandler(payload)
                 disconnect()
-            case .readyAck, .jobStarted, .ping, .pong:
-                // These messages are handled at infrastructure level or ignored
-                // readyAck: Backend acknowledgment of client ready signal (no action needed)
-                // jobStarted: Optional pre-processing notification (no action needed)
-                // ping/pong: Keep-alive messages (no action needed)
-                break
+            case .readyAck:
+                #if DEBUG
+                logger.debug("✅ [WS] Ready acknowledgment received from backend")
+                #endif
+            case .jobStarted:
+                #if DEBUG
+                logger.debug("🚀 [WS] Job started notification received")
+                #endif
+            case .ping, .pong:
+                #if DEBUG
+                logger.debug("💓 [WS] Keep-alive ping/pong received")
+                #endif
 
             case .batchInit, .batchProgress, .batchComplete, .batchCanceling:
                 // Batch scanning messages - ignore in this generic handler
@@ -286,8 +338,15 @@ public final class GenericWebSocketHandler {
             throw InvalidStringDataError()
         }
 
+        #if DEBUG
+        logger.debug("📤 [WS] Sending ready signal: \(jsonString)")
+        #endif
+
         try await webSocket.send(.string(jsonString))
-        logger.debug("📤 Ready signal sent to backend (\(self.pipeline.rawValue))")
+
+        #if DEBUG
+        logger.debug("✅ [WS] Ready signal sent successfully to backend (\(self.pipeline.rawValue))")
+        #endif
     }
 
     /// Disconnects from the WebSocket.

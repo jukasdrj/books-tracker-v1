@@ -26,11 +26,23 @@ enum WebSocketHelpers {
         let maxAttempts = 5
         var attempts = 0
         var lastError: Error?
-        
+
+        #if DEBUG
+        print("🔍 [WS_HELPERS] Starting connection verification (timeout: \(timeout)s, max attempts: \(maxAttempts))")
+        #endif
+
         while attempts < maxAttempts {
-            if Date().timeIntervalSince(startTime) > timeout {
+            let elapsed = Date().timeIntervalSince(startTime)
+            if elapsed > timeout {
+                #if DEBUG
+                print("❌ [WS_HELPERS] Timeout after \(elapsed)s (limit: \(timeout)s)")
+                #endif
                 throw URLError(.timedOut)
             }
+
+            #if DEBUG
+            print("📍 [WS_HELPERS] Ping attempt \(attempts + 1)/\(maxAttempts) (elapsed: \(String(format: "%.1f", elapsed))s)")
+            #endif
 
             do {
                 // Use URLSessionWebSocketTask's native ping mechanism
@@ -40,8 +52,14 @@ enum WebSocketHelpers {
                     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
                         task.sendPing { error in
                             if let error = error {
+                                #if DEBUG
+                                print("❌ [WS_HELPERS] Ping failed: \(error.localizedDescription)")
+                                #endif
                                 continuation.resume(throwing: error)
                             } else {
+                                #if DEBUG
+                                print("✅ [WS_HELPERS] Ping successful (server responded)")
+                                #endif
                                 continuation.resume(returning: ())
                             }
                         }
@@ -50,7 +68,7 @@ enum WebSocketHelpers {
 
                 // Success! Connection is established and server responded to ping
                 #if DEBUG
-                print("✅ WebSocket connection verified after \(attempts + 1) attempts")
+                print("✅ [WS_HELPERS] Connection verified after \(attempts + 1) attempts in \(String(format: "%.2f", Date().timeIntervalSince(startTime)))s")
                 #endif
                 return
 
@@ -58,13 +76,24 @@ enum WebSocketHelpers {
                 lastError = error
                 attempts += 1
 
+                #if DEBUG
+                print("⚠️ [WS_HELPERS] Ping attempt \(attempts) failed: \(error.localizedDescription)")
+                #endif
+
                 // If we've exhausted all attempts, throw the last error
                 if attempts >= maxAttempts {
+                    #if DEBUG
+                    print("❌ [WS_HELPERS] All \(maxAttempts) ping attempts failed, giving up")
+                    #endif
                     throw lastError ?? URLError(.cannotConnectToHost)
                 }
 
                 // Wait before retrying (exponential backoff)
-                try await Task.sleep(for: .milliseconds(100 * attempts))
+                let backoffMs = 100 * attempts
+                #if DEBUG
+                print("⏳ [WS_HELPERS] Waiting \(backoffMs)ms before retry...")
+                #endif
+                try await Task.sleep(for: .milliseconds(backoffMs))
             }
         }
     }

@@ -341,10 +341,11 @@ public final class EnrichmentQueue {
                                 return
                             }
 
+                            // Build WebSocket URL with jobId in query params (NOT token - see Issue #163)
+                            // Token is passed via Sec-WebSocket-Protocol header for security
                             var components = URLComponents(string: "\(EnrichmentConfig.webSocketBaseURL)/ws/progress")!
                             components.queryItems = [
-                                URLQueryItem(name: "jobId", value: jobId),
-                                URLQueryItem(name: "token", value: token)
+                                URLQueryItem(name: "jobId", value: jobId)
                             ]
 
                             guard let wsURL = components.url else {
@@ -354,12 +355,43 @@ public final class EnrichmentQueue {
 
                             #if DEBUG
                             print("🔌 Connecting WebSocket for batch \(index + 1)...")
+                            print("⚠️  WebSocket connection may fail due to HTTP/2 protocol mismatch")
+                            print("💡 Falling back to HTTP polling if WebSocket fails within 15 seconds...")
                             #endif
+
+                            // Set up a fallback timer - if WebSocket doesn't connect in 15s, use polling
+                            let fallbackTask = Task { @MainActor in
+                                try await Task.sleep(for: .seconds(15))
+                                if !Task.isCancelled {
+                                    #if DEBUG
+                                    print("⏱️  WebSocket timeout - switching to HTTP polling fallback")
+                                    #endif
+                                    self.webSocketHandler?.disconnect()
+                                    self.webSocketHandler = nil
+
+                                    // Start polling for results
+                                    try await self.pollForEnrichmentResults(
+                                        jobId: jobId,
+                                        batchWorkIDs: batchWorkIDs,
+                                        totalBooks: works.count,
+                                        processedCount: processedCount,
+                                        batchIndex: index,
+                                        batchCount: batches.count,
+                                        modelContext: modelContext,
+                                        progressHandler: progressHandler,
+                                        continuation: continuation
+                                    )
+                                }
+                            }
 
                             self.webSocketHandler = GenericWebSocketHandler(
                                 url: wsURL,
+                                token: token,  // ✅ CRITICAL: Pass token for Sec-WebSocket-Protocol header
                                 pipeline: .batchEnrichment,
                                 progressHandler: { [weak self] progressPayload in
+                                    // Cancel fallback since WebSocket is working
+                                    fallbackTask.cancel()
+
                                     self?.resetActivityTimer()
                                     let batchProcessed = progressPayload.processedCount ?? 0
                                     let totalForUI = works.count
@@ -372,6 +404,8 @@ public final class EnrichmentQueue {
                                     NotificationCoordinator.postEnrichmentProgress(completed: overallProcessed, total: totalForUI, currentTitle: progressTitle)
                                 },
                                 completionHandler: { [weak self] completePayload in
+                                    // Cancel fallback since WebSocket completed successfully
+                                    fallbackTask.cancel()
                                     guard let self = self else { return }
                                     self.resetActivityTimer()
                                     guard case .batchEnrichment(let batchPayload) = completePayload else {
@@ -444,6 +478,9 @@ public final class EnrichmentQueue {
                                     }
                                 },
                                 errorHandler: { errorPayload in
+                                    // Cancel fallback - error handler will handle this
+                                    fallbackTask.cancel()
+
                                     // On error, ensure we clean up this batch from active enrichments
                                     self.activeEnrichments.subtract(batchWorkIDs)
 
@@ -934,6 +971,97 @@ public final class EnrichmentQueue {
         }
         
         return (successCount: successCount, failureCount: failureCount, errors: errors)
+    }
+
+    /// Poll for enrichment results when WebSocket connection fails
+    /// Fallback mechanism for HTTP/2 protocol mismatch issue (Issue #227)
+    private func pollForEnrichmentResults(
+        jobId: String,
+        batchWorkIDs: [PersistentIdentifier],
+        totalBooks: Int,
+        processedCount: Int,
+        batchIndex: Int,
+        batchCount: Int,
+        modelContext: ModelContext,
+        progressHandler: @escaping (Int, Int, String) -> Void,
+        continuation: CheckedContinuation<Void, Error>
+    ) async throws {
+        logger.info("📊 [POLLING] Starting HTTP polling for job \(jobId)")
+        logger.info("📊 [POLLING] Poll interval: 5 seconds, max duration: 5 minutes")
+
+        let startTime = Date()
+        let maxPollDuration: TimeInterval = 300 // 5 minutes
+        let pollInterval: TimeInterval = 5 // 5 seconds
+
+        var pollCount = 0
+
+        while Date().timeIntervalSince(startTime) < maxPollDuration {
+            pollCount += 1
+            logger.debug("📊 [POLLING] Poll attempt #\(pollCount) for job \(jobId)")
+
+            do {
+                // Fetch job results from backend
+                let enrichedBooks = try await fetchEnrichmentResults(jobId: jobId)
+
+                // If we got results, job is complete!
+                logger.info("✅ [POLLING] Job complete! Received \(enrichedBooks.count) enriched books")
+
+                // Apply enriched data
+                let result = applyEnrichedData(enrichedBooks, in: modelContext)
+
+                // Clean up
+                activeEnrichments.subtract(batchWorkIDs)
+
+                // Publish completion event
+                completionEvents.send(EnrichmentCompletionEvent(
+                    bookIds: batchWorkIDs,
+                    successCount: result.successCount,
+                    failureCount: result.failureCount,
+                    errors: result.errors,
+                    timestamp: Date()
+                ))
+
+                continuation.resume()
+                return
+
+            } catch let error as EnrichmentError {
+                // Check if this is a "results not ready yet" error (404 or similar)
+                switch error {
+                case .httpError(404):
+                    // Results not ready yet - continue polling
+                    logger.debug("⏳ [POLLING] Results not ready for job \(jobId), will retry in \(pollInterval)s")
+                case .apiError(let message) where message.contains("not ready"):
+                    // Backend explicitly says not ready
+                    logger.debug("⏳ [POLLING] Backend says results not ready, will retry in \(pollInterval)s")
+                default:
+                    // Actual error - stop polling
+                    logger.error("❌ [POLLING] Error fetching results: \(error)")
+                    activeEnrichments.subtract(batchWorkIDs)
+                    continuation.resume(throwing: error)
+                    return
+                }
+            } catch {
+                // Unknown error - stop polling
+                logger.error("❌ [POLLING] Unexpected error: \(error)")
+                activeEnrichments.subtract(batchWorkIDs)
+                continuation.resume(throwing: error)
+                return
+            }
+
+            // Wait before next poll
+            try await Task.sleep(for: .seconds(pollInterval))
+
+            // Update progress UI (estimate based on time elapsed)
+            let elapsedSeconds = Date().timeIntervalSince(startTime)
+            let estimatedProgress = min(0.9, elapsedSeconds / 60.0) // Cap at 90%
+            let currentTitle = "Polling for results... (\(Int(elapsedSeconds))s elapsed)"
+            progressHandler(processedCount, totalBooks, currentTitle)
+        }
+
+        // Timeout - give up
+        logger.error("❌ [POLLING] Timeout after \(maxPollDuration)s of polling")
+        activeEnrichments.subtract(batchWorkIDs)
+        continuation.resume(throwing: EnrichmentError.apiError("Enrichment polling timed out after 5 minutes"))
     }
 }
 
