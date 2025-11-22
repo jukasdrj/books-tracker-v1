@@ -99,15 +99,16 @@
   - Prepares for 70-80% reduction in Durable Object costs
   - Enables proper hibernation API usage (automatic sleep/wake)
   - Improved error handling with categorization
-- **Status:** ⚠️ Deployed with hibernation **disabled** - gradual rollout planned
+- **Status:** ✅ **READY FOR PRODUCTION** - WebSocket HTTP/1.1 fix validated (Nov 22, 2025)
 - **Backward Compatibility:** 100% compatible - all WebSocket behaviors unchanged
 
 **Technical Details:**
 - Refactored `ProgressWebSocketDO_Hibernation` to use `this.state.storage` pattern
 - Fixed constructor to comply with Cloudflare hibernation API requirements
 - Enhanced `webSocketError` handler with error categorization and connection cleanup
-- Feature flag: `ENABLE_HIBERNATION_WEBSOCKET` (currently `false`)
-- Gradual rollout planned: 1% → 10% → 50% → 100%
+- Feature flag: `ENABLE_HIBERNATION_WEBSOCKET` (recommended: `true`)
+- Client-side HTTP/1.1 enforcement now properly configured (Issue #513)
+- **Action Required (Backend):** Set `ENABLE_HIBERNATION_WEBSOCKET=true` in wrangler.jsonc
 
 **See:** Section 8.2 (Performance SLAs) - updated latency targets
 
@@ -2673,7 +2674,7 @@ for (index, batch) in allPhotos.chunked(into: batchSize).enumerated() {
   - 📊 **Performance:** Internal DO-to-DO latency reduced from 10-15ms to <2ms
   - 🛡️ **Enhanced Error Handling:** WebSocket error categorization and connection cleanup
   - 🎯 **Zero Breaking Changes:** All client-facing APIs unchanged
-  - Feature flag: `ENABLE_HIBERNATION_WEBSOCKET` (currently disabled, gradual rollout planned)
+  - 🚀 **Production Ready:** Client HTTP/1.1 fix validated (Issue #513) - `ENABLE_HIBERNATION_WEBSOCKET` recommended
   - Updated services: `CacheMetricsDO`, `ProgressWebSocketDO_Hibernation`
   - See: Sprint plan at `docs/sprints/SPRINT_1_RPC_HIBERNATION.md`
 - **v2.5 (Nov 21, 2025):** 📚 **Author-Driven Harvest System** (4.8x performance increase)
