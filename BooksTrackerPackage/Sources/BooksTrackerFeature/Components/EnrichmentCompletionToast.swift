@@ -3,7 +3,8 @@ import SwiftUI
 struct EnrichmentCompletionToast: View {
     let event: EnrichmentQueue.EnrichmentCompletionEvent
     @Binding var isPresented: Bool
-    @Environment(TabCoordinator.self) private var tabCoordinator
+    // ✅ Make TabCoordinator optional to prevent crash when not in environment
+    @Environment(TabCoordinator.self) private var tabCoordinator: TabCoordinator?
 
     var body: some View {
         HStack(spacing: 12) {
@@ -41,7 +42,14 @@ struct EnrichmentCompletionToast: View {
             }
         }
         .onTapGesture {
-            tabCoordinator.showEnrichedBooksInLibrary(bookIDs: event.bookIds)
+            // ✅ Only navigate if TabCoordinator is available
+            if let tabCoordinator = tabCoordinator {
+                tabCoordinator.showEnrichedBooksInLibrary(bookIDs: event.bookIds)
+            } else {
+                #if DEBUG
+                print("⚠️ TabCoordinator not available in environment - cannot navigate")
+                #endif
+            }
             isPresented = false
         }
     }

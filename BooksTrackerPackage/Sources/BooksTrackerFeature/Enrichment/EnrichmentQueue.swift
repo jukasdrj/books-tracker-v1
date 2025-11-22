@@ -363,7 +363,7 @@ public final class EnrichmentQueue {
                                     self?.resetActivityTimer()
                                     let batchProcessed = progressPayload.processedCount ?? 0
                                     let totalForUI = works.count
-                                    let currentTitle = progressPayload.currentItem ?? "Unknown"
+                                    let currentTitle = progressPayload.currentItem?.title ?? "Unknown"
                                     let overallProcessed = processedCount + batchProcessed
 
                                     let progressTitle = "(\(index + 1)/\(batches.count)) \(currentTitle)"
@@ -388,9 +388,27 @@ public final class EnrichmentQueue {
                                             // Fetch full results from KV cache
                                             let enrichedBooks: [EnrichedBookPayload]
                                             if let resourceId = batchPayload.summary.resourceId {
-                                                let jobId = resourceId.replacingOccurrences(of: "job-results:", with: "")
+                                                self.logger.debug("📥 [WS] Completion received with resourceId: \(resourceId)")
+
+                                                // Validate and extract jobId from resourceId
+                                                let jobId: String
+                                                if resourceId.hasPrefix("job-results:") {
+                                                    jobId = String(resourceId.dropFirst(12)) // "job-results:" = 12 chars
+                                                    self.logger.debug("🔑 [WS] Extracted jobId: \(jobId)")
+                                                } else {
+                                                    self.logger.warning("⚠️ [WS] Unexpected resourceId format (missing 'job-results:' prefix): \(resourceId)")
+                                                    self.logger.debug("🔑 [WS] Using resourceId as-is for jobId")
+                                                    jobId = resourceId
+                                                }
+
                                                 enrichedBooks = try await self.fetchEnrichmentResults(jobId: jobId)
                                             } else {
+                                                // CRITICAL: No resourceId means backend didn't store results
+                                                self.logger.error("❌ [WS] No resourceId in completion payload!")
+                                                self.logger.error("❌ [WS] Summary: totalProcessed=\(batchPayload.summary.totalProcessed), success=\(batchPayload.summary.successCount), failure=\(batchPayload.summary.failureCount)")
+                                                self.logger.error("❌ [WS] This means results were NOT stored in Cloudflare KV cache")
+                                                self.logger.error("❌ [WS] Possible causes: backend error, KV write failure, or job failed silently")
+
                                                 // No resourceId - empty results
                                                 enrichedBooks = []
                                             }
@@ -583,11 +601,17 @@ public final class EnrichmentQueue {
     private func fetchEnrichmentResults(jobId: String) async throws -> [EnrichedBookPayload] {
         let url = URL(string: "\(EnrichmentConfig.apiBaseURL)/v1/jobs/\(jobId)/results")!
 
+        logger.info("🌐 [HTTP] GET \(url.absoluteString)")
+        logger.debug("🔑 [HTTP] Fetching results for jobId: \(jobId)")
+
         let (data, response) = try await URLSession.shared.data(from: url)
 
         guard let httpResponse = response as? HTTPURLResponse else {
+            logger.error("❌ [HTTP] Invalid HTTP response for job \(jobId) - not an HTTPURLResponse")
             throw EnrichmentError.invalidResponse
         }
+
+        logger.debug("📊 [HTTP] Status: \(httpResponse.statusCode), Body size: \(data.count) bytes")
 
         switch httpResponse.statusCode {
         case 200:
@@ -598,24 +622,33 @@ public final class EnrichmentQueue {
 
             let envelope = try JSONDecoder().decode(ResponseEnvelope<EnrichmentJobResults>.self, from: data)
 
+            logger.debug("📦 [HTTP] Envelope decoded: hasData=\(envelope.data != nil), hasError=\(envelope.error != nil)")
+
             guard let results = envelope.data, let books = results.enrichedBooks else {
+                logger.warning("⚠️ [HTTP] Empty enriched books in response for job \(jobId)")
                 if let error = envelope.error {
+                    logger.error("❌ [HTTP] API error: \(error.message)")
                     throw EnrichmentError.apiError(error.message)
                 }
+                logger.error("❌ [HTTP] No enriched books in response and no error message")
                 throw EnrichmentError.apiError("No enriched books in response")
             }
 
+            logger.info("✅ [HTTP] Successfully fetched \(books.count) enriched books for job \(jobId)")
             return books
 
         case 404:
             // Results expired (> 24 hours old)
+            logger.error("❌ [HTTP] 404 - Results expired for job \(jobId) (older than 24 hours)")
             throw EnrichmentError.apiError("Results expired (job older than 24 hours). Please re-run enrichment.")
 
         case 429:
             // Rate limited
+            logger.warning("⚠️ [HTTP] 429 - Rate limited for job \(jobId)")
             throw EnrichmentError.apiError("Rate limited. Please try again later.")
 
         default:
+            logger.error("❌ [HTTP] Unexpected status code \(httpResponse.statusCode) for job \(jobId)")
             throw EnrichmentError.httpError(httpResponse.statusCode)
         }
     }
