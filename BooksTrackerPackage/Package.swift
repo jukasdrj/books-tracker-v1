@@ -13,11 +13,18 @@ let package = Package(
             targets: ["BooksTrackerFeature"]
         ),
     ],
+    dependencies: [
+        // Starscream - WebSocket library with HTTP/1.1 enforcement
+        .package(url: "https://github.com/daltoniam/Starscream.git", from: "4.0.8")
+    ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
         // Targets can depend on other targets in this package and products from dependencies.
         .target(
-            name: "BooksTrackerFeature"
+            name: "BooksTrackerFeature",
+            dependencies: [
+                .product(name: "Starscream", package: "Starscream")
+            ]
         ),
         .testTarget(
             name: "BooksTrackerFeatureTests",
