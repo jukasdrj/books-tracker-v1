@@ -84,8 +84,6 @@ The Search feature enables users to locate books quickly via title, ISBN, author
 - Integration tests for `EnrichmentQueue` job lifecycle.
 - Mock backend responses for success/failure scenarios.
 
-## Future Enhancements
-
 ## vNext (Q1 2026): Autocomplete + Query Unification + JobStream
 
 Objective: Improve discoverability, cut time-to-first-result, and standardize long-running job comms across Search, CSV Import, and Scanner.
@@ -122,16 +120,15 @@ Objective: Improve discoverability, cut time-to-first-result, and standardize lo
 - Given enrichment running, JobStream updates per-result badges without blocking scrolling.
 
 ### API Additions
-- `GET /v1/search/autocomplete?q=...&scope=...`
-- `GET /v1/search?q=...&fields=title,author,isbn`
+- `GET /v1/search/autocomplete?q={q}&scope={scope}`
+- `GET /v1/search?q={q}&fields={fields}`
 
 ---
 
-- **Search History Sync** via CloudKit.
-- **Autocomplete Endpoint** `/v1/search/autocomplete`.
-- **Filter UI** (genre, year, language).
+## Future Enhancements
+
 - **Batch ISBN Enrichment** for bookshelf scanner.
-- **User‑controlled Enrichment Settings** (opt‑out of auto‑enrich).
+- **User-controlled Enrichment Settings** (opt-out of auto-enrich).
 
 ## Dependencies
 - SwiftUI, SwiftData, UserDefaults (search prefs).

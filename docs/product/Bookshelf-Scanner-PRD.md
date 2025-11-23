@@ -87,20 +87,20 @@ Users who prefer physical books but want digital tracking for reading goals/stat
 Goal: Cut perceived waiting time and error recovery while unifying progress communication across Scanner, CSV Import, and Enrichment.
 
 ### Architecture Changes
-1) Client pre‑pass (on‑device)
+1) Client pre-pass (on-device)
 - Perform a fast Vision-based spine OCR pass to propose candidates and alignment hints before upload.
 - If ≥1 high-confidence ISBN/Title found, prefill results and crop suggested ROIs. Always upload full image for server AI.
 - Maintain feature flag `FeatureFlags.shelfPrePass`.
 
 2) Unified JobStream (WS primary, SSE fallback)
 - Introduce a single progress schema used by all long-running jobs.
-- Primary comms: WebSocket `/ws/job-stream?jobId=…`.
-- New fallback: Server‑Sent Events `/sse/job-stream/{jobId}` with JSON Lines messages.
-- Keep‑alive every 15s; resume tokens supported for app backgrounding up to 10 minutes.
+- Primary comms: WebSocket `/ws/job-stream?jobId={jobId}`.
+- New fallback: Server-Sent Events `/sse/job-stream/{jobId}` with JSON Lines messages.
+- Keep-alive every 15s; resume tokens supported for app backgrounding up to 10 minutes.
 
 3) Durable Object refactor
 - New `JobStreamDO` multiplexes phases: `upload → ai_detect → enrich → finalize`.
-- Short‑lived HMAC token (job-scoped) replaces ad‑hoc tokens; parallel storage reads remain.
+- Short-lived HMAC token (job-scoped) replaces ad-hoc tokens; parallel storage reads remain.
 - Cropped spine thumbnails persisted to R2 with 24h TTL for Review Queue context.
 
 4) Media pipeline
@@ -123,16 +123,15 @@ Goal: Cut perceived waiting time and error recovery while unifying progress comm
 ### Acceptance Criteria (P0)
 - Given a poor network, SSE fallback maintains progress updates without UI freeze; reconnection resumes within 3s using resume token.
 - Given overlay enabled, bounding boxes render ≤ 200ms after capture on iPhone 17 Pro.
-- Given app backgrounded mid‑job (<10 min), upon return, stream resumes and final results render without reupload.
+- Given app backgrounded mid-job (<10 min), upon return, stream resumes and final results render without reupload.
 - Given confidence slider set to 80%, imported books below threshold route to Review Queue.
 
 ### API Additions
 - GET `/sse/job-stream/{jobId}` → text/event-stream; data: JobStreamMessage (JSON Lines)
-- POST `/v1/scans/{jobId}/resume` → returns new resumeToken (10‑minute TTL)
+- POST `/v1/scans/{jobId}/resume` → returns new resumeToken (10-minute TTL)
 - R2 lifecycle rule: `shelf-scans/*` auto-delete after 24h
 
 ---
-
 
 ## User Stories & Acceptance Criteria
 
