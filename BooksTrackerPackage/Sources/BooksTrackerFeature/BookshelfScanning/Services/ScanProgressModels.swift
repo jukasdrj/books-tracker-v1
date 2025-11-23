@@ -17,11 +17,18 @@ public struct BookshelfScanMetadata: Sendable {
 
 // MARK: - Scan Job Response (from POST /scan)
 
+/// Response from POST /api/batch-scan or POST /api/scan-bookshelf/batch
+/// Matches backend BookshelfScanInitResponse (API Contract v2.4.1 Section 6.2.3)
 public struct ScanJobResponse: Codable, Sendable {
     public let jobId: String
-    public let token: String  // NEW: Auth token for WebSocket
-    public let stages: [StageMetadata]
-    public let estimatedRange: [Int]  // [min, max] seconds
+    public let token: String      // Auth token for WebSocket authentication
+    public let totalPhotos: Int   // Number of photos in batch (1 for single-image scan)
+    public let status: String?    // Optional: "processing", "queued", etc.
+
+    // DEPRECATED: These fields are not in the API contract v2.4.1
+    // Kept for backward compatibility but will be nil
+    public let stages: [StageMetadata]?
+    public let estimatedRange: [Int]?  // [min, max] seconds
 
     public struct StageMetadata: Codable, Sendable {
         public let name: String

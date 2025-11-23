@@ -70,10 +70,10 @@ enum EnrichmentConfig {
 
     /// WebSocket progress tracking for background jobs (v2.4 - Secure Auth)
     ///
-    /// ⚠️ SECURITY (Issue #163): Token authentication now uses Sec-WebSocket-Protocol header
+    /// ⚠️ SECURITY (Issue #163): Token authentication uses Sec-WebSocket-Protocol header
     /// instead of query parameters to prevent token leakage in server logs.
     ///
-    /// **NEW (Secure) - Recommended:**
+    /// **Secure Method (Recommended):**
     /// ```swift
     /// let url = EnrichmentConfig.webSocketURL(jobId: jobId)
     /// var request = URLRequest(url: url)

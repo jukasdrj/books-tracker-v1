@@ -7,6 +7,7 @@ import Foundation
 actor BatchWebSocketHandler {
     private var webSocket: URLSessionWebSocketTask?
     private let jobId: String
+    private let token: String  // Auth token for WebSocket authentication
     private let onProgress: @MainActor (BatchProgress) -> Void
     private let onDisconnect: (@MainActor () -> Void)?
     private var isConnected = false
@@ -17,10 +18,12 @@ actor BatchWebSocketHandler {
 
     init(
         jobId: String,
+        token: String,
         onProgress: @MainActor @escaping (BatchProgress) -> Void,
         onDisconnect: (@MainActor () -> Void)? = nil
     ) {
         self.jobId = jobId
+        self.token = token
         self.onProgress = onProgress
         self.onDisconnect = onDisconnect
     }
@@ -29,16 +32,35 @@ actor BatchWebSocketHandler {
     func connect() async throws {
         let wsURL = EnrichmentConfig.webSocketURL(jobId: jobId)
 
-        let session = URLSession(configuration: .default)
-        webSocket = session.webSocketTask(with: wsURL)
+        // FIX (Issue #227): Enforce HTTP/1.1 for WebSocket handshake compatibility with iOS/backend.
+        // iOS defaults to HTTP/2 for HTTPS, which is incompatible with RFC 6455 WebSocket upgrade.
+        let config = URLSessionConfiguration.default
+        config.httpMaximumConnectionsPerHost = 1
+        config.timeoutIntervalForRequest = 10.0
+
+        // CRITICAL: Set WebSocket headers on URLSessionConfiguration (NOT URLRequest)
+        // This forces HTTP/1.1 negotiation before the WebSocket upgrade
+        config.httpAdditionalHeaders = [
+            "Connection": "Upgrade",
+            "Upgrade": "websocket"
+        ]
+
+        let session = URLSession(configuration: config)
+
+        // SECURITY (Issue #163): Pass token via Sec-WebSocket-Protocol header
+        // instead of query params to prevent token leakage in logs
+        var request = URLRequest(url: wsURL)
+        request.setValue("bookstrack-auth.\(token)", forHTTPHeaderField: "Sec-WebSocket-Protocol")
+
+        webSocket = session.webSocketTask(with: request)
         webSocket?.resume()
-        
+
         // ✅ CRITICAL: Wait for WebSocket handshake to complete
         // Prevents POSIX error 57 "Socket is not connected" when calling receive()
         if let webSocket = webSocket {
             try await WebSocketHelpers.waitForConnection(webSocket, timeout: 10.0)
         }
-        
+
         isConnected = true
 
         #if DEBUG

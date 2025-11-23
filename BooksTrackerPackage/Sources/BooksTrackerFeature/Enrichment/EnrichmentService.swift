@@ -112,9 +112,9 @@ public final class EnrichmentService {
 
         do {
             let result = try await apiClient.startEnrichment(jobId: jobId, books: books)
-            
+
             #if DEBUG
-            print("✅ Batch enrichment job accepted: \(result.totalCount) books queued for background processing")
+            print("✅ Batch enrichment job accepted with jobId: \(result.jobId), \(books.count) books queued for background processing")
             #endif
             
             // HTTP 202 response indicates job acceptance, not completion

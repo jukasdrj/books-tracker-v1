@@ -84,12 +84,13 @@ public final class BatchCaptureModel {
             let response = try await service.submitBatch(jobId: jobId, photos: capturedPhotos)
 
             #if DEBUG
-            print("[BatchCapture] Batch submitted: \(response.jobId), \(response.totalPhotos) photos")
+            print("[BatchCapture] Batch submitted: \(response.jobId), \(response.totalPhotos) photos, token: \(response.token.prefix(8))...")
             #endif
 
-            // Connect WebSocket for progress updates
+            // Connect WebSocket for progress updates (with authentication token)
             let handler = BatchWebSocketHandler(
                 jobId: jobId,
+                token: response.token,
                 onProgress: { [weak self] updatedProgress in
                     guard let self = self else { return }
                     self.batchProgress = updatedProgress

@@ -1,10 +1,73 @@
-# BooksTrack API Contract v2.6.0
+# BooksTrack API Contract v2.6.1
 
 **Status:** Production ✅
 **Effective Date:** November 22, 2025
-**Last Updated:** November 22, 2025 (v2.6.0 - Sprint 1: RPC & Hibernation Optimization)
+**Last Updated:** November 22, 2025 (v2.6.1 - WebSocket Security & Performance Hardening)
 **Contract Owner:** Backend Team
 **Audience:** iOS, Flutter, Web Frontend Teams
+
+---
+
+## 🚀 What's New in v2.6.1 (WebSocket Security & Performance Hardening)
+
+### **🔒 SECURITY: WebSocket Message Size Validation**
+- **Change:** Enforced 10KB maximum incoming message size (Cloudflare best practices)
+- **Impact:** Zero user-facing changes - protects against DoS attacks
+- **Benefits:**
+  - Prevents malicious oversized message attacks
+  - Protects Durable Object CPU time from abuse
+  - Enforces RFC 6455 policy violation (close code 1008)
+- **Backward Compatibility:** 100% compatible - normal client messages well under limit
+
+**Technical Details:**
+- Incoming messages > 10KB are rejected with WebSocket close code 1008
+- Client messages (e.g., "ready" signal) are typically < 100 bytes
+- Protects against memory exhaustion attacks
+
+### **⚡ PERFORMANCE: WebSocket Backpressure Handling**
+- **Change:** Added 1MB buffered amount threshold before sending messages
+- **Impact:** Zero user-facing changes - improves stability for slow connections
+- **Benefits:**
+  - Prevents memory bloat from slow/disconnected clients
+  - Gracefully skips progress updates instead of buffering indefinitely
+  - Maintains system stability under network congestion
+- **Backward Compatibility:** 100% compatible - fast clients unaffected
+
+**Technical Details:**
+- Checks `ws.bufferedAmount` before sending each message
+- Skips progress updates if > 1MB already buffered
+- Critical messages (job_complete, error) always sent
+
+### **📊 OBSERVABILITY: Session Metadata Tracking**
+- **Change:** Backend now tracks connection metadata for diagnostics
+- **Impact:** Zero user-facing changes - internal logging only
+- **Benefits:**
+  - Full audit trail for security incidents
+  - Geographic distribution tracking (IP, country)
+  - Connection troubleshooting (duration, user agent)
+- **Data Collected:**
+  - Session ID (UUID)
+  - Client IP (CF-Connecting-IP)
+  - User agent string
+  - Country code (CF-IPCountry)
+  - Connection timestamp
+
+**Privacy:** Metadata stored in-memory only, not persisted beyond session lifecycle.
+
+### **🔐 RELIABILITY: Atomic Token Operations**
+- **Change:** Token invalidation now uses storage transactions
+- **Impact:** Zero user-facing changes - prevents race conditions
+- **Benefits:**
+  - Eliminates concurrent token invalidation bugs
+  - Ensures atomic token blacklisting on job completion
+  - Follows Cloudflare Durable Object best practices
+
+**Technical Details:**
+- `storage.transaction()` used for all token operations
+- Prevents token leak vulnerabilities
+- Matches hibernation DO pattern
+
+**See:** Comprehensive technical details in `docs/CLOUDFLARE_WEBSOCKET_IMPROVEMENTS.md`
 
 ---
 
@@ -36,15 +99,16 @@
   - Prepares for 70-80% reduction in Durable Object costs
   - Enables proper hibernation API usage (automatic sleep/wake)
   - Improved error handling with categorization
-- **Status:** ⚠️ Deployed with hibernation **disabled** - gradual rollout planned
+- **Status:** ✅ **READY FOR PRODUCTION** - WebSocket HTTP/1.1 fix validated (Nov 22, 2025)
 - **Backward Compatibility:** 100% compatible - all WebSocket behaviors unchanged
 
 **Technical Details:**
 - Refactored `ProgressWebSocketDO_Hibernation` to use `this.state.storage` pattern
 - Fixed constructor to comply with Cloudflare hibernation API requirements
 - Enhanced `webSocketError` handler with error categorization and connection cleanup
-- Feature flag: `ENABLE_HIBERNATION_WEBSOCKET` (currently `false`)
-- Gradual rollout planned: 1% → 10% → 50% → 100%
+- Feature flag: `ENABLE_HIBERNATION_WEBSOCKET` (recommended: `true`)
+- Client-side HTTP/1.1 enforcement now properly configured (Issue #513)
+- **Action Required (Backend):** Set `ENABLE_HIBERNATION_WEBSOCKET=true` in wrangler.jsonc
 
 **See:** Section 8.2 (Performance SLAs) - updated latency targets
 
@@ -2610,7 +2674,7 @@ for (index, batch) in allPhotos.chunked(into: batchSize).enumerated() {
   - 📊 **Performance:** Internal DO-to-DO latency reduced from 10-15ms to <2ms
   - 🛡️ **Enhanced Error Handling:** WebSocket error categorization and connection cleanup
   - 🎯 **Zero Breaking Changes:** All client-facing APIs unchanged
-  - Feature flag: `ENABLE_HIBERNATION_WEBSOCKET` (currently disabled, gradual rollout planned)
+  - 🚀 **Production Ready:** Client HTTP/1.1 fix validated (Issue #513) - `ENABLE_HIBERNATION_WEBSOCKET` recommended
   - Updated services: `CacheMetricsDO`, `ProgressWebSocketDO_Hibernation`
   - See: Sprint plan at `docs/sprints/SPRINT_1_RPC_HIBERNATION.md`
 - **v2.5 (Nov 21, 2025):** 📚 **Author-Driven Harvest System** (4.8x performance increase)

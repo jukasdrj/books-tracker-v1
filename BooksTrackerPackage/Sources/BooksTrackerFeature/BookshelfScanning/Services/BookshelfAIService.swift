@@ -105,9 +105,12 @@ actor BookshelfAIService {
 
     // MARK: - Public API
 
+    /// DEPRECATED: Legacy single-image upload (replaced by batch WebSocket workflow)
     /// Process bookshelf image and return detected books with suggestions.
     /// - Parameter image: UIImage to process (will be compressed)
     /// - Returns: Tuple of (detected books, suggestions for improvement)
+    /// - Warning: This function uses a legacy endpoint that may not use ResponseEnvelope format
+    @available(*, deprecated, message: "Use submitBatch() with WebSocket progress tracking instead")
     func processBookshelfImage(_ image: UIImage) async throws -> ([DetectedBook], [SuggestionViewModel]) {
         // Step 1: Compress image to acceptable size
         guard let imageData = compressImage(image, maxSizeBytes: maxImageSize) else {
@@ -176,21 +179,15 @@ actor BookshelfAIService {
             throw .networkError(error)
         }
 
-        // STEP 3: Connect WebSocket with authentication token
-        let wsManager = await WebSocketProgressManager()
-        do {
-            _ = try await wsManager.establishConnection(jobId: jobId, token: scanResponse.token)
-            try await wsManager.configureForJob(jobId: jobId)
+        // TEMPORARY WORKAROUND: Skip WebSocket due to HTTP/2 ALPN negotiation issue
+        // URLSession WebSockets negotiate HTTP/2 by default, breaking RFC 6455 upgrade.
+        // Until we migrate to NWConnection (which allows HTTP/1.1 enforcement), use HTTP polling.
+        #if DEBUG
+        print("⚠️ WebSocket disabled due to HTTP/2 ALPN issue - using HTTP polling fallback")
+        #endif
 
-            // NEW: Send ready signal to server
-            try await wsManager.sendReadySignal()
-
-            #if DEBUG
-            print("✅ WebSocket connected with authentication and ready signal sent for job \(jobId)")
-            #endif
-        } catch {
-            throw .networkError(error)
-        }
+        // Use HTTP polling instead of WebSocket
+        return try await pollJobUntilComplete(jobId: jobId, progressHandler: progressHandler)
 
         // STEP 4: Listen for progress updates
         let result: Result<([DetectedBook], [SuggestionViewModel]), BookshelfAIError> = await withCheckedContinuation { continuation in
@@ -343,7 +340,9 @@ actor BookshelfAIService {
         return nil
     }
 
-    /// Upload compressed image data to Cloudflare Worker.
+    /// DEPRECATED: Upload compressed image data to Cloudflare Worker (legacy single-image endpoint).
+    /// - Warning: Does NOT use ResponseEnvelope format (legacy API)
+    @available(*, deprecated, message: "Use submitBatch() with WebSocket instead")
     private func uploadImage(_ imageData: Data) async throws -> BookshelfAIResponse {
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
@@ -613,12 +612,100 @@ actor BookshelfAIService {
 
         let (data, response) = try await URLSession.shared.data(for: request)
 
-        guard let httpResponse = response as? HTTPURLResponse,
-              httpResponse.statusCode == 202 else {
+        #if DEBUG
+        print("[Diagnostic iOS Layer] === HTTP Response ===")
+        print("[Diagnostic iOS Layer] Response type: \(type(of: response))")
+        #endif
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            #if DEBUG
+            print("[Diagnostic iOS Layer] ❌ Response is not HTTPURLResponse!")
+            #endif
             throw BookshelfAIError.invalidResponse
         }
 
-        return try JSONDecoder().decode(ScanJobResponse.self, from: data)
+        #if DEBUG
+        print("[Diagnostic iOS Layer] Status code: \(httpResponse.statusCode)")
+        print("[Diagnostic iOS Layer] Response headers: \(httpResponse.allHeaderFields)")
+        print("[Diagnostic iOS Layer] Response body size: \(data.count) bytes")
+        if let bodyPreview = String(data: data.prefix(500), encoding: .utf8) {
+            print("[Diagnostic iOS Layer] Response body preview: \(bodyPreview)")
+        }
+        #endif
+
+        guard httpResponse.statusCode == 202 else {
+            #if DEBUG
+            print("[Diagnostic iOS Layer] ❌ Expected status 202, got \(httpResponse.statusCode)")
+            if let errorBody = String(data: data, encoding: .utf8) {
+                print("[Diagnostic iOS Layer] ❌ Error response body: \(errorBody)")
+            }
+            #endif
+
+            // Try to decode error response using ResponseEnvelope
+            if let errorResponse = try? JSONDecoder().decode(ResponseEnvelope<ScanJobResponse>.self, from: data),
+               let error = errorResponse.error {
+                throw BookshelfAIError.serverError(httpResponse.statusCode, error.message)
+            }
+            throw BookshelfAIError.invalidResponse
+        }
+
+        // Decode using ResponseEnvelope wrapper (consistent with API contract)
+        let decoder = JSONDecoder()
+        let envelope: ResponseEnvelope<ScanJobResponse>
+
+        do {
+            envelope = try decoder.decode(ResponseEnvelope<ScanJobResponse>.self, from: data)
+            #if DEBUG
+            print("[Diagnostic iOS Layer] ✅ Successfully decoded ResponseEnvelope")
+            #endif
+        } catch {
+            #if DEBUG
+            print("[Diagnostic iOS Layer] ❌ Failed to decode ResponseEnvelope: \(error)")
+            if let decodingError = error as? DecodingError {
+                switch decodingError {
+                case .keyNotFound(let key, let context):
+                    print("[Diagnostic iOS Layer] ❌ Missing key: \(key.stringValue)")
+                    print("[Diagnostic iOS Layer] ❌ Context: \(context.debugDescription)")
+                case .typeMismatch(let type, let context):
+                    print("[Diagnostic iOS Layer] ❌ Type mismatch: expected \(type)")
+                    print("[Diagnostic iOS Layer] ❌ Context: \(context.debugDescription)")
+                case .valueNotFound(let type, let context):
+                    print("[Diagnostic iOS Layer] ❌ Value not found: \(type)")
+                    print("[Diagnostic iOS Layer] ❌ Context: \(context.debugDescription)")
+                case .dataCorrupted(let context):
+                    print("[Diagnostic iOS Layer] ❌ Data corrupted: \(context.debugDescription)")
+                @unknown default:
+                    print("[Diagnostic iOS Layer] ❌ Unknown decoding error")
+                }
+            }
+            if let rawResponse = String(data: data, encoding: .utf8) {
+                print("[Diagnostic iOS Layer] ❌ Raw response: \(rawResponse)")
+            }
+            #endif
+            throw BookshelfAIError.decodingFailed(error)
+        }
+
+        // Check for errors in response
+        if let error = envelope.error {
+            #if DEBUG
+            print("[Diagnostic iOS Layer] ❌ API error in envelope: \(error.message)")
+            #endif
+            throw BookshelfAIError.serverError(httpResponse.statusCode, error.message)
+        }
+
+        // Extract data
+        guard let scanResponse = envelope.data else {
+            #if DEBUG
+            print("[Diagnostic iOS Layer] ❌ No data in ResponseEnvelope despite successful decode")
+            #endif
+            throw BookshelfAIError.serverError(httpResponse.statusCode, "No data in response")
+        }
+
+        #if DEBUG
+        print("[Diagnostic iOS Layer] ✅ Successfully extracted scan response (jobId: \(scanResponse.jobId))")
+        #endif
+
+        return scanResponse
     }
 
     /// Calculate expected progress based on elapsed time and stages
@@ -645,14 +732,126 @@ actor BookshelfAIService {
         return stages.last?.progress ?? 1.0
     }
 
-    /// Poll job status from server (DEPRECATED - WebSocket-only now)
-    /// This method is retained for backward compatibility but should not be used.
-    /// All progress updates come via WebSocket on /ws/progress endpoint.
-    @available(*, deprecated, message: "Polling removed - use WebSocket for all progress updates")
-    func pollJobStatus(jobId: String) async throws -> JobStatusResponse {
-        // Polling endpoints no longer exist on api-worker
-        // This is kept for compilation but will always fail
-        throw BookshelfAIError.serverError(410, "Polling endpoints removed - use WebSocket")
+    /// Poll job status from server until complete (HTTP fallback when WebSocket fails)
+    /// TEMPORARY: Used until NWConnection WebSocket implementation is complete
+    private func pollJobUntilComplete(
+        jobId: String,
+        progressHandler: @MainActor @escaping (Double, String) -> Void
+    ) async throws -> ([DetectedBook], [SuggestionViewModel]) {
+        #if DEBUG
+        print("📊 Using HTTP polling for job \(jobId)")
+        #endif
+
+        let maxPolls = 60  // 60 polls * 2s = 2 minutes timeout
+        var pollCount = 0
+
+        while pollCount < maxPolls && !Task.isCancelled {
+            pollCount += 1
+
+            // Wait before polling (start immediately, then 2s intervals)
+            if pollCount > 1 {
+                try await Task.sleep(for: .seconds(2))
+            }
+
+            do {
+                // Poll job status via REST API
+                let status = try await checkJobStatus(jobId: jobId)
+
+                #if DEBUG
+                print("📊 Poll #\(pollCount): \(status.stage)")
+                #endif
+
+                // Calculate progress from stage
+                let (progress, statusMessage) = mapStageToProgress(stage: status.stage, elapsed: status.elapsedTime)
+
+                await MainActor.run {
+                    progressHandler(progress, statusMessage)
+                }
+
+                // Check if complete
+                if let result = status.result {
+                    #if DEBUG
+                    print("✅ Polling complete after \(pollCount) polls")
+                    #endif
+
+                    let detectedBooks = result.books.compactMap { aiBook in
+                        self.convertToDetectedBook(aiBook)
+                    }
+                    let suggestions = SuggestionGenerator.generateSuggestions(from: result)
+
+                    return (detectedBooks, suggestions)
+                }
+
+                // Check if errored
+                if let error = status.error {
+                    throw BookshelfAIError.serverError(500, "Job failed: \(error)")
+                }
+
+            } catch {
+                #if DEBUG
+                print("📊 Poll error: \(error)")
+                #endif
+                throw BookshelfAIError.networkError(error)
+            }
+        }
+
+        // Timeout after maxPolls
+        #if DEBUG
+        print("❌ Polling timeout after \(pollCount) polls")
+        #endif
+        throw BookshelfAIError.serverError(408, "Request timeout")
+    }
+
+    /// Map stage string to progress percentage and display message
+    private func mapStageToProgress(stage: String, elapsed: Int) -> (Double, String) {
+        switch stage.lowercased() {
+        case "uploading":
+            return (0.1, "Uploading...")
+        case "analyzing":
+            return (0.3, "Analyzing...")
+        case "processing":
+            return (0.5, "Processing...")
+        case "enriching":
+            return (0.7, "Enriching...")
+        case "complete", "completed":
+            return (1.0, "Complete!")
+        default:
+            // Estimate based on elapsed time (typical: 20-30s)
+            let estimatedProgress = min(0.9, Double(elapsed) / 30.0)
+            return (estimatedProgress, "Processing...")
+        }
+    }
+
+    /// Check job status via REST API (for HTTP polling fallback)
+    private func checkJobStatus(jobId: String) async throws -> JobStatusResponse {
+        let url = URL(string: "\(EnrichmentConfig.baseURL)/v1/scan/status/\(jobId)")!
+
+        let (data, response) = try await URLSession.shared.data(from: url)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw BookshelfAIError.invalidResponse
+        }
+
+        guard httpResponse.statusCode == 200 else {
+            throw BookshelfAIError.serverError(httpResponse.statusCode, "Status check failed")
+        }
+
+        let decoder = JSONDecoder()
+        let envelope = try decoder.decode(ResponseEnvelope<JobStatusResponse>.self, from: data)
+
+        guard let status = envelope.data else {
+            throw BookshelfAIError.invalidResponse
+        }
+
+        return status
+    }
+
+    /// Job status response for HTTP polling
+    private struct JobStatusResponse: Codable {
+        let stage: String
+        let elapsedTime: Int
+        let result: BookshelfAIResponse?
+        let error: String?
     }
 
     // MARK: - Batch Scanning
@@ -699,12 +898,28 @@ actor BookshelfAIService {
         }
 
         guard httpResponse.statusCode == 202 else { // Accepted
+            // Try to decode error response using ResponseEnvelope
+            if let errorResponse = try? JSONDecoder().decode(ResponseEnvelope<BatchSubmissionResponse>.self, from: data),
+               let error = errorResponse.error {
+                throw BookshelfAIError.serverError(httpResponse.statusCode, error.message)
+            }
             let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
             throw BookshelfAIError.serverError(httpResponse.statusCode, errorMessage)
         }
 
+        // Decode using ResponseEnvelope wrapper (consistent with API contract)
         let decoder = JSONDecoder()
-        let submissionResponse = try decoder.decode(BatchSubmissionResponse.self, from: data)
+        let envelope = try decoder.decode(ResponseEnvelope<BatchSubmissionResponse>.self, from: data)
+
+        // Check for errors in response
+        if let error = envelope.error {
+            throw BookshelfAIError.serverError(httpResponse.statusCode, error.message)
+        }
+
+        // Extract data
+        guard let submissionResponse = envelope.data else {
+            throw BookshelfAIError.serverError(httpResponse.statusCode, "No data in response")
+        }
 
         return submissionResponse
     }
@@ -810,8 +1025,10 @@ actor BookshelfAIService {
 // MARK: - Batch Response Models
 
 /// Response from batch submission endpoint
+/// Matches backend BookshelfScanInitResponse (API_CONTRACT.md Section 6.2.3)
 public struct BatchSubmissionResponse: Codable, Sendable {
     public let jobId: String
+    public let token: String      // Auth token for WebSocket authentication
     public let totalPhotos: Int
     public let status: String
 }
