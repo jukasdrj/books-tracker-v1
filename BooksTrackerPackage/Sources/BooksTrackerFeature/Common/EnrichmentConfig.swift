@@ -68,21 +68,23 @@ enum EnrichmentConfig {
 
     // MARK: - WebSocket Endpoints
 
-    /// WebSocket progress tracking for background jobs (v2.4.1)
+    /// WebSocket progress tracking for background jobs (v2.4 - Secure Auth)
     ///
-    /// **Authentication:** Token passed as query parameter (API Contract v2.4.1)
+    /// ⚠️ SECURITY (Issue #163): Token authentication uses Sec-WebSocket-Protocol header
+    /// instead of query parameters to prevent token leakage in server logs.
     ///
+    /// **Secure Method (Recommended):**
     /// ```swift
-    /// let url = EnrichmentConfig.webSocketURL(jobId: jobId, token: token)
-    /// let webSocket = URLSession.shared.webSocketTask(with: url)
+    /// let url = EnrichmentConfig.webSocketURL(jobId: jobId)
+    /// var request = URLRequest(url: url)
+    /// request.setValue("bookstrack-auth.\(token)", forHTTPHeaderField: "Sec-WebSocket-Protocol")
+    /// let webSocket = URLSession.shared.webSocketTask(with: request)
     /// ```
     ///
-    /// - Parameters:
-    ///   - jobId: The unique job identifier
-    ///   - token: The authentication token from the initial POST response
-    /// - Returns: WebSocket URL with authentication (API Contract v2.4.1)
-    static func webSocketURL(jobId: String, token: String) -> URL {
-        URL(string: "\(webSocketBaseURL)/ws/progress?jobId=\(jobId)&token=\(token)")!
+    /// - Parameter jobId: The unique job identifier
+    /// - Returns: WebSocket URL for the specified job (WITHOUT token in query params)
+    static func webSocketURL(jobId: String) -> URL {
+        URL(string: "\(webSocketBaseURL)/ws/progress?jobId=\(jobId)")!
     }
 
     // MARK: - Health Check

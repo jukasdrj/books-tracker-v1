@@ -6,7 +6,7 @@ import Network
 ///
 /// WHY: URLSession WebSockets negotiate HTTP/2 via ALPN, breaking RFC 6455 upgrade.
 /// SOLUTION: Network.framework's NWConnection allows explicit HTTP/1.1 enforcement.
-@available(iOS 26.0, *)
+@available(iOS 13.0, *)
 @MainActor
 final class NWConnectionWebSocket {
 

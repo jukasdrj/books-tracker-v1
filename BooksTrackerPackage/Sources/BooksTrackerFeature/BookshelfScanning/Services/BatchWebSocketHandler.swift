@@ -30,7 +30,7 @@ actor BatchWebSocketHandler {
 
     /// Connect to WebSocket and start listening
     func connect() async throws {
-        let wsURL = EnrichmentConfig.webSocketURL(jobId: jobId, token: token)
+        let wsURL = EnrichmentConfig.webSocketURL(jobId: jobId)
 
         // FIX (Issue #227): Enforce HTTP/1.1 for WebSocket handshake compatibility with iOS/backend.
         // iOS defaults to HTTP/2 for HTTPS, which is incompatible with RFC 6455 WebSocket upgrade.
@@ -47,7 +47,12 @@ actor BatchWebSocketHandler {
 
         let session = URLSession(configuration: config)
 
-        webSocket = session.webSocketTask(with: wsURL)
+        // SECURITY (Issue #163): Pass token via Sec-WebSocket-Protocol header
+        // instead of query params to prevent token leakage in logs
+        var request = URLRequest(url: wsURL)
+        request.setValue("bookstrack-auth.\(token)", forHTTPHeaderField: "Sec-WebSocket-Protocol")
+
+        webSocket = session.webSocketTask(with: request)
         webSocket?.resume()
 
         // ✅ CRITICAL: Wait for WebSocket handshake to complete
