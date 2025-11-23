@@ -84,7 +84,7 @@ public final class BatchCaptureModel {
             let response = try await service.submitBatch(jobId: jobId, photos: capturedPhotos)
 
             #if DEBUG
-            print("[BatchCapture] Batch submitted: \(response.jobId), \(response.totalPhotos) photos, token: \(response.token.prefix(8))...")
+            print("[BatchCapture] Batch submitted: \(response.jobId), \(response.totalPhotos) photos")
             #endif
 
             // Connect WebSocket for progress updates (with authentication token)
@@ -175,9 +175,9 @@ public final class BatchCaptureModel {
                 progress.overallStatus = "canceled"
                 isSubmitting = false
 
-                // Disconnect WebSocket (actor-isolated call)
+                // Disconnect WebSocket
                 if let handler = wsHandler {
-                    await handler.disconnect()
+                    handler.disconnect()
                 }
             } else {
                 #if DEBUG
