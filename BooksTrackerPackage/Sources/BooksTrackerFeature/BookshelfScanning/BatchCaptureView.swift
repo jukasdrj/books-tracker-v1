@@ -18,7 +18,7 @@ public final class BatchCaptureModel {
     public var batchProgress: BatchProgress?
     public var errorMessage: String?
     public var showingError = false
-    private var wsHandler: BatchWebSocketHandler?
+    private var wsHandler: StarscreamWebSocketHandler?
 
     public init() {}
 
@@ -88,48 +88,32 @@ public final class BatchCaptureModel {
             #endif
 
             // Connect WebSocket for progress updates (with authentication token)
-            let handler = BatchWebSocketHandler(
-                jobId: jobId,
-                token: response.token,
-                onProgress: { [weak self] updatedProgress in
-                    guard let self = self else { return }
-                    self.batchProgress = updatedProgress
+            let handler = StarscreamWebSocketHandler()
+            handler.onBatchProgress = { [weak self] updatedProgress in
+                guard let self = self else { return }
+                self.batchProgress = updatedProgress
 
-                    // Re-enable idle timer when batch completes
-                    if updatedProgress.isComplete {
-                        UIApplication.shared.isIdleTimerDisabled = false
-                        #if DEBUG
-                        print("🔓 Idle timer re-enabled (batch complete)")
-                        #endif
-                    }
-                },
-                onDisconnect: { [weak self] in
-                    guard let self = self else { return }
-                    // CRITICAL: Re-enable idle timer on unexpected disconnection (#307)
+                // Re-enable idle timer when batch completes
+                if updatedProgress.isComplete {
                     UIApplication.shared.isIdleTimerDisabled = false
                     #if DEBUG
-                    print("🔓 Idle timer re-enabled (WebSocket disconnected)")
-                    #endif
-                    self.isSubmitting = false
-                }
-            )
-            self.wsHandler = handler
-
-            // Connect WebSocket in background
-            Task {
-                do {
-                    try await handler.connect()
-                } catch {
-                    #if DEBUG
-                    print("[BatchCapture] WebSocket connection failed: \(error)")
-                    #endif
-                    // Re-enable idle timer on connection failure
-                    UIApplication.shared.isIdleTimerDisabled = false
-                    #if DEBUG
-                    print("🔓 Idle timer re-enabled (connection error)")
+                    print("🔓 Idle timer re-enabled (batch complete)")
                     #endif
                 }
             }
+            handler.onDisconnect = { [weak self] in
+                guard let self = self else { return }
+                // CRITICAL: Re-enable idle timer on unexpected disconnection (#307)
+                UIApplication.shared.isIdleTimerDisabled = false
+                #if DEBUG
+                print("🔓 Idle timer re-enabled (WebSocket disconnected)")
+                #endif
+                self.isSubmitting = false
+            }
+            self.wsHandler = handler
+
+            // Connect WebSocket with Starscream (forces HTTP/1.1)
+            handler.connect(jobId: jobId, token: response.token, batchProgress: progress)
 
             // Clear captured photos from memory after upload
             capturedPhotos.removeAll()

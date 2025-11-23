@@ -11,7 +11,7 @@ import Starscream
 /// - Works reliably with Cloudflare Workers WebSocket endpoints
 @available(iOS 13.0, *)
 @MainActor
-final class StarscreamWebSocketHandler: NSObject, WebSocketDelegate {
+public final class StarscreamWebSocketHandler: NSObject, WebSocketDelegate {
 
     // MARK: - Properties
 
@@ -19,11 +19,21 @@ final class StarscreamWebSocketHandler: NSObject, WebSocketDelegate {
     private var jobId: String?
     private var isConnected = false
 
-    /// Progress handler called when job progress updates are received
-    var onProgress: ((JobProgress) -> Void)?
+    /// Batch progress handler (for shelf scanning)
+    public var onBatchProgress: ((BatchProgress) -> Void)?
+
+    /// Generic progress handler (for enrichment)
+    public var onProgress: ((Double, String) -> Void)?
 
     /// Disconnection handler called when connection drops
-    var onDisconnect: ((Error?) -> Void)?
+    public var onDisconnect: (() -> Void)?
+
+    // Track batch progress state for updates
+    private var batchProgress: BatchProgress?
+
+    public override init() {
+        super.init()
+    }
 
     // MARK: - Connection Management
 
@@ -31,9 +41,10 @@ final class StarscreamWebSocketHandler: NSObject, WebSocketDelegate {
     /// - Parameters:
     ///   - jobId: Unique job identifier
     ///   - token: Authentication token from POST response
-    /// - Throws: Never (errors handled via delegate)
-    func connect(jobId: String, token: String) async {
+    ///   - batchProgress: Optional BatchProgress for shelf scanning (will be updated via onBatchProgress)
+    public func connect(jobId: String, token: String, batchProgress: BatchProgress? = nil) {
         self.jobId = jobId
+        self.batchProgress = batchProgress
 
         // ✅ SECURITY: Token NOT in URL (Issue #163)
         let urlString = "\(EnrichmentConfig.webSocketBaseURL)/ws/progress?jobId=\(jobId)"
@@ -41,7 +52,7 @@ final class StarscreamWebSocketHandler: NSObject, WebSocketDelegate {
             #if DEBUG
             print("[Starscream] ❌ Invalid WebSocket URL")
             #endif
-            onDisconnect?(URLError(.badURL))
+            onDisconnect?()
             return
         }
 
@@ -67,8 +78,8 @@ final class StarscreamWebSocketHandler: NSObject, WebSocketDelegate {
         socket?.connect()
     }
 
-    /// Send ready signal to backend to start processing
-    func sendReadySignal() {
+    /// Send ready signal to backend to start processing (optional - some flows don't need this)
+    public func sendReadySignal() {
         let readyMessage: [String: Any] = [
             "type": "ready",
             "timestamp": Date().timeIntervalSince1970 * 1000
@@ -84,7 +95,7 @@ final class StarscreamWebSocketHandler: NSObject, WebSocketDelegate {
     }
 
     /// Disconnect WebSocket connection
-    func disconnect() {
+    public func disconnect() {
         #if DEBUG
         print("[Starscream] 🔌 Disconnecting...")
         #endif
@@ -110,14 +121,7 @@ final class StarscreamWebSocketHandler: NSObject, WebSocketDelegate {
                 print("[Starscream] ❌ Disconnected: \(reason) (code: \(code))")
                 #endif
                 isConnected = false
-
-                // Create error from disconnect reason
-                let error = NSError(
-                    domain: "WebSocket",
-                    code: Int(code),
-                    userInfo: [NSLocalizedDescriptionKey: reason]
-                )
-                onDisconnect?(error)
+                onDisconnect?()
 
             case .text(let string):
                 #if DEBUG
@@ -137,7 +141,7 @@ final class StarscreamWebSocketHandler: NSObject, WebSocketDelegate {
                 #if DEBUG
                 print("[Starscream] ❌ Error: \(error?.localizedDescription ?? "Unknown")")
                 #endif
-                onDisconnect?(error)
+                onDisconnect?()
 
             case .cancelled:
                 #if DEBUG
@@ -183,12 +187,18 @@ final class StarscreamWebSocketHandler: NSObject, WebSocketDelegate {
             let message = try JSONDecoder().decode(TypedWebSocketMessage.self, from: data)
 
             #if DEBUG
-            print("[Starscream] ✅ Decoded message type: \(message.type)")
+            print("[Starscream] ✅ Decoded message type: \(message.type), pipeline: \(message.pipeline)")
             #endif
 
-            // Convert to JobProgress and notify handler
-            let jobProgress = convertToJobProgress(message)
-            onProgress?(jobProgress)
+            // Handle based on pipeline type
+            switch message.pipeline {
+            case .aiScan:
+                handleBatchMessage(message)
+            case .batchEnrichment:
+                handleEnrichmentMessage(message)
+            case .csvImport:
+                handleEnrichmentMessage(message)  // CSV uses same progress format as enrichment
+            }
 
         } catch {
             #if DEBUG
@@ -198,111 +208,83 @@ final class StarscreamWebSocketHandler: NSObject, WebSocketDelegate {
         }
     }
 
-    /// Convert TypedWebSocketMessage to JobProgress
-    private func convertToJobProgress(_ message: TypedWebSocketMessage) -> JobProgress {
-        switch message.payload {
-        case .jobProgress(let progressPayload):
-            return JobProgress(
-                fractionCompleted: progressPayload.progress,
-                processedCount: progressPayload.processedCount,
-                totalCount: progressPayload.totalCount,
-                currentStatus: progressPayload.status,
-                currentWorkId: nil,
-                keepAlive: nil,
-                scanResult: nil
-            )
+    /// Handle batch scanning messages (shelf scan)
+    private func handleBatchMessage(_ message: TypedWebSocketMessage) {
+        guard let batchProgress = batchProgress else {
+            #if DEBUG
+            print("[Starscream] ⚠️ Received batch message but no BatchProgress instance")
+            #endif
+            return
+        }
 
-        case .jobComplete(let completePayload):
-            // Extract scan result if available
-            var scanResult: ScanResult?
-            if case .aiScan(let scanPayload) = completePayload {
-                scanResult = ScanResult(
-                    totalDetected: scanPayload.summary.totalDetected,
-                    approved: scanPayload.summary.approved,
-                    needsReview: scanPayload.summary.needsReview,
-                    books: [], // Would need to fetch from resourceId
-                    metadata: ScanResult.ScanMetadata(
-                        processingTime: 0,
-                        enrichedCount: 0,
-                        timestamp: "",
-                        modelUsed: ""
-                    )
-                )
+        switch message.payload {
+        case .batchProgress(let progressPayload):
+            #if DEBUG
+            print("[Starscream] Batch progress: photo \(progressPayload.currentPhoto)/\(progressPayload.totalPhotos)")
+            #endif
+
+            // Update batch progress state
+            let photoIndex = progressPayload.currentPhoto - 1
+            if photoIndex >= 0 && photoIndex < batchProgress.photos.count {
+                let status: PhotoStatus
+                switch progressPayload.photoStatus.lowercased() {
+                case "processing": status = .processing
+                case "complete": status = .complete
+                case "error": status = .error
+                default: status = .queued
+                }
+
+                batchProgress.updatePhoto(index: photoIndex, status: status)
+                batchProgress.overallStatus = progressPayload.photoStatus
+                batchProgress.totalBooksFound = progressPayload.totalBooksFound
             }
 
-            return JobProgress(
-                fractionCompleted: 1.0,
-                processedCount: 0,
-                totalCount: 0,
-                currentStatus: "Complete",
-                currentWorkId: nil,
-                keepAlive: nil,
-                scanResult: scanResult
-            )
+            onBatchProgress?(batchProgress)
+
+        case .batchComplete(let completePayload):
+            #if DEBUG
+            print("[Starscream] Batch complete: \(completePayload.summary.totalDetected) books found")
+            #endif
+
+            batchProgress.complete(totalBooks: completePayload.summary.totalDetected)
+            onBatchProgress?(batchProgress)
 
         case .error(let errorPayload):
-            return JobProgress(
-                fractionCompleted: 0.0,
-                processedCount: 0,
-                totalCount: 0,
-                currentStatus: "Error: \(errorPayload.message)",
-                currentWorkId: nil,
-                keepAlive: nil,
-                scanResult: nil
-            )
-
-        case .readyAck:
-            return JobProgress(
-                fractionCompleted: 0.0,
-                processedCount: 0,
-                totalCount: 0,
-                currentStatus: "Ready",
-                currentWorkId: nil,
-                keepAlive: nil,
-                scanResult: nil
-            )
+            #if DEBUG
+            print("[Starscream] Batch error: \(errorPayload.message)")
+            #endif
+            batchProgress.overallStatus = "error"
+            onBatchProgress?(batchProgress)
 
         default:
-            return JobProgress(
-                fractionCompleted: 0.0,
-                processedCount: 0,
-                totalCount: 0,
-                currentStatus: "Processing",
-                currentWorkId: nil,
-                keepAlive: nil,
-                scanResult: nil
-            )
+            break
         }
     }
-}
 
-/// Job progress model (compatible with existing WebSocketProgressManager)
-struct JobProgress {
-    let fractionCompleted: Double
-    let processedCount: Int
-    let totalCount: Int
-    let currentStatus: String
-    let currentWorkId: String?
-    let keepAlive: Bool?
-    let scanResult: ScanResult?
-}
+    /// Handle enrichment/CSV import messages (generic progress)
+    private func handleEnrichmentMessage(_ message: TypedWebSocketMessage) {
+        switch message.payload {
+        case .jobProgress(let progressPayload):
+            #if DEBUG
+            print("[Starscream] Progress: \(Int(progressPayload.progress * 100))%")
+            #endif
+            onProgress?(progressPayload.progress, progressPayload.status)
 
-/// Scan result model (compatible with existing types)
-struct ScanResult {
-    let totalDetected: Int
-    let approved: Int
-    let needsReview: Int
-    let books: [BookData]
-    let metadata: ScanMetadata
+        case .jobComplete:
+            #if DEBUG
+            print("[Starscream] Job complete")
+            #endif
+            onProgress?(1.0, "Complete")
 
-    struct BookData: Codable {
-        // Placeholder - matches existing structure
+        case .error(let errorPayload):
+            #if DEBUG
+            print("[Starscream] Error: \(errorPayload.message)")
+            #endif
+            onProgress?(0.0, "Error: \(errorPayload.message)")
+
+        default:
+            break
+        }
     }
 
-    struct ScanMetadata {
-        let processingTime: Int
-        let enrichedCount: Int
-        let timestamp: String
-        let modelUsed: String
-    }
 }
