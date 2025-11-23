@@ -47,7 +47,7 @@ public final class EnrichmentQueue {
     private var queue: [EnrichmentQueueItem] = []
     private var processing: Bool = false
     private var currentTask: Task<Void, Never>?
-    private var webSocketHandler: GenericWebSocketHandler?
+    private var webSocketHandler: StarscreamWebSocketHandler?
     // Track current backend job ID for cancellation
     private var currentJobId: String?
     // Activity tracking for timeout watchdog
@@ -355,26 +355,23 @@ public final class EnrichmentQueue {
 
                             #if DEBUG
                             print("🔌 Connecting WebSocket for batch \(index + 1)...")
-                            print("✅ Using GenericWebSocketHandler with HTTP/1.1 enforcement")
+                            print("✅ Using Starscream with HTTP/1.1 enforcement")
                             #endif
 
-                            self.webSocketHandler = GenericWebSocketHandler(
-                                url: wsURL,
-                                token: token,  // ✅ CRITICAL: Pass token for Sec-WebSocket-Protocol header
-                                pipeline: .batchEnrichment,
-                                progressHandler: { [weak self] progressPayload in
-                                    self?.resetActivityTimer()
-                                    let batchProcessed = progressPayload.processedCount ?? 0
-                                    let totalForUI = works.count
-                                    let currentTitle = progressPayload.currentItem?.title ?? "Unknown"
-                                    let overallProcessed = processedCount + batchProcessed
+                            let handler = StarscreamWebSocketHandler()
+                            handler.onEnrichmentProgress = { [weak self] progressPayload in
+                                self?.resetActivityTimer()
+                                let batchProcessed = progressPayload.processedCount ?? 0
+                                let totalForUI = works.count
+                                let currentTitle = progressPayload.currentItem?.title ?? "Unknown"
+                                let overallProcessed = processedCount + batchProcessed
 
-                                    let progressTitle = "(\(index + 1)/\(batches.count)) \(currentTitle)"
+                                let progressTitle = "(\(index + 1)/\(batches.count)) \(currentTitle)"
 
-                                    progressHandler(overallProcessed, totalForUI, progressTitle)
-                                    NotificationCoordinator.postEnrichmentProgress(completed: overallProcessed, total: totalForUI, currentTitle: progressTitle)
-                                },
-                                completionHandler: { [weak self] completePayload in
+                                progressHandler(overallProcessed, totalForUI, progressTitle)
+                                NotificationCoordinator.postEnrichmentProgress(completed: overallProcessed, total: totalForUI, currentTitle: progressTitle)
+                            }
+                            handler.onEnrichmentComplete = { [weak self] completePayload in
                                     guard let self = self else { return }
                                     self.resetActivityTimer()
                                     guard case .batchEnrichment(let batchPayload) = completePayload else {
@@ -445,16 +442,14 @@ public final class EnrichmentQueue {
                                             continuation.resume()
                                         }
                                     }
-                                },
-                                errorHandler: { errorPayload in
-                                    // On error, ensure we clean up this batch from active enrichments
-                                    self.activeEnrichments.subtract(batchWorkIDs)
-
-                                    NotificationCoordinator.postEnrichmentFailed(error: errorPayload.message)
-                                    continuation.resume(throwing: EnrichmentError.apiError(errorPayload.message))
                                 }
-                            )
-                            await self.webSocketHandler?.connect()
+                            }
+
+                            // Connect WebSocket with Starscream (forces HTTP/1.1)
+                            handler.connect(jobId: jobId, token: token, pipeline: .batchEnrichment)
+
+                            // Store handler reference
+                            self.webSocketHandler = handler
                         }
                     }
                     processedCount += batch.count

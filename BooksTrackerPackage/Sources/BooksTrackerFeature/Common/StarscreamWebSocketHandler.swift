@@ -22,14 +22,20 @@ public final class StarscreamWebSocketHandler: NSObject, WebSocketDelegate {
     /// Batch progress handler (for shelf scanning)
     public var onBatchProgress: ((BatchProgress) -> Void)?
 
-    /// Generic progress handler (for enrichment)
-    public var onProgress: ((Double, String) -> Void)?
+    /// Enrichment progress handler (processedCount, totalCount, currentTitle)
+    public var onEnrichmentProgress: ((JobProgressPayload) -> Void)?
+
+    /// Enrichment completion handler
+    public var onEnrichmentComplete: ((JobCompletePayload) -> Void)?
 
     /// Disconnection handler called when connection drops
     public var onDisconnect: (() -> Void)?
 
     // Track batch progress state for updates
     private var batchProgress: BatchProgress?
+
+    // Track pipeline type for proper message routing
+    private var pipeline: WebSocketPipeline?
 
     public override init() {
         super.init()
@@ -41,10 +47,12 @@ public final class StarscreamWebSocketHandler: NSObject, WebSocketDelegate {
     /// - Parameters:
     ///   - jobId: Unique job identifier
     ///   - token: Authentication token from POST response
+    ///   - pipeline: WebSocket pipeline type (aiScan, batchEnrichment, csvImport)
     ///   - batchProgress: Optional BatchProgress for shelf scanning (will be updated via onBatchProgress)
-    public func connect(jobId: String, token: String, batchProgress: BatchProgress? = nil) {
+    public func connect(jobId: String, token: String, pipeline: WebSocketPipeline, batchProgress: BatchProgress? = nil) {
         self.jobId = jobId
         self.batchProgress = batchProgress
+        self.pipeline = pipeline
 
         // ✅ SECURITY: Token NOT in URL (Issue #163)
         let urlString = "\(EnrichmentConfig.webSocketBaseURL)/ws/progress?jobId=\(jobId)"
@@ -106,7 +114,7 @@ public final class StarscreamWebSocketHandler: NSObject, WebSocketDelegate {
 
     // MARK: - WebSocketDelegate
 
-    nonisolated func didReceive(event: WebSocketEvent, client: any WebSocketClient) {
+    nonisolated public func didReceive(event: WebSocketEvent, client: any WebSocketClient) {
         Task { @MainActor in
             switch event {
             case .connected(let headers):
@@ -243,10 +251,10 @@ public final class StarscreamWebSocketHandler: NSObject, WebSocketDelegate {
 
         case .batchComplete(let completePayload):
             #if DEBUG
-            print("[Starscream] Batch complete: \(completePayload.summary.totalDetected) books found")
+            print("[Starscream] Batch complete: \(completePayload.totalBooks) books found")
             #endif
 
-            batchProgress.complete(totalBooks: completePayload.summary.totalDetected)
+            batchProgress.complete(totalBooks: completePayload.totalBooks)
             onBatchProgress?(batchProgress)
 
         case .error(let errorPayload):
@@ -268,19 +276,28 @@ public final class StarscreamWebSocketHandler: NSObject, WebSocketDelegate {
             #if DEBUG
             print("[Starscream] Progress: \(Int(progressPayload.progress * 100))%")
             #endif
-            onProgress?(progressPayload.progress, progressPayload.status)
+            onEnrichmentProgress?(progressPayload)
 
-        case .jobComplete:
+        case .jobComplete(let completePayload):
             #if DEBUG
             print("[Starscream] Job complete")
             #endif
-            onProgress?(1.0, "Complete")
+            onEnrichmentComplete?(completePayload)
 
         case .error(let errorPayload):
             #if DEBUG
             print("[Starscream] Error: \(errorPayload.message)")
             #endif
-            onProgress?(0.0, "Error: \(errorPayload.message)")
+            // Create error progress payload
+            let errorProgress = JobProgressPayload(
+                type: "error",
+                progress: 0.0,
+                processedCount: 0,
+                totalCount: 0,
+                status: "Error: \(errorPayload.message)",
+                currentItem: nil
+            )
+            onEnrichmentProgress?(errorProgress)
 
         default:
             break

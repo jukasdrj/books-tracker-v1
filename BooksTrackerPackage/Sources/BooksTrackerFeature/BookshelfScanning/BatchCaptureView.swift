@@ -113,7 +113,7 @@ public final class BatchCaptureModel {
             self.wsHandler = handler
 
             // Connect WebSocket with Starscream (forces HTTP/1.1)
-            handler.connect(jobId: jobId, token: response.token, batchProgress: progress)
+            handler.connect(jobId: jobId, token: response.token, pipeline: .aiScan, batchProgress: progress)
 
             // Clear captured photos from memory after upload
             capturedPhotos.removeAll()
