@@ -372,34 +372,58 @@ public struct GeminiCSVImportView: View {
                     #endif
                 }
 
-                // Listen for messages
+                // Listen for messages with timeout mechanism
                 #if DEBUG
                 print("[CSV WebSocket] Waiting for messages...")
                 #endif
-                while !Task.isCancelled {
-                    let message = try await webSocketTask.receive()
-                    #if DEBUG
-                    print("[CSV WebSocket] 📨 Received message")
-                    #endif
 
-                    switch message {
-                    case .string(let text):
+                var lastMessageTime = Date.now
+                let messageTimeout: TimeInterval = 30.0 // 30 seconds without messages triggers fallback
+
+                while !Task.isCancelled {
+                    // Check for message timeout
+                    let timeSinceLastMessage = Date.now.timeIntervalSince(lastMessageTime)
+                    if timeSinceLastMessage > messageTimeout {
                         #if DEBUG
-                        print("[CSV WebSocket] Message text: \(text.prefix(200))")
+                        print("[CSV WebSocket] ⚠️ No messages for \(Int(timeSinceLastMessage))s - backend may be stalled")
+                        print("[CSV WebSocket] ⚠️ Switching to fallback polling...")
                         #endif
-                        handleWebSocketMessage(text)
-                    case .data(let data):
+                        importStatus = .processing(progress: 0.1, message: "Switching to alternate method...")
+                        await fallbackPollingForJobStatus(jobId: jobId)
+                        return
+                    }
+
+                    // Try to receive message with timeout
+                    do {
+                        let message = try await webSocketTask.receive()
+                        lastMessageTime = Date.now // Reset timeout on any message
+
                         #if DEBUG
-                        print("[CSV WebSocket] Message data: \(data.count) bytes")
+                        print("[CSV WebSocket] 📨 Received message (timeout reset)")
                         #endif
-                        if let text = String(data: data, encoding: .utf8) {
+
+                        switch message {
+                        case .string(let text):
+                            #if DEBUG
+                            print("[CSV WebSocket] Message text: \(text.prefix(200))")
+                            #endif
                             handleWebSocketMessage(text)
+                        case .data(let data):
+                            #if DEBUG
+                            print("[CSV WebSocket] Message data: \(data.count) bytes")
+                            #endif
+                            if let text = String(data: data, encoding: .utf8) {
+                                handleWebSocketMessage(text)
+                            }
+                        @unknown default:
+                            #if DEBUG
+                            print("[CSV WebSocket] ⚠️ Unknown message type")
+                            #endif
+                            break
                         }
-                    @unknown default:
-                        #if DEBUG
-                        print("[CSV WebSocket] ⚠️ Unknown message type")
-                        #endif
-                        break
+                    } catch {
+                        // receive() can throw on timeout or connection issues
+                        throw error
                     }
                 }
                 #if DEBUG
@@ -525,6 +549,11 @@ public struct GeminiCSVImportView: View {
     }
 
     private func handleWebSocketMessage(_ text: String) {
+        #if DEBUG
+        print("[CSV WebSocket] 🔍 Processing message (length: \(text.count))")
+        print("[CSV WebSocket] 📝 Full message: \(text)")
+        #endif
+
         guard let data = text.data(using: .utf8) else {
             #if DEBUG
             print("[CSV WebSocket] ❌ Failed to convert text to data")
@@ -544,16 +573,21 @@ public struct GeminiCSVImportView: View {
             // Use unified WebSocket schema (Phase 1 #363)
             let message = try JSONDecoder().decode(TypedWebSocketMessage.self, from: data)
             #if DEBUG
-            print("[CSV WebSocket] Decoded message type: \(message.type), pipeline: \(message.pipeline)")
+            print("[CSV WebSocket] ✅ Decoded message type: \(message.type), pipeline: \(message.pipeline)")
             #endif
 
             // Verify this is for csv_import pipeline
             guard message.pipeline == .csvImport else {
                 #if DEBUG
-                print("[CSV WebSocket] ⚠️ Ignoring message for different pipeline: \(message.pipeline)")
+                print("[CSV WebSocket] ⚠️ FILTERED OUT - Wrong pipeline: \(message.pipeline) (expected: csv_import)")
+                print("[CSV WebSocket] ⚠️ This message will be ignored!")
                 #endif
                 return
             }
+
+            #if DEBUG
+            print("[CSV WebSocket] ✅ Pipeline verified, dispatching to payload handler...")
+            #endif
 
             // Dispatch UI updates to MainActor (WebSocket runs on background thread)
             Task { @MainActor in
@@ -673,8 +707,36 @@ public struct GeminiCSVImportView: View {
 
         } catch {
             #if DEBUG
-            print("[CSV WebSocket] ❌ Failed to decode WebSocket message: \(error)")
-            print("[CSV WebSocket] Raw message: \(text)")
+            print("[CSV WebSocket] ❌ DECODE FAILURE - This message cannot be parsed!")
+            print("[CSV WebSocket] ❌ Error: \(error)")
+            if let decodingError = error as? DecodingError {
+                switch decodingError {
+                case .keyNotFound(let key, let context):
+                    print("[CSV WebSocket] ❌ Missing key: \(key.stringValue)")
+                    print("[CSV WebSocket] ❌ Context: \(context.debugDescription)")
+                case .typeMismatch(let type, let context):
+                    print("[CSV WebSocket] ❌ Type mismatch: expected \(type)")
+                    print("[CSV WebSocket] ❌ Context: \(context.debugDescription)")
+                case .valueNotFound(let type, let context):
+                    print("[CSV WebSocket] ❌ Value not found: \(type)")
+                    print("[CSV WebSocket] ❌ Context: \(context.debugDescription)")
+                case .dataCorrupted(let context):
+                    print("[CSV WebSocket] ❌ Data corrupted: \(context.debugDescription)")
+                @unknown default:
+                    print("[CSV WebSocket] ❌ Unknown decoding error")
+                }
+            }
+            print("[CSV WebSocket] ❌ Raw message that failed: \(text)")
+            print("[CSV WebSocket] ⚠️ Switching to fallback polling due to decode failures...")
+
+            // If we're getting decode errors, the backend might be using a different schema
+            // Switch to fallback polling to continue tracking job progress
+            if let currentJobId = jobId {
+                Task { @MainActor in
+                    importStatus = .processing(progress: 0.1, message: "Switching to alternate method...")
+                    await fallbackPollingForJobStatus(jobId: currentJobId)
+                }
+            }
             #endif
         }
     }
